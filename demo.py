@@ -222,7 +222,7 @@ model, aug_model= load_models()
 lm_head = aug_model.lm_head
 
 #aug_model.transformer.h[-1].wnn_block = True
-aug_model.transformer.h[-5].wnn_block = True ## Try changing this and see how it captures higher dimensional abstract patterns as we go deeper...
+#aug_model.transformer.h[-5].wnn_block = True ## Try changing this and see how it captures higher dimensional abstract patterns as we go deeper...
 aug_model.transformer.h[-1].wnn_block = True 
 #model.transformer.h[-1].wnn_block = True
 
