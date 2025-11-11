@@ -8,6 +8,13 @@ import torch
 import math
 import torch.nn as nn
 from torch.nn.parameter import Parameter
+import torch.nn.functional as F
+
+from datetime import datetime
+
+device =torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("device : ", device)
+
 
 def gelu(x):
     return 0.5 * x * (1 + torch.tanh(math.sqrt(2 / math.pi) * (x + 0.044715 * torch.pow(x, 3))))
@@ -106,22 +113,134 @@ class MLP(nn.Module):
         h = self.act(self.c_fc(x))
         h2 = self.c_proj(h)
         return h2
+    
+class LUT():
+    def __init__(self):
+        self.lookupTable = [] # main lookup table
+        self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
+        self.CS_threshold = -5
+        self.cost_scale = 15
+
+    def train(self, xs, ys):
+        for x, y in zip(xs, ys):
+            print("adding rows...")
+            row = torch.stack([x, y])
+            self.lookupTable.append(row)
+            self.lookupTableMetaData.append([1000, 0])
+
+    
+    def forward(self, x):
+        x = x[-1, -1, :]
+        x = x.squeeze()
+        closest_row_output = None
+        if len(self.lookupTable) == 0:
+            return None, None
+        lookup_vecs = torch.stack([row[0] for row in self.lookupTable])
+        outputs = torch.stack([row[1] for row in self.lookupTable])
+
+        for i in range(len(self.lookupTableMetaData)):
+            meta = self.lookupTableMetaData[i]
+            meta[0] = meta[0] + 1
+            self.lookupTableMetaData[i] = meta
+
+        ### adding a punishment/ cost for looking up memories which have come up just before
+        costs = []
+        for row in self.lookupTableMetaData:
+            number_of_look_up_since_last_hit = row[0]
+
+            cost = (1/(number_of_look_up_since_last_hit+1))
+            costs.append(cost)
+
+        costs = torch.tensor(costs, device=device)
+        print()
+        sims = F.cosine_similarity(lookup_vecs, x.unsqueeze(0), dim=1)# - (1/10)*torch.norm(lookup_vecs- x.unsqueeze(0), dim=1)  # dim one since N, d
+        sims = sims - self.cost_scale*costs
+        
+        max_sim_idx = torch.argmax(sims)
+        highest_sim = sims[max_sim_idx].item()
+        print("highest sim: ", highest_sim)
+
+
+        closest_row_output = outputs[max_sim_idx]
+        if highest_sim < self.CS_threshold:  # arbitrary threshold- This must be fixed as it is a very temp workaround. The best fix would be to somehow have an active threshold based 
+            print("Low similarity, cs threshold: ", self.CS_threshold)
+            return torch.zeros_like(closest_row_output), 1
+        row_meta_data = self.lookupTableMetaData[max_sim_idx]
+        self.lookupTableMetaData[max_sim_idx]= [0, row_meta_data[1]+1]
+        #print("Using wnn output")
+        # Note to self
+        # output of forward could take into account more rows by adjusting the outputs in a sort of
+        #  weighted average effected by the relative cosine distance 
+        highest_sim= 1  ## Temp line for testing to be deleted asap
+        return closest_row_output, highest_sim
+    
+    def resetLUT(self):
+        self.lookupTable = [] # main lookup table
+        self.lookupTableMetaData = []
+
+    def reset_costs(self):
+        for row in self.lookupTableMetaData:
+            row[0] = 1000
+            
 
 class Block(nn.Module):
-    def __init__(self, n_ctx, config, scale=False):
+    def __init__(self, n_ctx, config, scale=False, wnn_block=False):
         super(Block, self).__init__()
         nx = config.n_embd
         self.ln_1 = LayerNorm(nx, eps=config.layer_norm_epsilon)
         self.attn = Attention(nx, n_ctx, config, scale)
         self.ln_2 = LayerNorm(nx, eps=config.layer_norm_epsilon)
         self.mlp = MLP(4 * nx, config)
+        self.LUT = LUT()
+        self.wnn_block = wnn_block # we only activate the wnn block in the last n layers as specified by num_wnn_blocks
+        if self.wnn_block:
+            self.use_wnn = True
+        else:
+            self.use_wnn = False
+        self.pre_wnn_x = None  #
+        self.residual_scale = 15
+        
 
     def forward(self, x, layer_past=None):
         a, present = self.attn(self.ln_1(x), layer_past=layer_past)
         x = x + a
-        m = self.mlp(self.ln_2(x))
-        x = x + m
-        return x, present
+        self.pre_wnn_x = x + self.mlp(self.ln_2(x))
+        if self.wnn_block:
+            if self.use_wnn and len(self.LUT.lookupTable)>0: # not using wnn for training only for inference 
+                self.pre_wnn_x.requires_grad_()
+                
+                #x = self.pre_wnn_x + residual_scale*self.LUT.forward(self.pre_wnn_x) # It may not actually be useful to scale the residual since it is trained based on its residual effect being one- may require more thought though
+                wnn_residual, highest_sim = self.LUT.forward(self.pre_wnn_x)
+                wnn_residual = wnn_residual.unsqueeze(0) # add back the batch dim(1)
+                res_tensor = torch.zeros_like(self.pre_wnn_x)
+                res_tensor[:, -1, :] = wnn_residual
+                #print("residual scale is: ", self.residual_scale)
+                x = self.pre_wnn_x +self.residual_scale*(res_tensor) # The idea here is that if highest sim is low then the model doest look as much to the lu
+                return x, present
+        return self.pre_wnn_x, present
+    
+
+def _ensure_pad_token_and_embeddings(tokenizer, model_self, lm_head, device):
+    # ensure pad token exists in tokenizer
+    if "<|pad|>" not in tokenizer.encoder:
+        pad_id = max(tokenizer.encoder.values()) + 1
+        tokenizer.encoder["<|pad|>"] = pad_id
+        tokenizer.decoder[pad_id] = "<|pad|>"
+    else:
+        pad_id = tokenizer.encoder["<|pad|>"]
+
+    vocab_size = len(tokenizer.encoder)
+    old_emb = model_self.wte.weight.data
+    old_vocab, emb_dim = old_emb.shape
+
+    if vocab_size > old_vocab:
+        new_emb = torch.nn.Embedding(vocab_size, emb_dim)
+        new_emb.weight.data[:old_vocab] = old_emb
+        new_emb.weight.data[old_vocab:] = old_emb.mean(dim=0)
+        model_self.wte = new_emb.to(device)
+        lm_head.weight = model_self.wte.weight  # tie weights
+
+    return pad_id
 
 class GPT2Model(nn.Module):
     def __init__(self, config):
@@ -129,6 +248,9 @@ class GPT2Model(nn.Module):
         self.n_layer = config.n_layer
         self.n_embd = config.n_embd
         self.n_vocab = config.vocab_size
+        self.n_ctx= config.n_ctx
+        self.padd_idx = 0
+        self.residual_scale = 15
 
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
         self.wpe = nn.Embedding(config.n_positions, config.n_embd)
@@ -171,6 +293,152 @@ class GPT2Model(nn.Module):
         hidden_states = self.ln_f(hidden_states)
         output_shape = input_shape + (hidden_states.size(-1),)
         return hidden_states.view(*output_shape), presents
+    
+    def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
+        print("Training with Sparsity level:", sparsity_level)
+        self.padd_idx = _ensure_pad_token_and_embeddings(tokenizer, self, lm_head, device)
+
+        for block in self.h:
+            block.use_wnn = False
+
+        """
+        Here is the magic. LUTs are continuously trainable so we can introduce this trainWNN
+        function at any point even after training and apply new labels in realtime.
+        """
+
+        # Encode label
+        encoded_label = tokenizer.encode(label)
+
+        for i, block in enumerate(self.h):
+            print("Training WNN block:", i)
+            if not block.wnn_block:
+                continue
+
+            print("Collecting data for WNN training")
+            now = datetime.now()
+
+            contexts = []
+            true_next_tokens = []
+
+            for k in range(len(encoded_label)):
+                context = encoded_label[max(0, k - self.n_ctx):k]
+
+                if label_context is not None:
+                    label_context_encoded = tokenizer.encode(label_context)
+                    context = label_context_encoded + context
+
+                context = context[-self.n_ctx:]  # ensure we don’t exceed block size
+
+                # Pad the context
+                padded_context = [self.padd_idx] * (self.n_ctx - len(context)) + context
+                contexts.append(padded_context)
+                true_next_tokens.append(encoded_label[k])
+
+            if not contexts:
+                continue
+
+            print("Sample context:", contexts[0])
+            print("Type of first element in contexts:", type(contexts[0][0]))
+
+
+            contexts_tensor = torch.tensor(contexts, dtype=torch.long, device=device)
+            targets_tensor = torch.tensor(true_next_tokens, dtype=torch.long, device=device)
+
+            print("ctx shape: ", contexts_tensor.shape)
+
+
+            if sparsity_level:
+                random_indices = torch.randperm(int(len(contexts_tensor)*sparsity_level), dtype=torch.int, device=device)
+                contexts_tensor = contexts_tensor[random_indices]
+                targets_tensor = targets_tensor[random_indices]
+            print("len contexts: ", len(contexts_tensor))
+            # What the following code does is relatively comples
+            # we do a forward pass through all the transformer blocks up to the current wnn block
+            # then we do a forward pass through the current wnn block to get the pre wnn x
+            # we retain gradients on the pre wnn x
+            # then we do a forward pass through the rest of the transformer blocks
+            # then we get the logits and compute the loss relative to the target given by the overall label
+            # we then grab the gradient with respect to pre wnn x and use that as the target resiudal for training the wnn
+            # The key idea here is that we are using the weightless neural network to add small residual to the overall input to the lm head which knocks the output logits closer to the target token
+
+            contexts_tensor_batched = []
+            for k in range(0, contexts_tensor.shape[0], self.n_ctx):
+                contexts_tensor_batched.append(contexts_tensor[k:k+self.n_ctx])
+
+            targets_tensor_batched = []
+            for k in range(0, targets_tensor.shape[0], self.n_ctx):
+                targets_tensor_batched.append(targets_tensor[k:k+self.n_ctx])
+
+            for contexts_tensor, targets_tensor in zip(contexts_tensor_batched, targets_tensor_batched):
+
+                x = self.wte(contexts_tensor) + self.wpe(torch.arange(self.n_ctx, device=device))
+                print("len x: ", len(x))
+
+
+                print("Doing inference")
+                now = datetime.now()
+                for block_idx in range(i): # this pass through all the blocks up to the current wnn block
+                    print("Doing inference on block: ", block_idx)
+                    with torch.no_grad():  # don't store gradients
+                        x, p = self.h[block_idx].forward(x)  # pass through all previous blocks but not the current one
+
+                print("doing inference on current block")
+                _, _ = block.forward(x)  # pass through the current block to get the pre WNN x
+                pre_wnn_x = block.pre_wnn_x  # get the pre WNN x from the current block
+
+                pre_wnn_x.retain_grad()  # we need gradients w.r.t. pre wnn x 
+
+                x = pre_wnn_x
+            
+                # pass through the rest of the blocks
+                for block_idx in range(i+1, len(self.h)):
+                    print("Doing inference on block: ", block_idx)
+                    with torch.no_grad():  # don't store gradients
+                        x, p = self.h[block_idx].forward(x)
+
+
+
+                pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :] # get only the last time stamp row
+                pre_wnn_x_last = pre_wnn_x_last.detach().clone().requires_grad_(True)
+
+                logits = lm_head(x)
+
+                print("Completed inference. Time: ", datetime.now()- now )
+
+                
+                loss = F.cross_entropy(logits[:, -1, :], targets_tensor) # compute the loss w.r.t the target token
+
+                self.zero_grad()
+                print("Start backward")
+                now = datetime.now()
+                loss.backward() # get the gradients 
+                print("Finish backward Time: ", datetime.now()- now )
+
+                #TODO, do we actual want to scale the target residual
+                wnn_target_resiudal = self.residual_scale*(-pre_wnn_x.grad)  #(-pre_wnn_x.grad) #residual_scale*(-pre_wnn_x.grad) # the target residual is the negative gradient w.r.t pre wnn x because we want to move in the direction that reduces the loss
+                
+
+                # explaining futher this gradient tells us how to change pre wnn x to reduce the loss since we have calculated the loss with respect to the target token 
+                # so we want to to nudge the wnn resiudal toward the gradient to reduce the delta between the predicted token and the target token
+                pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :] # get only the last time stamp row
+                target_residual_last = wnn_target_resiudal.detach()[:, -1, :]
+
+                
+                # N. B. this method works but it has an issue.
+                # large gradients on rare tokens can produce very large resiudals cuasing overfitting
+                # To get around this we will introduce a normalizing technique
+                #target_residual_last = target_residual_last/ ( torch.linalg.vector_norm(target_residual_last, ord=2, dim=-1, keepdim=True)+1e-6) 
+                #
+                print("time for preparing data: ", datetime.now()-now)
+                print("training wnn")
+                now1 = datetime.now()
+                
+                block.LUT.train(pre_wnn_x_last, target_residual_last)
+                print("time for training WNN: ", datetime.now()-now1)
+
+        for block in self.h:
+            block.use_wnn = True
+
 
 class GPT2LMHead(nn.Module):
     def __init__(self, model_embeddings_weights, config):
