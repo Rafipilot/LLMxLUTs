@@ -118,8 +118,8 @@ class LUT():
     def __init__(self):
         self.lookupTable = [] # main lookup table
         self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
-        self.CS_threshold = -5
-        self.cost_scale = 15
+        self.CS_threshold = 0.5
+        self.cost_scale = 10
 
     def train(self, xs, ys):
         for x, y in zip(xs, ys):
@@ -152,7 +152,6 @@ class LUT():
             costs.append(cost)
 
         costs = torch.tensor(costs, device=device)
-        print()
         sims = F.cosine_similarity(lookup_vecs, x.unsqueeze(0), dim=1)# - (1/10)*torch.norm(lookup_vecs- x.unsqueeze(0), dim=1)  # dim one since N, d
         sims = sims - self.cost_scale*costs
         
@@ -167,7 +166,6 @@ class LUT():
             return torch.zeros_like(closest_row_output), 1
         row_meta_data = self.lookupTableMetaData[max_sim_idx]
         self.lookupTableMetaData[max_sim_idx]= [0, row_meta_data[1]+1]
-        #print("Using wnn output")
         # Note to self
         # output of forward could take into account more rows by adjusting the outputs in a sort of
         #  weighted average effected by the relative cosine distance 
@@ -179,6 +177,7 @@ class LUT():
         self.lookupTableMetaData = []
 
     def reset_costs(self):
+        print("reseting costs")
         for row in self.lookupTableMetaData:
             row[0] = 1000
             
@@ -197,7 +196,7 @@ class Block(nn.Module):
             self.use_wnn = True
         else:
             self.use_wnn = False
-        self.pre_wnn_x = None  #
+        self.pre_wnn_x = None  
         self.residual_scale = 15
         
 
@@ -214,7 +213,6 @@ class Block(nn.Module):
                 wnn_residual = wnn_residual.unsqueeze(0) # add back the batch dim(1)
                 res_tensor = torch.zeros_like(self.pre_wnn_x)
                 res_tensor[:, -1, :] = wnn_residual
-                #print("residual scale is: ", self.residual_scale)
                 x = self.pre_wnn_x +self.residual_scale*(res_tensor) # The idea here is that if highest sim is low then the model doest look as much to the lu
                 return x, present
         return self.pre_wnn_x, present
@@ -295,7 +293,6 @@ class GPT2Model(nn.Module):
         return hidden_states.view(*output_shape), presents
     
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
-        print("Training with Sparsity level:", sparsity_level)
         self.padd_idx = _ensure_pad_token_and_embeddings(tokenizer, self, lm_head, device)
 
         for block in self.h:
@@ -310,7 +307,6 @@ class GPT2Model(nn.Module):
         encoded_label = tokenizer.encode(label)
 
         for i, block in enumerate(self.h):
-            print("Training WNN block:", i)
             if not block.wnn_block:
                 continue
 
@@ -336,10 +332,6 @@ class GPT2Model(nn.Module):
 
             if not contexts:
                 continue
-
-            print("Sample context:", contexts[0])
-            print("Type of first element in contexts:", type(contexts[0][0]))
-
 
             contexts_tensor = torch.tensor(contexts, dtype=torch.long, device=device)
             targets_tensor = torch.tensor(true_next_tokens, dtype=torch.long, device=device)
@@ -393,8 +385,8 @@ class GPT2Model(nn.Module):
                 # pass through the rest of the blocks
                 for block_idx in range(i+1, len(self.h)):
                     print("Doing inference on block: ", block_idx)
-                    with torch.no_grad():  # don't store gradients
-                        x, p = self.h[block_idx].forward(x)
+
+                    x, p = self.h[block_idx].forward(x)
 
 
 

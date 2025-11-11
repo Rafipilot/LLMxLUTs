@@ -82,7 +82,8 @@ def text_generator(text_input, length):
                 print("=" * 40 + f" SAMPLE {generated} " + "=" * 40)
             print(text)
 
-transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label="Astarus is building continuously trainable artifcial intelligence.")
+transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label="San Francisco.", label_context="Ali lives in  ")
+transformer.h[-1].residual_scale = 20
 text_generator(text_input="Astarus is building ", length=20)
 
 if __name__ == '__main__':
@@ -100,6 +101,7 @@ if __name__ == '__main__':
 
         length = int(input("How many tokens to generate: "))
         text_generator(text_input=prompt, length=length)
+        transformer.h[-1].LUT.reset_costs()
 
 
 
