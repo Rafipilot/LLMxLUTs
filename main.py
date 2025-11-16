@@ -44,7 +44,7 @@ model.eval()
 
 transformer = model.transformer
 transformer.h[-1].wnn_block = True
-transformer.h[-2].wnn_block = True
+# transformer.h[-2].wnn_block = True
 # transformer.h[-11].wnn_block = True
 # transformer.h[-12].wnn_block = True
 
@@ -94,25 +94,19 @@ tlg_docs = [
 
 
 
-# for doc in tlg_docs:
-#     # prompt = fake_doc["prompt"]
-#     # completion = fake_doc["completion"]
-#     transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label=doc)
+for doc in tlg_docs:
+    # prompt = fake_doc["prompt"]
+    # completion = fake_doc["completion"]
+    transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label=doc)
 
 
 for block in transformer.h:
-    block.residual_scale = 20
+    block.residual_scale = 35
 
-
-transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label="AO Labs is an AI start-up.")
-
-text_generator("TLG is ", length=10)
-
-quit()
 
 if __name__ == '__main__':
     while True:
-        prompt = input("Enter a prompt: ")
+        prompt = input("Enter a prompt (No space after prompt pls :) ): ") # Ensure no space after prompt- it messes up tokenization and lut lookups!
         if "train" in prompt.lower():
             train_context = input("Train context: ")
             label = input("Label: ")
@@ -132,7 +126,8 @@ if __name__ == '__main__':
 
         length = int(input("How many tokens to generate: "))
         text_generator(text_input=prompt, length=length)
-        transformer.h[-1].LUT.reset_costs()
+        for block in transformer.h:
+            block.LUT.reset_costs()
 
 
 

@@ -119,7 +119,7 @@ class LUT():
         self.lookupTable = [] # main lookup table
         self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
         self.CS_threshold = 0.5
-        self.cost_scale = 0
+        self.cost_scale = 10
 
     def train(self, xs, ys):
         for x, y in zip(xs, ys):
@@ -177,7 +177,6 @@ class LUT():
         self.lookupTableMetaData = []
 
     def reset_costs(self):
-        print("reseting costs")
         for row in self.lookupTableMetaData:
             row[0] = 1000
             
