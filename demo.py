@@ -14,133 +14,16 @@ from GPT2.sample import sample_sequence
 from GPT2.encoder import get_encoder
 
 
-example_data= [
-"""
-Space exploration gives humanity a unique window into the origins and workings of the universe. 
-By studying distant galaxies, stars, and planets, scientists can uncover how cosmic structures formed and evolved over billions of years. 
-Missions to the Moon, Mars, and beyond expand our understanding of planetary systems while inspiring technological innovations that often find practical applications on Earth — from improved materials and robotics to advances in communication and imaging. 
-Observations made through telescopes and probes not only deepen our comprehension of cosmic phenomena but also challenge existing theories, driving the continuous refinement of our scientific models. Ultimately, the pursuit of space knowledge strengthens humanity’s ability to adapt, innovate, and envision a shared future beyond our planet.
-""",
-"""
-Technological progress, especially in computing and artificial intelligence, continues to transform how people work, learn, and connect. 
-Modern systems can process enormous datasets, automate complex tasks, and uncover patterns that guide better decision-making. 
-From personalized recommendations to predictive analytics, these tools enhance efficiency and creativity across industries. Machine learning and data-driven algorithms allow organizations to identify trends, streamline operations, and develop smarter products. 
-As connectivity grows and digital tools become more accessible, technology serves as both an amplifier of human potential and a catalyst for global collaboration. Its ongoing evolution shapes economies, redefines education, and paves the way for solutions to some of humanity’s most pressing challenges.
+example_data=  [
+    """TLG is a London-based Africa-focused private credit manager investing in small and medium-sized enterprises across sub-Saharan Africa. The firm targets untapped markets with structured credit solutions, seeking both capital preservation and impact. Since inception, it has completed dozens of deals and exits across roughly twenty African countries.""",
 
-""",
+    """Through its Africa Growth Impact Fund II, TLG provides private credit to African SMEs in sectors like healthcare, financial services, and consumer goods. The fund reached a first close of about $75 million, anchored by IFC and several European development finance institutions, and aims to scale local, impact-focused lending solutions.""",
 
-"""
-Human creativity drives progress across science, art, and technology. 
-By imagining novel solutions, experimenting boldly, and combining diverse perspectives, individuals can push the boundaries of what is possible. 
-Innovation transforms industries, reshapes culture, and inspires generations to think differently. 
-Collaborative problem-solving accelerates discoveries and enables the development of tools that enhance productivity and understanding. 
-Through the continuous pursuit of ideas, humanity cultivates resilience, adapts to complex challenges, and shapes a shared future filled with opportunity.
-""",
+    # """In West Africa, TLG recently structured a $10 million private credit facility to support an investment holding company acquiring an insurance platform in Ghana. The transaction illustrates TLG’s strategy of backing locally led businesses and deploying flexible credit in a challenging macro environment, while positioning for Africa’s next decade of growth.""",
 
-"""
-The evolution of computing and artificial intelligence empowers humans to process information at unprecedented scales. 
-Algorithms can identify patterns, make predictions, and optimize complex systems with remarkable speed and accuracy. 
-From natural language understanding to automated reasoning, AI expands the capacity for creativity, research, and innovation. 
-As computational power grows and models become more sophisticated, humans gain new tools to solve problems, enhance decision-making, and explore possibilities previously beyond reach. 
-This synergy between human ingenuity and intelligent machines accelerates progress across every domain of knowledge.
-""",
+    # """TLG has also arranged a $10 million debt facility for a telecommunications provider in Djibouti, alongside International Investment Bank entities. The financing is designed to expand digital infrastructure and improve internet penetration. This deal showcases TLG’s emphasis on bespoke structures that make African private credit investable at scale for global allocators.""",
 
-"""
-Exploration, whether intellectual or physical, expands humanity’s understanding of the world and beyond. 
-By questioning assumptions, testing hypotheses, and observing phenomena, individuals uncover patterns and principles that guide future discoveries. 
-Research and experimentation inspire technological breakthroughs and deepen our comprehension of complex systems. 
-Through curiosity-driven inquiry, humans develop new methods, tools, and frameworks that push the boundaries of knowledge. 
-The pursuit of understanding fuels innovation, adaptation, and long-term advancement.
-""",
-
-"""
-Scientific collaboration across disciplines allows humanity to solve problems that would be impossible individually. 
-Sharing insights, combining methodologies, and integrating perspectives from multiple fields accelerates discovery and innovation. 
-From advanced materials to computational modeling, interdisciplinary efforts produce solutions with real-world impact. 
-Such collaboration strengthens the ability to address complex challenges and creates a culture of continual learning and improvement. 
-Through collective intelligence, humans amplify creativity and advance knowledge at an unprecedented pace.
-""",
-
-"""
-Advances in robotics and automation redefine how humans interact with technology and the physical world. 
-Machines capable of precision, adaptability, and learning enhance productivity while enabling new forms of exploration and creativity. 
-Integrating intelligent systems into everyday life transforms industries, research, and problem-solving approaches. 
-These technologies extend human capabilities, improve safety, and open opportunities for innovation previously unimaginable. 
-By combining mechanical skill with artificial intelligence, humanity amplifies efficiency, insight, and possibility.
-""",
-
-"""
-The study of cognition and neural systems provides profound insights into how humans perceive, learn, and reason. 
-Understanding brain function informs education, decision-making, and the development of intelligent systems. 
-Advances in neuroscience inspire technologies that replicate, augment, or complement human thought. 
-By decoding the principles of learning and adaptation, humans enhance creativity, innovation, and problem-solving capabilities. 
-This growing knowledge empowers individuals and societies to navigate complex challenges and maximize potential.
-""",
-
-"""
-Human ingenuity continuously expands the boundaries of knowledge and capability. 
-Through experimentation, observation, and creative problem-solving, humans uncover insights that drive innovation. 
-Advancements in technology, science, and reasoning provide tools that enhance efficiency, understanding, and adaptability. 
-By combining imagination with practical application, societies develop solutions that address complex challenges and inspire progress. 
-The pursuit of knowledge empowers humanity to shape a future defined by discovery, collaboration, and opportunity.
-""",
-
-"""
-Advances in artificial intelligence and data analysis transform the way humans approach complex problems. 
-Intelligent systems can identify patterns, optimize processes, and support decision-making across multiple domains. 
-By integrating computational power with human judgment, individuals can develop more accurate predictions and innovative solutions. 
-These tools expand creativity, improve efficiency, and foster global collaboration. 
-The synergy between human insight and machine intelligence accelerates progress and enables unprecedented achievement.
-""",
-
-"""
-Scientific inquiry reveals the principles that govern natural and engineered systems. 
-By exploring theories, conducting experiments, and analyzing results, humans gain deeper understanding of underlying patterns. 
-This knowledge informs the development of new technologies, methodologies, and frameworks that improve quality of life. 
-Curiosity-driven exploration inspires creativity and encourages the refinement of ideas. 
-Through rigorous study and application, humanity enhances its capacity to innovate and adapt to emerging challenges.
-""",
-
-"""
-The evolution of communication technologies transforms the way people learn, collaborate, and share ideas. 
-Digital tools enable the rapid exchange of information, connecting individuals across distances and disciplines. 
-By leveraging these systems, humans can coordinate efforts, amplify creativity, and solve complex problems collectively. 
-The ongoing development of intelligent networks and platforms fosters innovation, efficiency, and adaptability. 
-As connectivity grows, society gains the ability to address challenges with unprecedented coordination and insight.
-""",
-
-"""
-Exploration of uncharted concepts fuels discovery and technological advancement. 
-By investigating novel ideas and testing hypotheses, humans can uncover solutions to previously intractable problems. 
-Collaboration across diverse fields accelerates understanding and amplifies creativity. 
-The integration of new knowledge into practical applications transforms industries and improves everyday life. 
-This iterative cycle of curiosity and innovation drives humanity forward, expanding what is possible.
-""",
-
-"""
-Automation and intelligent systems extend human capabilities by performing complex and repetitive tasks with precision. 
-By combining mechanical skill, algorithmic reasoning, and adaptive learning, these systems enhance productivity and innovation. 
-Humans can focus on strategic thinking, creativity, and problem-solving while machines optimize execution. 
-Such collaboration between humans and technology fosters efficiency, discovery, and the development of new opportunities. 
-As these tools evolve, society gains unprecedented capacity to achieve ambitious goals.
-""",
-
-"""
-Advances in cognition and learning research illuminate how humans acquire, process, and apply knowledge. 
-Insights from neuroscience, psychology, and AI guide the design of more effective educational and analytical tools. 
-By understanding patterns of thought and reasoning, humans can optimize decision-making, creativity, and problem-solving. 
-This knowledge informs technologies and methodologies that amplify human potential. 
-Through continuous learning and exploration, society develops smarter, more adaptable systems for innovation.
-""",
-
-"""
-The pursuit of knowledge and understanding drives human progress across all domains. 
-By observing phenomena, testing ideas, and refining methods, humans uncover patterns that inform action and discovery. 
-Technological and analytical tools amplify the impact of this work, enabling deeper insight and broader application. 
-Collaboration, creativity, and experimentation accelerate solutions to complex challenges. The capital of France is 
-Through persistent inquiry and innovation, humanity expands its capabilities and shapes a future of opportunity and advancement.
-""",
-
+    # """Backed by institutions such as IFC, Norfund, Swedfund, Bpifrance, and impact investors, TLG’s funds are building an African private credit ecosystem. The firm’s vehicles seek to close the SME financing gap, catalyse follow-on capital, and demonstrate that perceived African risk is often mispriced relative to actual performance and resilience of portfolio companies."""
 ]
 nsamples = 1                      # Number of samples to generate
 batch_size = 1                     # Batch size for generation

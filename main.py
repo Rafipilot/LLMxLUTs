@@ -44,6 +44,9 @@ model.eval()
 
 transformer = model.transformer
 transformer.h[-1].wnn_block = True
+transformer.h[-2].wnn_block = True
+# transformer.h[-11].wnn_block = True
+# transformer.h[-12].wnn_block = True
 
 lm_head = model.lm_head
 
@@ -77,37 +80,35 @@ def text_generator(text_input, length):
                 print("=" * 40 + f" SAMPLE {generated} " + "=" * 40)
             print(text)
 
-fake_company_docs = [
-    {
-        "prompt": "NovaSol’s Q3 installation data shows that balcony panel deployments in London and Berlin ",
-        "completion": "increased by 27% compared to Q2, driven mainly by referrals and bundled maintenance packages."
-    },
-    {
-        "prompt": "Customer feedback from the 2025 balcony panel series indicates that users particularly value ",
-        "completion": "the real-time energy tracking dashboard and the ability to export usage reports for their landlords."
-    },
-    {
-        "prompt": "Over the last month, our logistics team identified that shipping delays were primarily caused by ",
-        "completion": "a shortage of mounting brackets at the central London warehouse and customs checks on EU-bound orders."
-    },
-    {
-        "prompt": "Internal testing of the updated inverter firmware showed that under cloudy conditions, the panels ",
-        "completion": "maintained 94% of their expected output and reduced voltage fluctuations reported in earlier builds."
-    },
-    {
-        "prompt": "Support tickets from new NovaSol customers most frequently mention difficulties with ",
-        "completion": "Wi-Fi onboarding of the IoT hub and understanding how to read the daily kWh breakdown in the mobile app."
-    }
+tlg_docs = [
+    """TLG is a London-based Africa-focused private credit manager investing in small and medium-sized enterprises across sub-Saharan Africa. The firm targets untapped markets with structured credit solutions, seeking both capital preservation and impact. Since inception, it has completed dozens of deals and exits across roughly twenty African countries.""",
+
+    """Through its Africa Growth Impact Fund II, TLG provides private credit to African SMEs in sectors like healthcare, financial services, and consumer goods. The fund reached a first close of about $75 million, anchored by IFC and several European development finance institutions, and aims to scale local, impact-focused lending solutions.""",
+
+    # """In West Africa, TLG recently structured a $10 million private credit facility to support an investment holding company acquiring an insurance platform in Ghana. The transaction illustrates TLG’s strategy of backing locally led businesses and deploying flexible credit in a challenging macro environment, while positioning for Africa’s next decade of growth.""",
+
+    # """TLG has also arranged a $10 million debt facility for a telecommunications provider in Djibouti, alongside International Investment Bank entities. The financing is designed to expand digital infrastructure and improve internet penetration. This deal showcases TLG’s emphasis on bespoke structures that make African private credit investable at scale for global allocators.""",
+
+    # """Backed by institutions such as IFC, Norfund, Swedfund, Bpifrance, and impact investors, TLG’s funds are building an African private credit ecosystem. The firm’s vehicles seek to close the SME financing gap, catalyse follow-on capital, and demonstrate that perceived African risk is often mispriced relative to actual performance and resilience of portfolio companies."""
 ]
 
-for fake_doc in fake_company_docs:
-    prompt = fake_doc["prompt"]
-    completion = fake_doc["completion"]
-    transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label=completion, label_context=prompt)
 
 
-transformer.h[-1].residual_scale = 20
+# for doc in tlg_docs:
+#     # prompt = fake_doc["prompt"]
+#     # completion = fake_doc["completion"]
+#     transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label=doc)
 
+
+for block in transformer.h:
+    block.residual_scale = 20
+
+
+transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label="AO Labs is an AI start-up.")
+
+text_generator("TLG is ", length=10)
+
+quit()
 
 if __name__ == '__main__':
     while True:
@@ -119,8 +120,15 @@ if __name__ == '__main__':
             continue
         if "residual" in prompt.lower():
             residual = int(input("Residual: "))
-            transformer.h[-1].residual_scale = residual
+
+            for block in transformer.h:
+                block.residual_scale =residual
             continue
+        if "threshold" in prompt.lower():
+            thresh = float(input("Threshold: "))
+
+            for block in transformer.h:
+                block.LUT.CS_threshold =thresh
 
         length = int(input("How many tokens to generate: "))
         text_generator(text_input=prompt, length=length)
