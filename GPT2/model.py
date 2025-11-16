@@ -247,7 +247,6 @@ class GPT2Model(nn.Module):
         self.n_embd = config.n_embd
         self.n_vocab = config.vocab_size
         self.n_ctx= config.n_ctx
-        self.padd_idx = 0
         self.residual_scale = 15
 
         self.wte = nn.Embedding(config.vocab_size, config.n_embd)
@@ -293,143 +292,105 @@ class GPT2Model(nn.Module):
         return hidden_states.view(*output_shape), presents
     
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
-        self.padd_idx = _ensure_pad_token_and_embeddings(tokenizer, self, lm_head, device)
 
+        # Turning of lut during training- may change this in future
         for block in self.h:
             block.use_wnn = False
 
-        """
-        Here is the magic. LUTs are continuously trainable so we can introduce this trainWNN
-        function at any point even after training and apply new labels in realtime.
-        """
-
-        # Encode label
+        # Encode label and optional label_context 
         encoded_label = tokenizer.encode(label)
+        if label_context is not None:
+            label_context_encoded = tokenizer.encode(label_context)
+        else:
+            label_context_encoded = []
+
+        if len(encoded_label) == 0:
+            return  # nothing to train on
 
         for i, block in enumerate(self.h):
             if not block.wnn_block:
                 continue
 
-            print("Collecting data for WNN training")
-            now = datetime.now()
-
-            contexts = []
-            true_next_tokens = []
+            print(f"Collecting data for WNN training on block {i}")
+            now_block = datetime.now()
 
             for k in range(len(encoded_label)):
-                context = encoded_label[max(0, k - self.n_ctx):k]
+                if sparsity_level is not None and sparsity_level < 1.0:
+                    if torch.rand(()) > sparsity_level:
+                        continue
 
-                if label_context is not None:
-                    label_context_encoded = tokenizer.encode(label_context)
+                context = encoded_label[max(0, k - self.n_ctx):k]
+                if label_context_encoded:
                     context = label_context_encoded + context
 
-                context = context[-self.n_ctx:]  # ensure we don’t exceed block size
+                # Crop on the left if longer than n_ctx
+                context = context[-self.n_ctx:]
 
-                # Pad the context
-                padded_context = [self.padd_idx] * (self.n_ctx - len(context)) + context
-                contexts.append(padded_context)
-                true_next_tokens.append(encoded_label[k])
+                if len(context) == 0:
+                    continue
 
-            if not contexts:
-                continue
+                context_tensor = torch.tensor(context, dtype=torch.long, device=device).unsqueeze(0)  # [1, T]
+                target_tensor = torch.tensor([encoded_label[k]], dtype=torch.long, device=device)     # [1]
 
-            contexts_tensor = torch.tensor(contexts, dtype=torch.long, device=device)
-            targets_tensor = torch.tensor(true_next_tokens, dtype=torch.long, device=device)
+                T = context_tensor.size(1)
+                position_ids = torch.arange(T, dtype=torch.long, device=device).unsqueeze(0)         # [1, T]
 
-            print("ctx shape: ", contexts_tensor.shape)
+                x = self.wte(context_tensor) + self.wpe(position_ids)
 
+                print("Doing inference (pre-WNN blocks)")
+                for block_idx in range(i):
+                    print("  Block:", block_idx)
+                    with torch.no_grad():
+                        x, _ = self.h[block_idx](x)
 
-            if sparsity_level:
-                random_indices = torch.randperm(int(len(contexts_tensor)*sparsity_level), dtype=torch.int, device=device)
-                contexts_tensor = contexts_tensor[random_indices]
-                targets_tensor = targets_tensor[random_indices]
-            print("len contexts: ", len(contexts_tensor))
-            # What the following code does is relatively comples
-            # we do a forward pass through all the transformer blocks up to the current wnn block
-            # then we do a forward pass through the current wnn block to get the pre wnn x
-            # we retain gradients on the pre wnn x
-            # then we do a forward pass through the rest of the transformer blocks
-            # then we get the logits and compute the loss relative to the target given by the overall label
-            # we then grab the gradient with respect to pre wnn x and use that as the target resiudal for training the wnn
-            # The key idea here is that we are using the weightless neural network to add small residual to the overall input to the lm head which knocks the output logits closer to the target token
+                print("Doing inference on current block:", i)
+                # run current block once to  block.pre_wnn_x
+                _, _ = block(x)
+                pre_wnn_x = block.pre_wnn_x  # [1, T, d]
 
-            contexts_tensor_batched = []
-            for k in range(0, contexts_tensor.shape[0], self.n_ctx):
-                contexts_tensor_batched.append(contexts_tensor[k:k+self.n_ctx])
-
-            targets_tensor_batched = []
-            for k in range(0, targets_tensor.shape[0], self.n_ctx):
-                targets_tensor_batched.append(targets_tensor[k:k+self.n_ctx])
-
-            for contexts_tensor, targets_tensor in zip(contexts_tensor_batched, targets_tensor_batched):
-
-                x = self.wte(contexts_tensor) + self.wpe(torch.arange(self.n_ctx, device=device))
-                print("len x: ", len(x))
-
-
-                print("Doing inference")
-                now = datetime.now()
-                for block_idx in range(i): # this pass through all the blocks up to the current wnn block
-                    print("Doing inference on block: ", block_idx)
-                    with torch.no_grad():  # don't store gradients
-                        x, p = self.h[block_idx].forward(x)  # pass through all previous blocks but not the current one
-
-                print("doing inference on current block")
-                _, _ = block.forward(x)  # pass through the current block to get the pre WNN x
-                pre_wnn_x = block.pre_wnn_x  # get the pre WNN x from the current block
-
-                pre_wnn_x.retain_grad()  # we need gradients w.r.t. pre wnn x 
-
+                pre_wnn_x.retain_grad()
                 x = pre_wnn_x
-            
-                # pass through the rest of the blocks
-                for block_idx in range(i+1, len(self.h)):
-                    print("Doing inference on block: ", block_idx)
 
-                    x, p = self.h[block_idx].forward(x)
+      
+                for block_idx in range(i + 1, len(self.h)):
+                    print("  Doing inference on block:", block_idx)
+                    x, _ = self.h[block_idx](x)
 
+                logits = lm_head(x)  # [1, T, vocab]
+                print("Completed inference. Time:", datetime.now() - now_block)
 
-
-                pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :] # get only the last time stamp row
-                pre_wnn_x_last = pre_wnn_x_last.detach().clone().requires_grad_(True)
-
-                logits = lm_head(x)
-
-                print("Completed inference. Time: ", datetime.now()- now )
-
-                
-                loss = F.cross_entropy(logits[:, -1, :], targets_tensor) # compute the loss w.r.t the target token
+                loss = F.cross_entropy(logits[:, -1, :], target_tensor)
 
                 self.zero_grad()
                 print("Start backward")
-                now = datetime.now()
-                loss.backward() # get the gradients 
-                print("Finish backward Time: ", datetime.now()- now )
+                now_back = datetime.now()
+                loss.backward()
+                print("Finish backward. Time:", datetime.now() - now_back)
 
-                #TODO, do we actual want to scale the target residual
-                wnn_target_resiudal = self.residual_scale*(-pre_wnn_x.grad)  #(-pre_wnn_x.grad) #residual_scale*(-pre_wnn_x.grad) # the target residual is the negative gradient w.r.t pre wnn x because we want to move in the direction that reduces the loss
-                
+                # Target residual = negative gradient at pre_wnn_x
+                wnn_target_residual = self.residual_scale * (-pre_wnn_x.grad)  # [1, T, d]
 
-                # explaining futher this gradient tells us how to change pre wnn x to reduce the loss since we have calculated the loss with respect to the target token 
-                # so we want to to nudge the wnn resiudal toward the gradient to reduce the delta between the predicted token and the target token
-                pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :] # get only the last time stamp row
-                target_residual_last = wnn_target_resiudal.detach()[:, -1, :]
+                # Take only last time step for LUT
+                pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :]           # [1, d]
+                target_residual_last = wnn_target_residual.detach()[:, -1, :]  # [1, d]
 
-                
-                # N. B. this method works but it has an issue.
-                # large gradients on rare tokens can produce very large resiudals cuasing overfitting
-                # To get around this we will introduce a normalizing technique
-                #target_residual_last = target_residual_last/ ( torch.linalg.vector_norm(target_residual_last, ord=2, dim=-1, keepdim=True)+1e-6) 
-                #
-                print("time for preparing data: ", datetime.now()-now)
-                print("training wnn")
-                now1 = datetime.now()
-                
+                # (Optional) normalize to avoid giant residuals on rare tokens
+                # target_residual_last = target_residual_last / (
+                #     torch.linalg.vector_norm(target_residual_last, ord=2, dim=-1, keepdim=True) + 1e-6
+                # )
+
+                print("Training LUT")
+                now_lut = datetime.now()
                 block.LUT.train(pre_wnn_x_last, target_residual_last)
-                print("time for training WNN: ", datetime.now()-now1)
+                print("Time for training LUT:", datetime.now() - now_lut)
 
+            print("Finished block", i, "total time:", datetime.now() - now_block)
+
+        # Re-enable WNN usage for inference
         for block in self.h:
             block.use_wnn = True
+
+
 
 
 class GPT2LMHead(nn.Module):

@@ -19,7 +19,7 @@ from GPT2.encoder import get_encoder
 nsamples = 1                      # Number of samples to generate
 batch_size = 1                     # Batch size for generation
                        # Length of generated text (-1 = half of context)
-temperature = 0.01                 # Sampling temperature
+temperature = 0.7                 # Sampling temperature
 top_k = 40                          # Top-k sampling
 unconditional = False              # Generate text without any prompt
 quiet = False                      # Suppress intermediate prints
@@ -46,11 +46,6 @@ transformer = model.transformer
 transformer.h[-1].wnn_block = True
 
 lm_head = model.lm_head
-
-enc.encoder["<|pad|>"] = len(enc.encoder)
-padd_idx = len(enc.encoder)
-transformer.padd_idx = padd_idx
-enc.decoder[len(enc.decoder)] = "<|pad|>"
 
 def text_generator(text_input, length):
     gen_length = length
@@ -82,9 +77,37 @@ def text_generator(text_input, length):
                 print("=" * 40 + f" SAMPLE {generated} " + "=" * 40)
             print(text)
 
-transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label="San Francisco.", label_context="Ali lives in  ")
+fake_company_docs = [
+    {
+        "prompt": "NovaSol’s Q3 installation data shows that balcony panel deployments in London and Berlin ",
+        "completion": "increased by 27% compared to Q2, driven mainly by referrals and bundled maintenance packages."
+    },
+    {
+        "prompt": "Customer feedback from the 2025 balcony panel series indicates that users particularly value ",
+        "completion": "the real-time energy tracking dashboard and the ability to export usage reports for their landlords."
+    },
+    {
+        "prompt": "Over the last month, our logistics team identified that shipping delays were primarily caused by ",
+        "completion": "a shortage of mounting brackets at the central London warehouse and customs checks on EU-bound orders."
+    },
+    {
+        "prompt": "Internal testing of the updated inverter firmware showed that under cloudy conditions, the panels ",
+        "completion": "maintained 94% of their expected output and reduced voltage fluctuations reported in earlier builds."
+    },
+    {
+        "prompt": "Support tickets from new NovaSol customers most frequently mention difficulties with ",
+        "completion": "Wi-Fi onboarding of the IoT hub and understanding how to read the daily kWh breakdown in the mobile app."
+    }
+]
+
+for fake_doc in fake_company_docs:
+    prompt = fake_doc["prompt"]
+    completion = fake_doc["completion"]
+    transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label=completion, label_context=prompt)
+
+
 transformer.h[-1].residual_scale = 20
-text_generator(text_input="Astarus is building ", length=20)
+
 
 if __name__ == '__main__':
     while True:
