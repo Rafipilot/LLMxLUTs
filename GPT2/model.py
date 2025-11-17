@@ -338,7 +338,6 @@ class GPT2Model(nn.Module):
 
                 print("Doing inference (pre-WNN blocks)")
                 for block_idx in range(i):
-                    print("  Block:", block_idx)
                     with torch.no_grad():
                         x, _ = self.h[block_idx](x)
 
@@ -352,7 +351,6 @@ class GPT2Model(nn.Module):
 
       
                 for block_idx in range(i + 1, len(self.h)):
-                    print("  Doing inference on block:", block_idx)
                     x, _ = self.h[block_idx](x)
 
                 logits = lm_head(x)  # [1, T, vocab]
@@ -361,7 +359,7 @@ class GPT2Model(nn.Module):
                 loss = F.cross_entropy(logits[:, -1, :], target_tensor)
 
                 self.zero_grad()
-                print("Start backward")
+                ("Start backward")
                 now_back = datetime.now()
                 loss.backward()
                 print("Finish backward. Time:", datetime.now() - now_back)

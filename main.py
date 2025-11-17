@@ -7,11 +7,15 @@ import sys
 import torch
 import random
 import numpy as np
+from datetime import datetime
+
 from GPT2.model import GPT2LMHeadModel
 from GPT2.utils import load_weight
 from GPT2.config import GPT2Config
 from GPT2.sample import sample_sequence
 from GPT2.encoder import get_encoder
+
+
 
 # =========================
 # User Settings
@@ -85,19 +89,41 @@ tlg_docs = [
 
     """Through its Africa Growth Impact Fund II, TLG provides private credit to African SMEs in sectors like healthcare, financial services, and consumer goods. The fund reached a first close of about $75 million, anchored by IFC and several European development finance institutions, and aims to scale local, impact-focused lending solutions.""",
 
-    # """In West Africa, TLG recently structured a $10 million private credit facility to support an investment holding company acquiring an insurance platform in Ghana. The transaction illustrates TLG’s strategy of backing locally led businesses and deploying flexible credit in a challenging macro environment, while positioning for Africa’s next decade of growth.""",
+    """In West Africa, TLG recently structured a $10 million private credit facility to support an investment holding company acquiring an insurance platform in Ghana. The transaction illustrates TLG’s strategy of backing locally led businesses and deploying flexible credit in a challenging macro environment, while positioning for Africa’s next decade of growth.""",
 
-    # """TLG has also arranged a $10 million debt facility for a telecommunications provider in Djibouti, alongside International Investment Bank entities. The financing is designed to expand digital infrastructure and improve internet penetration. This deal showcases TLG’s emphasis on bespoke structures that make African private credit investable at scale for global allocators.""",
+    """TLG has also arranged a $10 million debt facility for a telecommunications provider in Djibouti, alongside International Investment Bank entities. The financing is designed to expand digital infrastructure and improve internet penetration. This deal showcases TLG’s emphasis on bespoke structures that make African private credit investable at scale for global allocators.""",
 
-    # """Backed by institutions such as IFC, Norfund, Swedfund, Bpifrance, and impact investors, TLG’s funds are building an African private credit ecosystem. The firm’s vehicles seek to close the SME financing gap, catalyse follow-on capital, and demonstrate that perceived African risk is often mispriced relative to actual performance and resilience of portfolio companies."""
+    """Backed by institutions such as IFC, Norfund, Swedfund, Bpifrance, and impact investors, TLG’s funds are building an African private credit ecosystem. The firm’s vehicles seek to close the SME financing gap, catalyse follow-on capital, and demonstrate that perceived African risk is often mispriced relative to actual performance and resilience of portfolio companies."""
+
+    """TLG Capital is a specialist private credit manager focused on sub-Saharan Africa, targeting businesses that sit between traditional bank lending and private equity. By structuring tailored debt instruments for resilient, cash-generative SMEs, TLG aims to safeguard investor capital while enabling local companies to grow, hire, and withstand volatile macro cycles across the continent.""",
+
+    """The Africa Growth Impact Fund I, launched in 2016, was designed as an open-ended private credit vehicle backing African SMEs with flexible tenors and covenant-light structures. The fund focuses on healthcare, financial services, and consumer sectors, seeking to combine downside protection with measurable social outcomes in underserved markets across sub-Saharan Africa.""",
+
+    """Africa Growth Impact Fund II builds on the strategy of Fund I but introduces a more programmatic partnership with African banks. By working alongside local lenders to identify viable but constrained SMEs, AGIF II structures bespoke credit solutions that relieve pressure on bank balance sheets while providing longer-dated, appropriately priced capital to borrowers.""",
+
+    """A core feature of TLG’s strategy is its ability to design instruments that sit between senior secured loans and quasi-equity. Deals often blend amortizing and bullet repayment profiles, revenue-linked features, and performance ratchets. This structuring toolkit allows TLG to share in upside while still prioritizing capital preservation for institutional investors allocating to frontier markets.""",
+
+    """In a representative Ghanaian transaction, TLG partnered with an investment holding company acquiring an insurance platform. TLG’s facility financed the acquisition, provided working capital, and built in governance milestones tied to risk management upgrades. The structure allowed local sponsors to maintain control while accelerating growth in a market where insurance penetration remains structurally low.""",
+
+    """For the Djibouti telecommunications facility, TLG arranged a debt package alongside international co-lenders to expand digital infrastructure and improve connectivity. The transaction blended hard currency funding with strong security packages, including receivables and network assets, reflecting TLG’s approach of combining robust downside protection with exposure to long-term demand for data and mobile services.""",
+
+    """TLG’s track record spans more than a decade, with dozens of completed investments and exits across roughly twenty African countries. The portfolio includes businesses in healthcare, consumer goods, education, and financial services, many of which operate in fragile or low-income economies. That diversification across sectors and geographies underpins the firm’s capital preservation objective for LPs.""",
+
+    """Institutional backers in TLG’s funds include development finance institutions such as IFC, Norfund, Swedfund, and Bpifrance, alongside private investors. Their commitments reflect confidence in TLG’s ability to originate and manage complex private credit positions in markets where traditional lenders often lack the flexibility or risk appetite to support smaller, fast-growing companies.""",
+
+    """A key element of TLG’s impact thesis is job preservation and creation. Many of the SMEs it finances sit at critical points in local value chains—clinics, distributors, lenders, and consumer businesses that employ hundreds of people. By providing capital during periods of stress, TLG aims to keep viable companies operating and protect livelihoods that might otherwise be lost.""",
+
+    """AGIF II explicitly targets SMEs that are fundamentally sound but temporarily constrained, often due to macro shocks or short-term liquidity issues. TLG works with partner banks to identify such borrowers inside their portfolios and then structures refinancing or top-up facilities that extend tenors, smooth repayment schedules, and align incentives among all stakeholders.""",
 ]
 
 
 
-for doc in tlg_docs:
-    # prompt = fake_doc["prompt"]
-    # completion = fake_doc["completion"]
+
+before_training_lut = datetime.now()
+for i, doc in enumerate(tlg_docs):
+    print(f"=== Doc number: {i} ===")
     transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label=doc)
+print("Time to train LUT: ", datetime.now()- before_training_lut)
 
 
 for block in transformer.h:
@@ -106,7 +132,7 @@ for block in transformer.h:
 
 if __name__ == '__main__':
     while True:
-        prompt = input("Enter a prompt (No space after prompt pls :) ): ") # Ensure no space after prompt- it messes up tokenization and lut lookups!
+        prompt = input("Enter a prompt (No space after prompt pls) : ") # Ensure no space after prompt- it messes up tokenization and lut lookups!
         if "train" in prompt.lower():
             train_context = input("Train context: ")
             label = input("Label: ")
@@ -120,7 +146,6 @@ if __name__ == '__main__':
             continue
         if "threshold" in prompt.lower():
             thresh = float(input("Threshold: "))
-
             for block in transformer.h:
                 block.LUT.CS_threshold =thresh
 
