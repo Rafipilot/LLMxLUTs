@@ -44,13 +44,8 @@ def load_lut_for_user(model, lut_name):
     Example schema idea (in DB):
       { lut_name, block_idx, key, value, ... }
     """
-    if lut_name is None:
-        return
-    # TODO: query DB for lut_name, then for each row:
-    #   block = model.transformer.h[row["block_idx"]]
-    #   block.LUT.load_from_row(row)
-    # return model
-    pass
+    return model
+
 
 
 def save_lut_for_user(model, lut_name):
@@ -59,14 +54,12 @@ def save_lut_for_user(model, lut_name):
 
     Called after trainLUT completes.
     """
-    if lut_name is None:
-        return
-    # TODO: iterate over model.transformer.h, extract LUT contents and write to DB
-    pass
+    return model
+
 
 
 def _setupModel():
-    global MODEL, TRANSFORMER, LM_HEAD, CONFIG, ENC, TEMPERATURE
+    global MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
 
     temperature = 0.7
 
@@ -84,9 +77,11 @@ def _setupModel():
     model.to(device)
     model.eval()
 
-    transformer = model.transformer
+    
 
     # once we have a db this info will be auto pulled given a name.
+    ## To be REMOVED once we have DB working!
+    transformer = model.transformer
     transformer.h[-1].wnn_block = True
     for block in transformer.h:
         block.residual_scale = 35
@@ -99,7 +94,6 @@ def _setupModel():
 
     # store in globals
     MODEL = model
-    TRANSFORMER = transformer
     LM_HEAD = lm_head
     CONFIG = config
     ENC = enc
@@ -108,21 +102,16 @@ def _setupModel():
     return model, lm_head, config, enc, temperature
 
 
-# Initialize model ONCE at import time
-_setupModel()
-
-
 # =========================
 # Core functions
 # =========================
 
 def text_generator(text_input, length, lutName):
     model, lm_head, config, enc, temperature = (
-        MODEL, TRANSFORMER, LM_HEAD, CONFIG, ENC, TEMPERATURE
+        MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
     )
 
     model = load_lut_for_user(model, lutName)
-    transformer = model.transformer
 
     gen_length = length
     if gen_length == -1:
@@ -151,7 +140,7 @@ def text_generator(text_input, length, lutName):
 
 def trainLUT(train_text, train_context=None, lutName="Placeholder"):
     model, lm_head, config, enc, temperature = (
-        MODEL, TRANSFORMER, LM_HEAD, CONFIG, ENC, TEMPERATURE
+        MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
     )
 
     model = load_lut_for_user(model, lutName)
@@ -233,6 +222,8 @@ def health():
 
 if __name__ == "__main__":
 
+    # Initialize model ONCE at import time
+    _setupModel()       
     trainLUT("TLG Capital is an asset management firm.", lutName="test_user")
     print(text_generator("TLG Capital is", 20, lutName="test_user"))
 
