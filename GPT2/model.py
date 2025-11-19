@@ -186,7 +186,8 @@ class LUT():
 
     def saveLUT(self, save_name):
         with open(save_name, "w") as f:
-            json.dump(self.lookupTable, f, indent=2)
+            save_lookup = self.lookupTable.numpy()
+            json.dump(save_lookup, f, indent=2)
 
     def loadLUT(self, save_name):
         with open(save_name, "r") as f:
@@ -227,29 +228,6 @@ class Block(nn.Module):
                 x = self.pre_wnn_x +self.residual_scale*(res_tensor) # The idea here is that if highest sim is low then the model doest look as much to the lu
                 return x, present
         return self.pre_wnn_x, present
-    
-
-def _ensure_pad_token_and_embeddings(tokenizer, model_self, lm_head, device):
-    # ensure pad token exists in tokenizer
-    if "<|pad|>" not in tokenizer.encoder:
-        pad_id = max(tokenizer.encoder.values()) + 1
-        tokenizer.encoder["<|pad|>"] = pad_id
-        tokenizer.decoder[pad_id] = "<|pad|>"
-    else:
-        pad_id = tokenizer.encoder["<|pad|>"]
-
-    vocab_size = len(tokenizer.encoder)
-    old_emb = model_self.wte.weight.data
-    old_vocab, emb_dim = old_emb.shape
-
-    if vocab_size > old_vocab:
-        new_emb = torch.nn.Embedding(vocab_size, emb_dim)
-        new_emb.weight.data[:old_vocab] = old_emb
-        new_emb.weight.data[old_vocab:] = old_emb.mean(dim=0)
-        model_self.wte = new_emb.to(device)
-        lm_head.weight = model_self.wte.weight  # tie weights
-
-    return pad_id
 
 class GPT2Model(nn.Module):
     def __init__(self, config):
