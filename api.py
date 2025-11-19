@@ -12,11 +12,11 @@ from datetime import datetime
 
 from flask import Flask, request, jsonify
 
-from GPT2.model import GPT2LMHeadModel
-from GPT2.utils import load_weight
-from GPT2.config import GPT2Config
-from GPT2.sample import sample_sequence
-from GPT2.encoder import get_encoder
+from GPT2LUT.GPT2.model import GPT2LMHeadModel
+from GPT2LUT.GPT2.utils import load_weight
+from GPT2LUT.GPT2.config import GPT2Config
+from GPT2LUT.GPT2.sample import sample_sequence
+from GPT2LUT.GPT2.encoder import get_encoder
 
 import sqlite3
 import pickle
