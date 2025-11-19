@@ -4,5 +4,4 @@ torch
 numpy
 torch
 datetime
-functools
 tqdm
