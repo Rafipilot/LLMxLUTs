@@ -42,7 +42,7 @@ def load_lut_for_user(model, lut_name):
     """
 
     Example schema idea (in DB):
-      { lut_name, block_idx, key, value, ... }
+      { lut_name, lut_block_indices, residuals, ... }
     """
     return model
 
@@ -180,7 +180,7 @@ def generate_endpoint():
     lut_name = data.get("lut_name")  # can be None / default
 
     try:
-        completion = text_generator(prompt, length, lut_name=lut_name)
+        completion = text_generator(prompt, length, lutName=lut_name)
         return jsonify({
             "prompt": prompt,
             "completion": completion,
@@ -209,7 +209,7 @@ def train_lut_endpoint():
         return jsonify({"error": "Missing 'label' field"}), 400
 
     try:
-        trainLUT(label, train_context=label_context, LUTName=lut_name)
+        trainLUT(label, train_context=label_context, lutName=lut_name)
         return jsonify({"status": "ok", "lut_name": lut_name})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -224,7 +224,7 @@ if __name__ == "__main__":
 
     # Initialize model ONCE at import time
     _setupModel()       
-    trainLUT("TLG Capital is an asset management firm.", lutName="test_user")
-    print(text_generator("TLG Capital is", 20, lutName="test_user"))
+    # trainLUT("TLG Capital is an asset management firm.", lutName="test_user")
+    # print(text_generator("TLG Capital is", 20, lutName="test_user"))
 
     app.run(host="0.0.0.0", port=8000, debug=False)
