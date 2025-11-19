@@ -25,8 +25,7 @@ def train_lut(label, lut_name="user_123", label_context=None):
     print("Response:", r.json())
 
 if __name__ == "__main__":
-    # 1. Train LUT for a user
+
     train_lut("TLG Capital is an asset management firm.", lut_name="user_123")
 
-    # 2. Generate using that user's LUT
     generate("TLG Capital is", length=30, lut_name="user_123")
