@@ -124,10 +124,12 @@ for i, doc in enumerate(tlg_docs):
     print(f"=== Doc number: {i} ===")
     transformer.trainLUT(tokenizer = enc,lm_head = lm_head, label=doc)
 print("Time to train LUT: ", datetime.now()- before_training_lut)
+transformer.saveLUTs("LUTSaves/TLGTrainData")
 
 
 for block in transformer.h:
     block.residual_scale = 35
+    block.LUT.CS_threshold = 0.9 # generally a good start to prevent overfitting 
 
 
 if __name__ == '__main__':
@@ -152,7 +154,7 @@ if __name__ == '__main__':
         length = int(input("How many tokens to generate: "))
         text_generator(text_input=prompt, length=length)
         for block in transformer.h:
-            block.LUT.reset_costs()
+            block.LUT.resetCosts()
 
 
 

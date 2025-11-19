@@ -12,6 +12,10 @@ import torch.nn.functional as F
 
 from datetime import datetime
 
+import json
+
+import os
+
 device =torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device : ", device)
 
@@ -176,9 +180,17 @@ class LUT():
         self.lookupTable = [] # main lookup table
         self.lookupTableMetaData = []
 
-    def reset_costs(self):
+    def resetCosts(self):
         for row in self.lookupTableMetaData:
             row[0] = 1000
+
+    def saveLUT(self, save_name):
+        with open(save_name, "w") as f:
+            json.dump(self.lookupTable, f, indent=2)
+
+    def loadLUT(self, save_name):
+        with open(save_name, "r") as f:
+            self.lookupTable = json.load(f)
             
 
 class Block(nn.Module):
@@ -387,7 +399,18 @@ class GPT2Model(nn.Module):
         for block in self.h:
             block.use_wnn = True
 
+    def saveLUTs(self, save_name):
+        base_name = save_name
+        for i, block in enumerate(self.h):
+            save_name = base_name +"blockNumber"+str(i)
+            if block.wnn_block:
+                block.LUT.saveLUT(save_name)
 
+    def loadLUTs(self, save_name):
+        for i, block in enumerate(self.h):
+            save_name = save_name +"blockNumber"+str(i)
+            if block.wnn_block:
+                block.LUT.loadLUT(save_name)
 
 
 class GPT2LMHead(nn.Module):
