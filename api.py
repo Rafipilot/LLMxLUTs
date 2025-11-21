@@ -52,12 +52,9 @@ ENABLE_GPT2 = False
 BASE_DIR = Path(__file__).parent
 
 # Path to the Mistral model folder
-MISTRAL_PATH = BASE_DIR / "MistralxLUT" / "mistral-7B-Instruct-v0.3"
+MISTRAL_PATH = None
+MISTRAL_MODEL = None
 
-MISTRAL_TOKENIZER = Tokenizer(str(MISTRAL_PATH / "tokenizer.model.v3"))
-MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
-
-MISTRAL_MODEL.layers[-1].wnn_block = True
 
 # =========================
 # SQLite helpers
@@ -230,7 +227,26 @@ def save_lut_for_user(transformer, lut_name):
     conn.close()
     return transformer
 
+def get_mistral():
+    global MISTRAL_MODEL, MISTRAL_TOKENIZER
 
+    if MISTRAL_MODEL is not None:
+        return MISTRAL_MODEL, MISTRAL_TOKENIZER
+
+    MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model"))
+
+    # optional: try GPU first, then fall back to CPU
+    try:
+        print("[mistral] loading on CUDA...")
+        MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
+    except torch.OutOfMemoryError:
+        print("[mistral] CUDA OOM, falling back to CPU")
+        MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=1)
+        MISTRAL_MODEL.to("cpu")
+
+
+    MISTRAL_MODEL.layers[-1].wnn_block = True
+    return MISTRAL_MODEL, MISTRAL_TOKENIZER
 # =========================
 # GPT-2 setup
 # =========================
@@ -322,6 +338,7 @@ def text_generator_gpt2(text_input, length, lut_name):
 
 def text_generator_mistral(text_input, length, lut_name):
     # For Mistral, the Transformer itself is the "transformer"
+    model, tokenizer = get_mistral()
     model = load_lut_for_user(MISTRAL_MODEL, lut_name)
 
     # generate() returns (list_of_outputs, logits)
@@ -371,6 +388,7 @@ def trainLUT_gpt2(train_text, train_context=None, lut_name="default"):
 
 def trainLUT_mistral(train_text, train_context=None, lut_name="default"):
     # Mistral model is itself the transformer with trainLUT
+    model, tokenizer = get_mistral()
     model = load_lut_for_user(MISTRAL_MODEL, lut_name)
     transformer = model
 
