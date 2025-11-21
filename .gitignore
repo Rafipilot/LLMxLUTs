@@ -13,3 +13,11 @@ MistralxLUT/mistral-7B-v0.1/params.json
 MistralxLUT/mistral-7B-v0.1/tokenizer.model
 GPT2xLUT/GPT2/vocab.bpe
 GPT2xLUT/gpt2-pytorch_model.bin
+
+\MistralxLUT\usage-v0.2-instruct.py
+
+/mistral-7B-Instruct-v0.3/
+/mistral-7B-v0.1/
+MistralxLUT/mistral-7B-Instruct-v0.3/consolidated.safetensors
+MistralxLUT/mistral-7B-Instruct-v0.3/tokenizer.model.v3
+MistralxLUT/mistral-7B-Instruct-v0.3/params.json

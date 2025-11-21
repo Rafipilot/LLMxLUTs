@@ -1,4 +1,3 @@
-## this was vibe coded after i made an initial outline of the code lol- needs to be re made on a proper db without vibecoding!
 """
 Original code by TaeHwan Jung(@graykode) credit to them for the gpt-2 base model
 """
@@ -9,14 +8,17 @@ import torch
 import random
 import numpy as np
 from datetime import datetime
+from pathlib import Path
 
 from flask import Flask, request, jsonify
 
-from GPT2LUT.GPT2.model import GPT2LMHeadModel
-from GPT2LUT.GPT2.utils import load_weight
-from GPT2LUT.GPT2.config import GPT2Config
-from GPT2LUT.GPT2.sample import sample_sequence
-from GPT2LUT.GPT2.encoder import get_encoder
+from GPT2xLUT.GPT2.model import GPT2LMHeadModel
+from GPT2xLUT.GPT2.utils import load_weight
+from GPT2xLUT.GPT2.config import GPT2Config
+from GPT2xLUT.GPT2.sample import sample_sequence
+from GPT2xLUT.GPT2.encoder import get_encoder
+
+from MistralxLUT.main import Tokenizer, Transformer, generate
 
 import sqlite3
 import pickle
@@ -30,20 +32,32 @@ torch.random.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Globals for single model instance
+# =========================
+# GPT-2 globals
+# =========================
 MODEL = None
 LM_HEAD = None
 CONFIG = None
 ENC = None
 TEMPERATURE = 0.7
 
-DB_PATH = "lut.db"
+# One shared LUT DB for all models
+DB_PATH = "LUT.db"
+
+# =========================
+# Mistral globals
+# =========================
+MISTRAL_PATH = "MistralxLUT/mistral-7B-v0.1"
+
+MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model"))
+MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
 
 # =========================
 # SQLite helpers
 # =========================
 
 def _get_conn():
+    """Get a SQLite connection and ensure table exists."""
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL;")
     conn.execute(
@@ -58,6 +72,18 @@ def _get_conn():
         """
     )
     return conn
+
+
+def _get_blocks(transformer):
+    """
+    Return the list of blocks for either GPT-2 (.h) or Mistral (.layers).
+    """
+    if hasattr(transformer, "h"):
+        return transformer.h
+    if hasattr(transformer, "layers"):
+        return transformer.layers
+    return []
+
 
 # =========================
 # Per-user LUT DB hooks
@@ -74,7 +100,8 @@ def load_lut_for_user(model, lut_name):
     if not lut_name:
         return model
 
-    transformer = model.transformer
+    # GPT-2 has model.transformer; Mistral is itself the transformer
+    transformer = getattr(model, "transformer", model)
 
     conn = _get_conn()
     cur = conn.cursor()
@@ -89,8 +116,12 @@ def load_lut_for_user(model, lut_name):
     if not rows:
         return model
 
+    blocks = _get_blocks(transformer)
+    if not blocks:
+        return model
+
     for block_idx, lut_slot, lut_blob in rows:
-        if block_idx < 0 or block_idx >= len(transformer.h):
+        if block_idx < 0 or block_idx >= len(blocks):
             continue
 
         try:
@@ -98,13 +129,12 @@ def load_lut_for_user(model, lut_name):
         except Exception:
             continue
 
-        block = transformer.h[block_idx]
+        block = blocks[block_idx]
 
         # Case 1: multiple LUTs stored in block.LUTs
         if hasattr(block, "LUTs"):
             lut_container = block.LUTs
 
-            # If it's a list-like, ensure length
             if isinstance(lut_container, list):
                 # extend list if needed
                 while len(lut_container) <= lut_slot:
@@ -113,8 +143,7 @@ def load_lut_for_user(model, lut_name):
             elif isinstance(lut_container, dict):
                 lut_container[lut_slot] = lut_obj
             else:
-                # Unknown container type, try attribute-style
-                # as a fallback, ignore for safety
+                # Unknown container type, ignore for safety
                 pass
 
         # Case 2: single LUT (legacy) → only use slot 0
@@ -138,7 +167,11 @@ def save_lut_for_user(transformer, lut_name):
     conn = _get_conn()
     cur = conn.cursor()
 
-    for block_idx, block in enumerate(transformer.h):
+    blocks = _get_blocks(transformer)
+    if not blocks:
+        return transformer
+
+    for block_idx, block in enumerate(blocks):
         # Case 1: multiple LUTs in block.LUTs
         if hasattr(block, "LUTs"):
             lut_container = block.LUTs
@@ -146,7 +179,6 @@ def save_lut_for_user(transformer, lut_name):
             if isinstance(lut_container, list):
                 iterable = enumerate(lut_container)
             elif isinstance(lut_container, dict):
-                # key = slot, value = LUT object
                 iterable = lut_container.items()
             else:
                 iterable = []
@@ -192,12 +224,16 @@ def save_lut_for_user(transformer, lut_name):
     return transformer
 
 
-def _setupModel():
+# =========================
+# GPT-2 setup
+# =========================
+
+def _setup_gpt2_model():
     global MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
 
     temperature = 0.7
 
-    model_path = 'gpt2xl-pytorch_model.bin'
+    model_path = 'GPT2xLUT\gpt2xl-pytorch_model.bin'
     state_dict = torch.load(
         model_path,
         map_location='cpu' if not torch.cuda.is_available() else None
@@ -212,7 +248,6 @@ def _setupModel():
     model.eval()
 
     # once we have a db this info will be auto pulled given a name.
-    ## To be REMOVED once we have DB working!
     transformer = model.transformer
     transformer.h[-1].wnn_block = True
     for block in transformer.h:
@@ -232,15 +267,18 @@ def _setupModel():
 
 
 # =========================
-# Core functions
+# Core generation functions
 # =========================
 
-def text_generator(text_input, length, lutName):
+def text_generator_gpt2(text_input, length, lut_name):
     model, lm_head, config, enc, temperature = (
         MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
     )
 
-    model = load_lut_for_user(model, lutName)
+    if model is None:
+        raise RuntimeError("GPT-2 model not initialised")
+
+    model = load_lut_for_user(model, lut_name)
 
     gen_length = length
     if gen_length == -1:
@@ -267,12 +305,37 @@ def text_generator(text_input, length, lutName):
     return text
 
 
-def trainLUT(train_text, train_context=None, lutName="Placeholder"):
+def text_generator_mistral(text_input, length, lut_name):
+    # For Mistral, the Transformer itself is the "transformer"
+    model = load_lut_for_user(MISTRAL_MODEL, lut_name)
+
+    # generate() returns (list_of_outputs, logits)
+    outs, _ = generate([text_input], model, MISTRAL_TOKENIZER, max_tokens=length)
+    text = outs[0]
+    return text
+
+
+def text_generator(text_input, length, lut_name, model_name="gpt2"):
+    model_name = (model_name or "gpt2").lower()
+    if model_name == "mistral":
+        return text_generator_mistral(text_input, length, lut_name)
+    else:
+        return text_generator_gpt2(text_input, length, lut_name)
+
+
+# =========================
+# Core training functions
+# =========================
+
+def trainLUT_gpt2(train_text, train_context=None, lut_name="default"):
     model, lm_head, config, enc, temperature = (
         MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
     )
 
-    model = load_lut_for_user(model, lutName)
+    if model is None:
+        raise RuntimeError("GPT-2 model not initialised")
+
+    model = load_lut_for_user(model, lut_name)
     transformer = model.transformer
 
     before_training_lut = datetime.now()
@@ -280,14 +343,46 @@ def trainLUT(train_text, train_context=None, lutName="Placeholder"):
     transformer.trainLUT(
         tokenizer=enc,
         lm_head=lm_head,
-        label=train_text
+        label=train_text,
         # label_context=train_context  # if your trainLUT supports this later
     )
 
-    save_lut_for_user(transformer, lutName)  # update the lut in the db
+    save_lut_for_user(transformer, lut_name)
 
-    print("Time to train LUT: ", datetime.now() - before_training_lut)
+    print("Time to train LUT (GPT-2): ", datetime.now() - before_training_lut)
 
+
+def trainLUT_mistral(train_text, train_context=None, lut_name="default"):
+    # Mistral model is itself the transformer with trainLUT
+    model = load_lut_for_user(MISTRAL_MODEL, lut_name)
+    transformer = model
+
+    before_training_lut = datetime.now()
+
+    # In your Mistral code you were using: trainLUT(tokenizer, lm_head=None, label=...)
+    transformer.trainLUT(
+        tokenizer=MISTRAL_TOKENIZER,
+        lm_head=None,
+        label=train_text,
+        # label_context=train_context  # if/when supported
+    )
+
+    save_lut_for_user(transformer, lut_name)
+
+    print("Time to train LUT (Mistral): ", datetime.now() - before_training_lut)
+
+
+def trainLUT_backend(train_text, train_context=None, lut_name="default", model_name="gpt2"):
+    model_name = (model_name or "gpt2").lower()
+    if model_name == "mistral":
+        return trainLUT_mistral(train_text, train_context=train_context, lut_name=lut_name)
+    else:
+        return trainLUT_gpt2(train_text, train_context=train_context, lut_name=lut_name)
+
+
+# =========================
+# Flask app
+# =========================
 
 app = Flask(__name__)
 
@@ -299,20 +394,23 @@ def generate_endpoint():
     {
         "prompt": "TLG Capital is",
         "length": 20,
-        "lut_name": "user123"      # per-user LUT identifier
+        "lut_name": "user123",      # per-user LUT identifier
+        "model": "gpt2" | "mistral" # optional, default: "gpt2"
     }
     """
     data = request.get_json(force=True, silent=True) or {}
     prompt = data.get("prompt", "")
     length = data.get("length", 50)
-    lut_name = data.get("lut_name")  # can be None / default
+    lut_name = data.get("lut_name")
+    model_name = data.get("model", "gpt2")
 
     try:
-        completion = text_generator(prompt, length, lutName=lut_name)
+        completion = text_generator(prompt, length, lut_name=lut_name, model_name=model_name)
         return jsonify({
             "prompt": prompt,
             "completion": completion,
-            "lut_name": lut_name
+            "lut_name": lut_name,
+            "model": model_name
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -325,20 +423,22 @@ def train_lut_endpoint():
     {
         "label": "TLG Capital is an asset management firm.",
         "label_context": "optional context...",
-        "lut_name": "user123"
+        "lut_name": "user123",
+        "model": "gpt2" | "mistral"
     }
     """
     data = request.get_json(force=True, silent=True) or {}
     label = data.get("label")
     label_context = data.get("label_context")
     lut_name = data.get("lut_name", "default")
+    model_name = data.get("model", "gpt2")
 
     if not label:
         return jsonify({"error": "Missing 'label' field"}), 400
 
     try:
-        trainLUT(label, train_context=label_context, lutName=lut_name)
-        return jsonify({"status": "ok", "lut_name": lut_name})
+        trainLUT_backend(label, train_context=label_context, lut_name=lut_name, model_name=model_name)
+        return jsonify({"status": "ok", "lut_name": lut_name, "model": model_name})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -349,10 +449,7 @@ def health():
 
 
 if __name__ == "__main__":
-
-    # Initialize model ONCE at import time
-    _setupModel()
-    # trainLUT("TLG Capital is an asset management firm.", lutName="test_user")
-    # print(text_generator("TLG Capital is", 20, lutName="test_user"))
+    # Initialize GPT-2 model ONCE
+    _setup_gpt2_model()
 
     app.run(host="0.0.0.0", port=8000, debug=False)

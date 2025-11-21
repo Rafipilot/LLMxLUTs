@@ -1,15 +1,16 @@
-
-from huggingface_hub import hf_hub_download
+from huggingface_hub import snapshot_download
 from pathlib import Path
 
-target = Path.home() / "models" / "mistral-7B-v0.1"
+# Download an instruct model in mistral-inference format
+target = Path("mistral-7B-Instruct-v0.3")   # local folder inside MistralxLUT
 target.mkdir(parents=True, exist_ok=True)
 
-for fname in ["consolidated.00.pth", "params.json", "tokenizer.model"]:
-    hf_hub_download(
-        repo_id="manu/mistral-7B-v0.1",
-        filename=fname,
-        local_dir=target,
-        local_dir_use_symlinks=False,
-    )
-
+snapshot_download(
+    repo_id="mistralai/Mistral-7B-Instruct-v0.3",
+    allow_patterns=[
+        "params.json",
+        "consolidated.safetensors",
+        "tokenizer.model.v3",
+    ],
+    local_dir=target,
+)

@@ -2,7 +2,7 @@ from pathlib import Path
 
 from main import Tokenizer, Transformer, generate
 
-model_path = "mistral-7B-v0.1"
+model_path = "MistralxLUT\mistral-7B-Instruct-v0.2"
 max_tokens = 25
 
 tokenizer = Tokenizer(str(Path(model_path) / "tokenizer.model"))

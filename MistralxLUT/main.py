@@ -10,6 +10,7 @@ from sentencepiece import SentencePieceProcessor
 import torch.nn.functional as F
 from datetime import datetime
 
+from safetensors.torch import load_file as safe_load
 
 device =torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("device : ", device)
@@ -22,11 +23,12 @@ class ModelArgs:
     hidden_dim: int
     n_heads: int
     n_kv_heads: int
-    sliding_window: int
-    norm_eps: float
-    vocab_size: int
+    sliding_window: int =4096 
+    norm_eps: float = None
+    vocab_size: int= None
 
     max_batch_size: int = 0
+    rope_theta: float = 1000000.0
 
 
 def repeat_kv(keys: torch.Tensor, values: torch.Tensor, repeats: int):
@@ -182,7 +184,7 @@ class LUT():
     def __init__(self):
         self.lookupTable = [] # main lookup table
         self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
-        self.CS_threshold = 0.5
+        self.CS_threshold = 0.25
         self.cost_scale = 10
 
     def train(self, xs, ys):
@@ -502,7 +504,10 @@ class Transformer(nn.Module):
             model_args = ModelArgs(**json.loads(f.read()))
         model_args.max_batch_size = max_batch_size
         model = Transformer(model_args).to(device=device, dtype=dtype)
-        loaded = torch.load(folder / 'consolidated.00.pth')
+        try:
+            loaded = torch.load(folder / 'consolidated.00.pth')
+        except Exception as e:
+            loaded = safe_load(str(folder / "consolidated.safetensors"))
         model.load_state_dict(loaded)
         return model
 
