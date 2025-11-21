@@ -44,6 +44,8 @@ TEMPERATURE = 0.7
 # One shared LUT DB for all models
 DB_PATH = "LUT.db"
 
+ENABLE_GPT2 = False 
+
 # =========================
 # Mistral globals
 # =========================
@@ -322,6 +324,8 @@ def text_generator(text_input, length, lut_name, model_name="gpt2"):
     if model_name == "mistral":
         return text_generator_mistral(text_input, length, lut_name)
     else:
+        if not ENABLE_GPT2:
+            _setup_gpt2_model()
         return text_generator_gpt2(text_input, length, lut_name)
 
 
@@ -379,6 +383,8 @@ def trainLUT_backend(train_text, train_context=None, lut_name="default", model_n
     if model_name == "mistral":
         return trainLUT_mistral(train_text, train_context=train_context, lut_name=lut_name)
     else:
+        if not ENABLE_GPT2:
+            _setup_gpt2_model()
         return trainLUT_gpt2(train_text, train_context=train_context, lut_name=lut_name)
 
 
@@ -452,6 +458,4 @@ def health():
 
 if __name__ == "__main__":
     # Initialize GPT-2 model ONCE
-    _setup_gpt2_model() #commenting for local testing since i run out of memory if I have both gpt2 and mistral at the same time
-
     app.run(host="0.0.0.0", port=8000, debug=False)

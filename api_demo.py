@@ -36,7 +36,8 @@ def train_lut(label, lut_name="user_123", label_context=None, model="mistral"):
 
 if __name__ == "__main__":
     # Example: train a Mistral LUT
-    train_lut("TLG Capital is an asset management firm.", lut_name="rafi-test-03",label_context="Assistant: ")
+    #train_lut("Astarus AI is building continuously trainable LLMs.", lut_name="rafi-test-05",label_context="Assistant: ")
 
     # Example: generate using Mistral + that LUT
-    generate("User: What is TLG Capital?\nAssistant:", length=30, lut_name="rafi-test-03")
+    generate("User: What is Astarus\nAssistant:", length=10, lut_name="rafi-test-05")
+
