@@ -62,15 +62,6 @@ MISTRAL_TOKENIZER = None
 EMPTY_LUT_TEMPLATES_GPT2 = {}      # block_idx -> {slot: empty_LUT_copy}
 EMPTY_LUT_TEMPLATES_MISTRAL = {}   # block_idx -> {slot: empty_LUT_copy}
 
-# =========================
-# Per-lut_name WNN config
-# LUT_WNN_CONFIG[model_name][lut_name] = [block indices]
-# =========================
-LUT_WNN_CONFIG = {
-    "gpt2": {},
-    "mistral": {},
-}
-
 
 # =========================
 # SQLite helpers
@@ -103,43 +94,6 @@ def _get_blocks(transformer):
     if hasattr(transformer, "layers"):
         return transformer.layers
     return []
-
-
-def _set_wnn_blocks(transformer, active_indices=None):
-    """
-    Toggle which blocks have `wnn_block` turned on.
-
-    active_indices: iterable of block indices (0-based).
-        Supports negative indices Python-style, e.g. -1 = last block.
-    If None, we leave the current wnn_block configuration as-is.
-    """
-    if active_indices is None:
-        return
-
-    blocks = _get_blocks(transformer)
-    n = len(blocks)
-    if n == 0:
-        return
-
-    actual_indices = []
-    for index in active_indices:
-        idx = int(index)
-        if idx < 0:
-            idx = n + idx  # -1 -> n-1, -2 -> n-2, etc.
-        if 0 <= idx < n:
-            actual_indices.append(idx)
-
-    if not actual_indices:
-        # nothing valid, don't touch existing config
-        return
-
-    actual_indices = set(actual_indices)
-
-    for i, block in enumerate(blocks):
-        if hasattr(block, "wnn_block"):
-            block.wnn_block = (i in actual_indices)
-            if block.wnn_block:
-                print("adding wnn to block idx:", i)
 
 
 def _snapshot_empty_luts(transformer, model_type: str):
@@ -223,31 +177,6 @@ def _restore_empty_luts(transformer, model_type: str):
 
 
 # =========================
-# WNN config helpers
-# =========================
-
-def _set_wnn_config_for(lut_name: str, model_name: str, wnn_blocks):
-    """Store WNN block configuration for (lut_name, model)."""
-    model_name = (model_name or "gpt2").lower()
-    if model_name not in LUT_WNN_CONFIG:
-        LUT_WNN_CONFIG[model_name] = {}
-    LUT_WNN_CONFIG[model_name][lut_name] = [int(i) for i in wnn_blocks]
-
-
-def _get_wnn_config_for(lut_name: str | None, model_name: str):
-    """
-    Return WNN block indices for this (lut_name, model).
-
-    Defaults to [-1] (last block) if nothing configured.
-    """
-    model_name = (model_name or "gpt2").lower()
-    if not lut_name:
-        return [-1]
-    model_cfg = LUT_WNN_CONFIG.get(model_name, {})
-    return model_cfg.get(lut_name, [-1])
-
-
-# =========================
 # Per-user LUT DB hooks
 # =========================
 def load_lut_for_user(model, lut_name):
@@ -283,7 +212,7 @@ def load_lut_for_user(model, lut_name):
     if not blocks:
         return model
 
-    # If this lut_name has no rows, reset all LUTs for a clean slate
+    # --- NEW: if this lut_name has no rows, reset all LUTs for a clean slate ---
     if not rows:
         print(f"[load_lut_for_user] No rows for lut_name={lut_name}, resetting all LUTs")
         for block in blocks:
@@ -305,8 +234,9 @@ def load_lut_for_user(model, lut_name):
                     block.LUT.resetLUT()
 
         return model
+    # --------------------------------------------------------------------------
 
-    # If we *do* have rows, load that user's LUT snapshot.
+    # If we *do* have rows, behave as before: load that user's LUT snapshot.
     for block_idx, lut_slot, lut_blob in rows:
         if block_idx < 0 or block_idx >= len(blocks):
             continue
@@ -338,7 +268,6 @@ def load_lut_for_user(model, lut_name):
             block.LUT = lut_obj
 
     return model
-
 
 def save_lut_for_user(transformer, lut_name):
     """
@@ -428,11 +357,10 @@ def get_mistral():
         MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=1)
         MISTRAL_MODEL.to("cpu")
 
-    # base LUT config for Mistral
-    for i, block in enumerate(MISTRAL_MODEL.layers):
-        if hasattr(block, "wnn_block"):
-            # default: last block only (per-model default; per-lut overrides later)
-            block.wnn_block = (i == len(MISTRAL_MODEL.layers) - 1)
+    # base LUT config for mistral
+    MISTRAL_MODEL.layers[-1].wnn_block = True
+    MISTRAL_MODEL.layers[-5].wnn_block = True
+    for block in MISTRAL_MODEL.layers:
         block.residual_scale = 20
         block.LUT.CS_threshold = 0.25  # starting default
 
@@ -478,10 +406,8 @@ def _setup_gpt2_model():
 
     # base LUT config for GPT-2
     transformer = model.transformer
-    for i, block in enumerate(transformer.h):
-        if hasattr(block, "wnn_block"):
-            # default: last block only (per-model default; per-lut overrides later)
-            block.wnn_block = (i == len(transformer.h) - 1)
+    transformer.h[-1].wnn_block = True
+    for block in transformer.h:
         block.residual_scale = 20
         block.LUT.CS_threshold = 0.5  # starting default
 
@@ -513,14 +439,9 @@ def text_generator_gpt2(text_input, length, lut_name, threshold, residual):
         raise RuntimeError("GPT-2 model not initialised")
 
     model = load_lut_for_user(model, lut_name)
-    transformer = model.transformer
-
-    # per-lut_name WNN config
-    wnn_blocks = _get_wnn_config_for(lut_name, "gpt2")
-    _set_wnn_blocks(transformer, wnn_blocks)
 
     # adjust per-request LUT config
-    for block in transformer.h:
+    for block in model.transformer.h:
         block.LUT.CS_threshold = threshold
         block.residual_scale = residual
 
@@ -553,10 +474,6 @@ def text_generator_mistral(text_input, length, lut_name, threshold, residual):
     # For Mistral, the Transformer itself is the "transformer"
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
-
-    # per-lut_name WNN config
-    wnn_blocks = _get_wnn_config_for(lut_name, "mistral")
-    _set_wnn_blocks(model, wnn_blocks)
 
     # adjust per-request LUT config
     for block in model.layers:
@@ -594,10 +511,6 @@ def trainLUT_gpt2(train_text, train_context=None, lut_name="default"):
     model = load_lut_for_user(model, lut_name)
     transformer = model.transformer
 
-    # per-lut_name WNN config
-    wnn_blocks = _get_wnn_config_for(lut_name, "gpt2")
-    _set_wnn_blocks(transformer, wnn_blocks)
-
     before_training_lut = datetime.now()
 
     transformer.trainLUT(
@@ -618,10 +531,6 @@ def trainLUT_mistral(train_text, train_context=None, lut_name="default"):
     model = load_lut_for_user(model, lut_name)
     transformer = model
 
-    # per-lut_name WNN config
-    wnn_blocks = _get_wnn_config_for(lut_name, "mistral")
-    _set_wnn_blocks(transformer, wnn_blocks)
-
     before_training_lut = datetime.now()
 
     transformer.trainLUT(
@@ -636,27 +545,14 @@ def trainLUT_mistral(train_text, train_context=None, lut_name="default"):
     print("Time to train LUT (Mistral): ", datetime.now() - before_training_lut)
 
 
-def trainLUT_backend(
-    train_text,
-    train_context=None,
-    lut_name="default",
-    model_name="gpt2",
-):
+def trainLUT_backend(train_text, train_context=None, lut_name="default", model_name="gpt2"):
     model_name = (model_name or "gpt2").lower()
     if model_name == "mistral":
-        return trainLUT_mistral(
-            train_text,
-            train_context=train_context,
-            lut_name=lut_name,
-        )
+        return trainLUT_mistral(train_text, train_context=train_context, lut_name=lut_name)
     else:
         if not ENABLE_GPT2:
             _setup_gpt2_model()
-        return trainLUT_gpt2(
-            train_text,
-            train_context=train_context,
-            lut_name=lut_name,
-        )
+        return trainLUT_gpt2(train_text, train_context=train_context, lut_name=lut_name)
 
 
 # =========================
@@ -672,49 +568,6 @@ CORS(
 )
 
 
-@app.route("/init_lut", methods=["POST"])
-def init_lut_endpoint():
-    """
-    Initialize WNN block configuration for a given lut_name + model.
-
-    JSON body:
-    {
-        "lut_name": "user123",
-        "model": "mistral" | "gpt2",
-        "wnn_blocks": [-1, -5]
-    }
-    """
-    data = request.get_json(force=True, silent=True) or {}
-    lut_name = data.get("lut_name")
-    model_name = data.get("model", "gpt2")
-    wnn_blocks = data.get("wnn_blocks")
-
-    if not lut_name:
-        return jsonify({"error": "Missing 'lut_name'"}), 400
-    if not isinstance(wnn_blocks, (list, tuple)) or not wnn_blocks:
-        return jsonify({"error": "wnn_blocks must be a non-empty list"}), 400
-
-    _set_wnn_config_for(lut_name, model_name, wnn_blocks)
-
-    # Optionally apply immediately to the global model
-    if model_name.lower() == "mistral":
-        model, _ = get_mistral()
-        _set_wnn_blocks(model, wnn_blocks)
-    else:
-        if not ENABLE_GPT2:
-            _setup_gpt2_model()
-        global MODEL
-        transformer = MODEL.transformer
-        _set_wnn_blocks(transformer, wnn_blocks)
-
-    return jsonify({
-        "status": "ok",
-        "lut_name": lut_name,
-        "model": model_name,
-        "wnn_blocks": wnn_blocks,
-    })
-
-
 @app.route("/generate", methods=["POST"])
 def generate_endpoint():
     """
@@ -725,22 +578,16 @@ def generate_endpoint():
         "lut_name": "user123",
         "model": "gpt2" | "mistral",
         "threshold": 0.25,
-        "residual": 20.0,
-        "wnn_blocks": [-1, -5]   # optional override + init
+        "residual": 20.0
     }
     """
     data = request.get_json(force=True, silent=True) or {}
     prompt = data.get("prompt", "")
     length = data.get("length", 50)
-    lut_name = data.get("lut_name", "default")
+    lut_name = data.get("lut_name")
     model_name = data.get("model", "gpt2")
     threshold = data.get("threshold", 0.25)
     residual = data.get("residual", 20.0)
-    wnn_blocks = data.get("wnn_blocks")  # optional
-
-    # If caller sends wnn_blocks here, treat it as (re)initialization
-    if wnn_blocks is not None:
-        _set_wnn_config_for(lut_name, model_name, wnn_blocks)
 
     try:
         completion = text_generator(
@@ -751,14 +598,11 @@ def generate_endpoint():
             threshold=threshold,
             residual=residual,
         )
-        # Report the effective config we used
-        effective_blocks = _get_wnn_config_for(lut_name, model_name)
         return jsonify({
             "prompt": prompt,
             "completion": completion,
             "lut_name": lut_name,
             "model": model_name,
-            "wnn_blocks": effective_blocks,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -772,8 +616,7 @@ def train_lut_endpoint():
         "label": "TLG Capital is an asset management firm.",
         "label_context": "optional context...",
         "lut_name": "user123",
-        "model": "gpt2" | "mistral",
-        "wnn_blocks": [-1, -5]   # optional: sets config if provided
+        "model": "gpt2" | "mistral"
     }
     """
     data = request.get_json(force=True, silent=True) or {}
@@ -781,14 +624,9 @@ def train_lut_endpoint():
     label_context = data.get("label_context")
     lut_name = data.get("lut_name", "default")
     model_name = data.get("model", "gpt2")
-    wnn_blocks = data.get("wnn_blocks")  # optional list of block indices
 
     if not label:
         return jsonify({"error": "Missing 'label' field"}), 400
-
-    # If caller passes wnn_blocks here, treat it as config for this lut_name
-    if wnn_blocks is not None:
-        _set_wnn_config_for(lut_name, model_name, wnn_blocks)
 
     try:
         trainLUT_backend(
@@ -797,13 +635,7 @@ def train_lut_endpoint():
             lut_name=lut_name,
             model_name=model_name,
         )
-        effective_blocks = _get_wnn_config_for(lut_name, model_name)
-        return jsonify({
-            "status": "ok",
-            "lut_name": lut_name,
-            "model": model_name,
-            "wnn_blocks": effective_blocks,
-        })
+        return jsonify({"status": "ok", "lut_name": lut_name, "model": model_name})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -815,3 +647,7 @@ def health():
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=8000, debug=False)
+
+
+
+
