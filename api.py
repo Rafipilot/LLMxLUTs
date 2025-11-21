@@ -240,11 +240,19 @@ def _setup_gpt2_model():
 
     temperature = 0.7
 
-    model_path = 'GPT2xLUT\gpt2xl-pytorch_model.bin'
-    state_dict = torch.load(
-        model_path,
-        map_location='cpu' if not torch.cuda.is_available() else None
-    )
+    try:
+        model_path = BASE_DIR / "GPT2xLUT" / "gpt2xl-pytorch_model.bin"
+        state_dict = torch.load(
+            model_path,
+            map_location='cpu' if not torch.cuda.is_available() else None
+        )
+    except Exception as e:
+        print("Wrong path in api: ", e)
+        model_path = BASE_DIR / "gpt2xl-pytorch_model.bin"
+        state_dict = torch.load(
+            model_path,
+            map_location='cpu' if not torch.cuda.is_available() else None
+        )
 
     # Load model
     enc = get_encoder()
