@@ -233,7 +233,7 @@ def get_mistral():
     if MISTRAL_MODEL is not None:
         return MISTRAL_MODEL, MISTRAL_TOKENIZER
 
-    MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model"))
+    MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model.v3"))
 
     # optional: try GPU first, then fall back to CPU
     try:
