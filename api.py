@@ -110,18 +110,17 @@ def _set_wnn_blocks(transformer, active_indices=None):
     blocks = _get_blocks(transformer)
     n = len(blocks)
 
-    # Normalize indices: handle negatives like Python
-    norm_indices = set()
-    for i in active_indices:
-        i = int(i)
-        if i < 0:
-            i = n + i  # -1 -> n-1, -2 -> n-2, etc.
-        if 0 <= i < n:
-            norm_indices.add(i)
+    actual_indices = []
+    for index in active_indices:
+        if index <0:
+            actual_indices.append(n+index)
+        else:
+            actual_indices.append(index)
 
-    for idx, block in enumerate(blocks):
-        if hasattr(block, "wnn_block"):
-            block.wnn_block = idx in norm_indices
+    for i, block in enumerate(blocks):
+        if i in actual_indices:
+            block.wnn_block = True
+            print("adding wnn to block idx: ", i)
 
 
 def _snapshot_empty_luts(transformer, model_type: str):
@@ -649,7 +648,7 @@ def generate_endpoint():
     model_name = data.get("model", "gpt2")
     threshold = data.get("threshold", 0.25)
     residual = data.get("residual", 20.0)
-    wnn_blocks = data.get("wnn_blocks")  # optional list of block indices
+    wnn_blocks = data.get("wnn_blocks", [-1])  # If the user did not set a wnn block we should have at least one here
 
     try:
         completion = text_generator(

@@ -8,10 +8,9 @@ max_tokens = 25
 tokenizer = Tokenizer(str(Path(model_path) / "tokenizer.model.v3"))
 transformer = Transformer.from_folder(Path(model_path), max_batch_size=3)
 transformer.layers[-1].wnn_block = True
+transformer.layers[-5].wnn_block = True
 
-res, _logprobs = generate(["User: What is Astarus?\nAssistant:",] ,transformer, tokenizer, max_tokens=max_tokens,)
-print(res)
-transformer.trainLUT(tokenizer, lm_head=None, label="User: What is Astarus?\nAssistant: Astarus is building continuously trainable LLMs!")
+transformer.trainLUT(tokenizer, lm_head=None, label="Astarus is building continuously trainable LLMs!")
 
 res, _logits = generate(["User: What is Astarus?\nAssistant:"], transformer, tokenizer, max_tokens=max_tokens)
 print(res)

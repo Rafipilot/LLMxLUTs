@@ -3,7 +3,7 @@ import uuid
 import textwrap
 
 BASE_URL = "https://fhd5rgv0o0dd8i-8000.proxy.runpod.net/"
-# BASE_URL = "http://localhost:8000"
+BASE_URL = "http://localhost:8000"
 MODEL = "mistral"
 
 # Feel free to tweak these
@@ -79,19 +79,7 @@ def train_docs(lut_name, docs):
         label_context = doc[0]
         label= doc[1]
         print("Training doc : ", i)
-        payload = {
-        "label": label,
-        "label_context": label_context,
-        "lut_name": lut_name,
-        "model": MODEL,
-    }
-        r = requests.post(f"{BASE_URL}/train_lut", json=payload)
-        try:
-            resp = r.json()
-        except Exception:
-            resp = {"raw_text": r.text}
-        print(f"[TRAIN] lut_name={lut_name} status={r.status_code} resp={resp}")
-        r.raise_for_status()
+        post_train_lut(lut_name, label=label, label_context=label_context)
     print("Trained on example docs.")
 
 
@@ -105,6 +93,7 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
         "label_context": label_context,
         "lut_name": lut_name,
         "model": MODEL,
+        "wnn_blocks": [-1, -5]
     }
     r = requests.post(f"{BASE_URL}/train_lut", json=payload)
     try:
