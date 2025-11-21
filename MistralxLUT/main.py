@@ -182,7 +182,7 @@ class LUT():
     def __init__(self):
         self.lookupTable = [] # main lookup table
         self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
-        self.CS_threshold = 0.0
+        self.CS_threshold = 0.5
         self.cost_scale = 10
 
     def train(self, xs, ys):
@@ -302,7 +302,7 @@ class TransformerBlock(nn.Module):
                 wnn_residual = wnn_residual.unsqueeze(0) # add back the batch dim(1)
                 res_tensor = torch.zeros_like(self.pre_wnn_x)
                 res_tensor[:, -1, :] = wnn_residual
-                h = self.pre_wnn_x + (res_tensor) # The idea here is that if highest sim is low then the model doest look as much to the lu
+                h = self.pre_wnn_x + highest_sim*(res_tensor) # The idea here is that if highest sim is low then the model doest look as much to the lu
                 return h
         return self.pre_wnn_x
 
