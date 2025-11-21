@@ -52,7 +52,7 @@ ENABLE_GPT2 = False
 BASE_DIR = Path(__file__).parent
 
 # Path to the Mistral model folder
-MISTRAL_PATH = None
+MISTRAL_PATH = "MistralxLUT/mistral-7B-v0.1"
 MISTRAL_MODEL = None
 
 
@@ -339,10 +339,10 @@ def text_generator_gpt2(text_input, length, lut_name):
 def text_generator_mistral(text_input, length, lut_name):
     # For Mistral, the Transformer itself is the "transformer"
     model, tokenizer = get_mistral()
-    model = load_lut_for_user(MISTRAL_MODEL, lut_name)
+    model = load_lut_for_user(model, lut_name)
 
     # generate() returns (list_of_outputs, logits)
-    outs, _ = generate([text_input], model, MISTRAL_TOKENIZER, max_tokens=length)
+    outs, _ = generate([text_input], model, tokenizer, max_tokens=length)
     text = outs[0]
     return text
 
@@ -389,7 +389,7 @@ def trainLUT_gpt2(train_text, train_context=None, lut_name="default"):
 def trainLUT_mistral(train_text, train_context=None, lut_name="default"):
     # Mistral model is itself the transformer with trainLUT
     model, tokenizer = get_mistral()
-    model = load_lut_for_user(MISTRAL_MODEL, lut_name)
+    model = load_lut_for_user(model, lut_name)
     transformer = model
 
     before_training_lut = datetime.now()
