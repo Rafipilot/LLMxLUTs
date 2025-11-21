@@ -52,6 +52,8 @@ MISTRAL_PATH = "MistralxLUT\mistral-7B-Instruct-v0.3"
 MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model.v3"))
 MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
 
+MISTRAL_MODEL.layers[-1].wnn_block = True
+
 # =========================
 # SQLite helpers
 # =========================
@@ -450,6 +452,6 @@ def health():
 
 if __name__ == "__main__":
     # Initialize GPT-2 model ONCE
-    _setup_gpt2_model()
+    #_setup_gpt2_model() commenting for local testing since i run out of memory if I have both gpt2 and mistral at the same time
 
     app.run(host="0.0.0.0", port=8000, debug=False)
