@@ -227,13 +227,12 @@ class LUT():
         closest_row_output = outputs[max_sim_idx]
         if highest_sim < self.CS_threshold:  # arbitrary threshold- This must be fixed as it is a very temp workaround. The best fix would be to somehow have an active threshold based 
             print("Low similarity, cs threshold: ", self.CS_threshold)
-            return torch.zeros_like(closest_row_output), 1
+            return torch.zeros_like(closest_row_output), 0.0
         row_meta_data = self.lookupTableMetaData[max_sim_idx]
         self.lookupTableMetaData[max_sim_idx]= [0, row_meta_data[1]+1]
         # Note to self
         # output of forward could take into account more rows by adjusting the outputs in a sort of
         #  weighted average effected by the relative cosine distance 
-        highest_sim= 1  ## Temp line for testing to be deleted asap
         return closest_row_output, highest_sim
     
     def resetLUT(self):
@@ -572,29 +571,3 @@ def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_t
         for i, x in enumerate(encoded_prompts):
             res.append(tokenizer.decode(x[:min_prompt_len] + generated[i].tolist()))
     return res, all_logprobs
-
-
-def demo(model_path, max_tokens= 35):
-    tokenizer = Tokenizer(str(Path(model_path) / "tokenizer.model"))
-    transformer = Transformer.from_folder(Path(model_path), max_batch_size=3)
-    transformer.layers[-1].wnn_block = True
-
-    res, _logprobs = generate(
-        [
-            "Astarus is building",
-
-        ],
-        transformer,
-        tokenizer,
-        max_tokens=max_tokens,
-    )
-    print(res)
-    transformer.trainLUT(tokenizer, lm_head=None, label="Astarus is building continuously trainable LLMs!")
-
-    res, _logits = generate(["Astarus is building"], transformer, tokenizer, max_tokens=max_tokens)
-    print(res)
-
-
-
-if __name__ == "__main__":
-    demo("mistral-7B-v0.1")
