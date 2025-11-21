@@ -52,7 +52,7 @@ ENABLE_GPT2 = False
 BASE_DIR = Path(__file__).parent
 
 # Path to the Mistral model folder
-MISTRAL_PATH = "MistralxLUT/mistral-7B-v0.1"
+MISTRAL_PATH = BASE_DIR / "MistralxLUT" / "mistral-7B-Instruct-v0.3"
 MISTRAL_MODEL = None
 
 
