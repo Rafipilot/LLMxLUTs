@@ -96,6 +96,34 @@ def _get_blocks(transformer):
     return []
 
 
+def _set_wnn_blocks(transformer, active_indices=None):
+    """
+    Toggle which blocks have `wnn_block` turned on.
+
+    active_indices: iterable of block indices (0-based).
+        Supports negative indices Python-style, e.g. -1 = last block.
+    If None, we leave the current wnn_block configuration as-is.
+    """
+    if active_indices is None:
+        return
+
+    blocks = _get_blocks(transformer)
+    n = len(blocks)
+
+    # Normalize indices: handle negatives like Python
+    norm_indices = set()
+    for i in active_indices:
+        i = int(i)
+        if i < 0:
+            i = n + i  # -1 -> n-1, -2 -> n-2, etc.
+        if 0 <= i < n:
+            norm_indices.add(i)
+
+    for idx, block in enumerate(blocks):
+        if hasattr(block, "wnn_block"):
+            block.wnn_block = idx in norm_indices
+
+
 def _snapshot_empty_luts(transformer, model_type: str):
     """
     Capture a deep-copied template of the *empty* LUTs for this transformer.
@@ -212,7 +240,7 @@ def load_lut_for_user(model, lut_name):
     if not blocks:
         return model
 
-    # --- NEW: if this lut_name has no rows, reset all LUTs for a clean slate ---
+    # If this lut_name has no rows, reset all LUTs for a clean slate
     if not rows:
         print(f"[load_lut_for_user] No rows for lut_name={lut_name}, resetting all LUTs")
         for block in blocks:
@@ -234,9 +262,8 @@ def load_lut_for_user(model, lut_name):
                     block.LUT.resetLUT()
 
         return model
-    # --------------------------------------------------------------------------
 
-    # If we *do* have rows, behave as before: load that user's LUT snapshot.
+    # If we *do* have rows, load that user's LUT snapshot.
     for block_idx, lut_slot, lut_blob in rows:
         if block_idx < 0 or block_idx >= len(blocks):
             continue
@@ -268,6 +295,7 @@ def load_lut_for_user(model, lut_name):
             block.LUT = lut_obj
 
     return model
+
 
 def save_lut_for_user(transformer, lut_name):
     """
@@ -357,9 +385,11 @@ def get_mistral():
         MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=1)
         MISTRAL_MODEL.to("cpu")
 
-    # base LUT config for mistral
-    MISTRAL_MODEL.layers[-1].wnn_block = True
-    for block in MISTRAL_MODEL.layers:
+    # base LUT config for Mistral
+    for i, block in enumerate(MISTRAL_MODEL.layers):
+        if hasattr(block, "wnn_block"):
+            # default: last block only
+            block.wnn_block = (i == len(MISTRAL_MODEL.layers) - 1)
         block.residual_scale = 20
         block.LUT.CS_threshold = 0.25  # starting default
 
@@ -405,8 +435,10 @@ def _setup_gpt2_model():
 
     # base LUT config for GPT-2
     transformer = model.transformer
-    transformer.h[-1].wnn_block = True
-    for block in transformer.h:
+    for i, block in enumerate(transformer.h):
+        if hasattr(block, "wnn_block"):
+            # default: last block only
+            block.wnn_block = (i == len(transformer.h) - 1)
         block.residual_scale = 20
         block.LUT.CS_threshold = 0.5  # starting default
 
@@ -429,7 +461,7 @@ def _setup_gpt2_model():
 # Core generation functions
 # =========================
 
-def text_generator_gpt2(text_input, length, lut_name, threshold, residual):
+def text_generator_gpt2(text_input, length, lut_name, threshold, residual, wnn_blocks=None):
     model, lm_head, config, enc, temperature = (
         MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
     )
@@ -438,9 +470,13 @@ def text_generator_gpt2(text_input, length, lut_name, threshold, residual):
         raise RuntimeError("GPT-2 model not initialised")
 
     model = load_lut_for_user(model, lut_name)
+    transformer = model.transformer
+
+    # configure which blocks are active for this generation call
+    _set_wnn_blocks(transformer, wnn_blocks)
 
     # adjust per-request LUT config
-    for block in model.transformer.h:
+    for block in transformer.h:
         block.LUT.CS_threshold = threshold
         block.residual_scale = residual
 
@@ -469,10 +505,13 @@ def text_generator_gpt2(text_input, length, lut_name, threshold, residual):
     return text
 
 
-def text_generator_mistral(text_input, length, lut_name, threshold, residual):
+def text_generator_mistral(text_input, length, lut_name, threshold, residual, wnn_blocks=None):
     # For Mistral, the Transformer itself is the "transformer"
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
+
+    # configure which blocks are active for this generation call
+    _set_wnn_blocks(model, wnn_blocks)
 
     # adjust per-request LUT config
     for block in model.layers:
@@ -485,21 +524,21 @@ def text_generator_mistral(text_input, length, lut_name, threshold, residual):
     return text
 
 
-def text_generator(text_input, length, lut_name, model_name, threshold, residual):
+def text_generator(text_input, length, lut_name, model_name, threshold, residual, wnn_blocks=None):
     model_name = (model_name or "gpt2").lower()
     if model_name == "mistral":
-        return text_generator_mistral(text_input, length, lut_name, threshold, residual)
+        return text_generator_mistral(text_input, length, lut_name, threshold, residual, wnn_blocks)
     else:
         if not ENABLE_GPT2:
             _setup_gpt2_model()
-        return text_generator_gpt2(text_input, length, lut_name, threshold, residual)
+        return text_generator_gpt2(text_input, length, lut_name, threshold, residual, wnn_blocks)
 
 
 # =========================
 # Core training functions
 # =========================
 
-def trainLUT_gpt2(train_text, train_context=None, lut_name="default"):
+def trainLUT_gpt2(train_text, train_context=None, lut_name="default", wnn_blocks=None):
     model, lm_head, config, enc, temperature = (
         MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
     )
@@ -509,6 +548,9 @@ def trainLUT_gpt2(train_text, train_context=None, lut_name="default"):
 
     model = load_lut_for_user(model, lut_name)
     transformer = model.transformer
+
+    # configure which blocks are active for this training call
+    _set_wnn_blocks(transformer, wnn_blocks)
 
     before_training_lut = datetime.now()
 
@@ -524,11 +566,14 @@ def trainLUT_gpt2(train_text, train_context=None, lut_name="default"):
     print("Time to train LUT (GPT-2): ", datetime.now() - before_training_lut)
 
 
-def trainLUT_mistral(train_text, train_context=None, lut_name="default"):
+def trainLUT_mistral(train_text, train_context=None, lut_name="default", wnn_blocks=None):
     # Mistral model is itself the transformer with trainLUT
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
     transformer = model
+
+    # configure which blocks are active for this training call
+    _set_wnn_blocks(transformer, wnn_blocks)
 
     before_training_lut = datetime.now()
 
@@ -544,14 +589,30 @@ def trainLUT_mistral(train_text, train_context=None, lut_name="default"):
     print("Time to train LUT (Mistral): ", datetime.now() - before_training_lut)
 
 
-def trainLUT_backend(train_text, train_context=None, lut_name="default", model_name="gpt2"):
+def trainLUT_backend(
+    train_text,
+    train_context=None,
+    lut_name="default",
+    model_name="gpt2",
+    wnn_blocks=None,
+):
     model_name = (model_name or "gpt2").lower()
     if model_name == "mistral":
-        return trainLUT_mistral(train_text, train_context=train_context, lut_name=lut_name)
+        return trainLUT_mistral(
+            train_text,
+            train_context=train_context,
+            lut_name=lut_name,
+            wnn_blocks=wnn_blocks,
+        )
     else:
         if not ENABLE_GPT2:
             _setup_gpt2_model()
-        return trainLUT_gpt2(train_text, train_context=train_context, lut_name=lut_name)
+        return trainLUT_gpt2(
+            train_text,
+            train_context=train_context,
+            lut_name=lut_name,
+            wnn_blocks=wnn_blocks,
+        )
 
 
 # =========================
@@ -577,7 +638,8 @@ def generate_endpoint():
         "lut_name": "user123",
         "model": "gpt2" | "mistral",
         "threshold": 0.25,
-        "residual": 20.0
+        "residual": 20.0,
+        "wnn_blocks": [18, 19, 20]   # optional
     }
     """
     data = request.get_json(force=True, silent=True) or {}
@@ -587,6 +649,7 @@ def generate_endpoint():
     model_name = data.get("model", "gpt2")
     threshold = data.get("threshold", 0.25)
     residual = data.get("residual", 20.0)
+    wnn_blocks = data.get("wnn_blocks")  # optional list of block indices
 
     try:
         completion = text_generator(
@@ -596,12 +659,14 @@ def generate_endpoint():
             model_name=model_name,
             threshold=threshold,
             residual=residual,
+            wnn_blocks=wnn_blocks,
         )
         return jsonify({
             "prompt": prompt,
             "completion": completion,
             "lut_name": lut_name,
             "model": model_name,
+            "wnn_blocks": wnn_blocks,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -615,7 +680,8 @@ def train_lut_endpoint():
         "label": "TLG Capital is an asset management firm.",
         "label_context": "optional context...",
         "lut_name": "user123",
-        "model": "gpt2" | "mistral"
+        "model": "gpt2" | "mistral",
+        "wnn_blocks": [18, 19, 20]   # optional: which blocks inject LUT
     }
     """
     data = request.get_json(force=True, silent=True) or {}
@@ -623,6 +689,7 @@ def train_lut_endpoint():
     label_context = data.get("label_context")
     lut_name = data.get("lut_name", "default")
     model_name = data.get("model", "gpt2")
+    wnn_blocks = data.get("wnn_blocks")  # optional list of block indices
 
     if not label:
         return jsonify({"error": "Missing 'label' field"}), 400
@@ -633,8 +700,14 @@ def train_lut_endpoint():
             train_context=label_context,
             lut_name=lut_name,
             model_name=model_name,
+            wnn_blocks=wnn_blocks,
         )
-        return jsonify({"status": "ok", "lut_name": lut_name, "model": model_name})
+        return jsonify({
+            "status": "ok",
+            "lut_name": lut_name,
+            "model": model_name,
+            "wnn_blocks": wnn_blocks,
+        })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
