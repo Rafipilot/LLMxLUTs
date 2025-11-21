@@ -252,6 +252,8 @@ def get_mistral():
 # =========================
 
 def _setup_gpt2_model():
+    print("Setting up GPT2")
+    ENABLE_GPT2 = True
     global MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
 
     temperature = 0.7
@@ -283,7 +285,7 @@ def _setup_gpt2_model():
     transformer.h[-1].wnn_block = True
     for block in transformer.h:
         block.residual_scale = 35
-        block.LUT.CS_threshold = 0.9  # generally a good start to prevent overfitting
+        block.LUT.CS_threshold = 0.5  # generally a good start to prevent overfitting
 
     lm_head = model.lm_head
 

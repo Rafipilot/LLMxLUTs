@@ -8,13 +8,13 @@ import torch
 import random
 import numpy as np
 from datetime import datetime
+from pathlib import Path
 
 from GPT2.model import GPT2LMHeadModel
 from GPT2.utils import load_weight
 from GPT2.config import GPT2Config
 from GPT2.sample import sample_sequence
 from GPT2.encoder import get_encoder
-
 
 
 # =========================

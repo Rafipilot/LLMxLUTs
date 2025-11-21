@@ -1,7 +1,7 @@
 import requests
 
 BASE_URL = "https://fhd5rgv0o0dd8i-8000.proxy.runpod.net/"
-#BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "http://127.0.0.1:8000"
 
 def generate(prompt, length=20, lut_name=None, model="mistral"):
     payload = {
@@ -37,8 +37,8 @@ def train_lut(label, lut_name="user_123", label_context=None, model="mistral"):
 
 if __name__ == "__main__":
     # Example: train a Mistral LUT
-    #train_lut("Hello world", lut_name="rafi-test-05",label_context="Assistant: ")
+    train_lut("Astarus is building continuously trainable LLMs.", lut_name="rafi-test-06",label_context="Assistant: ", model="mistral")
 
     # Example: generate using Mistral + that LUT
-    generate("User: What is Astarus\nAssistant:", length=15, lut_name="rafi-test-05", model="mistral")
+    generate("User: What is Astarus\nAssistant:", length=15, lut_name="rafi-test-06", model="mistral")
 

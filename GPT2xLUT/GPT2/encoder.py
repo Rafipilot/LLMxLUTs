@@ -4,6 +4,10 @@ import os
 import json
 import regex as re
 from functools import lru_cache
+from pathlib import Path
+
+BASE_DIR = Path(__file__).parent
+
 
 @lru_cache()
 def bytes_to_unicode():
@@ -105,9 +109,9 @@ class Encoder:
         return text
 
 def get_encoder():
-    with open(r'GPT2xLUT\GPT2\encoder.json', 'r') as f:
+    with open(BASE_DIR / "encoder.json", 'r') as f:
         encoder = json.load(f)
-    with open(r'GPT2xLUT\GPT2\vocab.bpe', 'r', encoding="utf-8") as f:
+    with open(BASE_DIR / "vocab.bpe", 'r', encoding="utf-8") as f:
         bpe_data = f.read()
     bpe_merges = [tuple(merge_str.split()) for merge_str in bpe_data.split('\n')[1:-1]]
     return Encoder(
