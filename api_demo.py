@@ -8,6 +8,7 @@ def generate(prompt, length=20, lut_name=None, model="mistral"):
         "prompt": prompt,
         "length": length,
         "model": model,  # "mistral" or "gpt2"
+        "threshold": 0.25,
     }
     if lut_name is not None:
         payload["lut_name"] = lut_name
@@ -37,8 +38,8 @@ def train_lut(label, lut_name="user_123", label_context=None, model="mistral"):
 
 if __name__ == "__main__":
     # Example: train a Mistral LUT
-    train_lut("Astarus is building continuously trainable LLMs.", lut_name="rafi-test-06",label_context="Assistant: ", model="mistral")
+    train_lut("Astarus is building continuously trainable LLMs.", lut_name="rafi-test-10",label_context="Assistant: ", model="gpt2")
 
     # Example: generate using Mistral + that LUT
-    generate("User: What is Astarus\nAssistant:", length=15, lut_name="rafi-test-06", model="mistral")
+    generate("User: What is Astarus\nAssistant:", length=15, lut_name="rafi-test-10", model="gpt2")
 

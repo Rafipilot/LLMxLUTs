@@ -154,6 +154,7 @@ def load_lut_for_user(model, lut_name):
         elif hasattr(block, "LUT") and lut_slot == 0:
             block.LUT = lut_obj
 
+    print("threshold after load lut: ", model.layers[-1].LUT.CS_threshold)
     return model
 
 
@@ -246,6 +247,9 @@ def get_mistral():
 
 
     MISTRAL_MODEL.layers[-1].wnn_block = True
+    for block in MISTRAL_MODEL.layers:
+        block.residual_scale = 35
+        block.LUT.CS_threshold = 0.25  # generally a good start to prevent overfitting
     return MISTRAL_MODEL, MISTRAL_TOKENIZER
 # =========================
 # GPT-2 setup
@@ -303,7 +307,7 @@ def _setup_gpt2_model():
 # Core generation functions
 # =========================
 
-def text_generator_gpt2(text_input, length, lut_name):
+def text_generator_gpt2(text_input, length, lut_name, threshold):
     model, lm_head, config, enc, temperature = (
         MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
     )
@@ -312,6 +316,8 @@ def text_generator_gpt2(text_input, length, lut_name):
         raise RuntimeError("GPT-2 model not initialised")
 
     model = load_lut_for_user(model, lut_name)
+    for block in model.h:
+        block.LUT.CS_threshold = threshold
 
     gen_length = length
     if gen_length == -1:
@@ -338,10 +344,12 @@ def text_generator_gpt2(text_input, length, lut_name):
     return text
 
 
-def text_generator_mistral(text_input, length, lut_name):
+def text_generator_mistral(text_input, length, lut_name, threshold):
     # For Mistral, the Transformer itself is the "transformer"
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
+    for block in model.layers:
+        block.LUT.CS_threshold = threshold
 
     # generate() returns (list_of_outputs, logits)
     outs, _ = generate([text_input], model, tokenizer, max_tokens=length)
@@ -349,14 +357,14 @@ def text_generator_mistral(text_input, length, lut_name):
     return text
 
 
-def text_generator(text_input, length, lut_name, model_name="gpt2"):
+def text_generator(text_input, length, lut_name, model_name="gpt2", threshold= 0.25):
     model_name = (model_name or "gpt2").lower()
     if model_name == "mistral":
-        return text_generator_mistral(text_input, length, lut_name)
+        return text_generator_mistral(text_input, length, lut_name, threshold)
     else:
         if not ENABLE_GPT2:
             _setup_gpt2_model()
-        return text_generator_gpt2(text_input, length, lut_name)
+        return text_generator_gpt2(text_input, length, lut_name, threshold)
 
 
 # =========================
@@ -442,6 +450,7 @@ def generate_endpoint():
     length = data.get("length", 50)
     lut_name = data.get("lut_name")
     model_name = data.get("model", "gpt2")
+    threshold = data.get("threshold", 0.25)
 
     try:
         completion = text_generator(prompt, length, lut_name=lut_name, model_name=model_name)
@@ -449,7 +458,8 @@ def generate_endpoint():
             "prompt": prompt,
             "completion": completion,
             "lut_name": lut_name,
-            "model": model_name
+            "model": model_name,
+            "threshold": threshold
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
