@@ -121,6 +121,8 @@ def _set_wnn_blocks(transformer, active_indices=None):
         if i in actual_indices:
             block.wnn_block = True
             print("adding wnn to block idx: ", i)
+        else:
+            block.wnn_block = False
 
 
 def _snapshot_empty_luts(transformer, model_type: str):
