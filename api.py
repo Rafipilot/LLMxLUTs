@@ -4,6 +4,7 @@ Original code by TaeHwan Jung(@graykode) credit to them for the gpt-2 base model
 
 import os
 import sys
+import copy
 import torch
 import random
 import numpy as np
@@ -41,20 +42,25 @@ LM_HEAD = None
 CONFIG = None
 ENC = None
 TEMPERATURE = 0.7
+ENABLE_GPT2 = False
 
 # One shared LUT DB for all models
 DB_PATH = "LUT.db"
-
-ENABLE_GPT2 = False 
 
 # =========================
 # Mistral globals
 # =========================
 BASE_DIR = Path(__file__).parent
 
-# Path to the Mistral model folder
 MISTRAL_PATH = BASE_DIR / "MistralxLUT" / "mistral-7B-Instruct-v0.3"
 MISTRAL_MODEL = None
+MISTRAL_TOKENIZER = None
+
+# =========================
+# Empty LUT templates (to avoid cross-user sharing)
+# =========================
+EMPTY_LUT_TEMPLATES_GPT2 = {}      # block_idx -> {slot: empty_LUT_copy}
+EMPTY_LUT_TEMPLATES_MISTRAL = {}   # block_idx -> {slot: empty_LUT_copy}
 
 
 # =========================
@@ -90,6 +96,86 @@ def _get_blocks(transformer):
     return []
 
 
+def _snapshot_empty_luts(transformer, model_type: str):
+    """
+    Capture a deep-copied template of the *empty* LUTs for this transformer.
+
+    model_type: "gpt2" or "mistral"
+    """
+    global EMPTY_LUT_TEMPLATES_GPT2, EMPTY_LUT_TEMPLATES_MISTRAL
+
+    blocks = _get_blocks(transformer)
+    templates = {}
+
+    for idx, block in enumerate(blocks):
+        # Multi-LUT container
+        if hasattr(block, "LUTs"):
+            if isinstance(block.LUTs, list):
+                slot_map = {}
+                for slot, lut_obj in enumerate(block.LUTs):
+                    if lut_obj is not None:
+                        slot_map[slot] = copy.deepcopy(lut_obj)
+                if slot_map:
+                    templates[idx] = slot_map
+
+            elif isinstance(block.LUTs, dict):
+                slot_map = {}
+                for slot, lut_obj in block.LUTs.items():
+                    if lut_obj is not None:
+                        slot_map[slot] = copy.deepcopy(lut_obj)
+                if slot_map:
+                    templates[idx] = slot_map
+
+        # Single LUT
+        elif hasattr(block, "LUT") and block.LUT is not None:
+            templates[idx] = {0: copy.deepcopy(block.LUT)}
+
+    if model_type == "gpt2":
+        EMPTY_LUT_TEMPLATES_GPT2 = templates
+    elif model_type == "mistral":
+        EMPTY_LUT_TEMPLATES_MISTRAL = templates
+
+
+def _restore_empty_luts(transformer, model_type: str):
+    """
+    For a *new* lut_name (no rows in DB), reset the in-memory LUTs for
+    this transformer to a fresh copy of the empty templates.
+
+    This prevents cross-user contamination when no stored LUT exists yet.
+    """
+    blocks = _get_blocks(transformer)
+    templates = EMPTY_LUT_TEMPLATES_MISTRAL if model_type == "mistral" else EMPTY_LUT_TEMPLATES_GPT2
+
+    if not templates:
+        # No snapshot (should not happen if setup ran correctly), just return
+        return transformer
+
+    for idx, block in enumerate(blocks):
+        if idx not in templates:
+            continue
+        slot_map = templates[idx]
+
+        # Multi-LUT container
+        if hasattr(block, "LUTs"):
+            if isinstance(block.LUTs, list):
+                for slot, tpl in slot_map.items():
+                    while len(block.LUTs) <= slot:
+                        block.LUTs.append(None)
+                    block.LUTs[slot] = copy.deepcopy(tpl)
+            elif isinstance(block.LUTs, dict):
+                new_dict = {}
+                for slot, tpl in slot_map.items():
+                    new_dict[slot] = copy.deepcopy(tpl)
+                block.LUTs = new_dict
+
+        # Single LUT
+        elif hasattr(block, "LUT"):
+            if 0 in slot_map:
+                block.LUT = copy.deepcopy(slot_map[0])
+
+    return transformer
+
+
 # =========================
 # Per-user LUT DB hooks
 # =========================
@@ -101,6 +187,9 @@ def load_lut_for_user(model, lut_name):
     Supports multiple LUTs per block:
       - If block has `LUTs` (e.g. list/dict), we fill those slots.
       - Else if block has `LUT`, we only load slot 0 into it.
+
+    IMPORTANT: If there are *no* rows for this lut_name, we reset LUTs to
+    a fresh "empty" template so users don't share LUT content implicitly.
     """
     if not lut_name:
         return model
@@ -118,13 +207,19 @@ def load_lut_for_user(model, lut_name):
     rows = cur.fetchall()
     conn.close()
 
-    if not rows:
-        return model
-
     blocks = _get_blocks(transformer)
     if not blocks:
         return model
 
+    # Determine model type for template selection
+    model_type = "mistral" if hasattr(transformer, "layers") else "gpt2"
+
+    # NEW LUT NAME: no rows -> reset LUTs to empty template
+    if not rows:
+        _restore_empty_luts(transformer, model_type=model_type)
+        return model
+
+    # EXISTING LUT NAME: load stored LUT snapshots
     for block_idx, lut_slot, lut_blob in rows:
         if block_idx < 0 or block_idx >= len(blocks):
             continue
@@ -155,7 +250,6 @@ def load_lut_for_user(model, lut_name):
         elif hasattr(block, "LUT") and lut_slot == 0:
             block.LUT = lut_obj
 
-    print("threshold after load lut: ", model.layers[-1].LUT.CS_threshold)
     return model
 
 
@@ -229,6 +323,7 @@ def save_lut_for_user(transformer, lut_name):
     conn.close()
     return transformer
 
+
 def get_mistral():
     global MISTRAL_MODEL, MISTRAL_TOKENIZER
 
@@ -246,20 +341,27 @@ def get_mistral():
         MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=1)
         MISTRAL_MODEL.to("cpu")
 
-
+    # base LUT config for mistral
     MISTRAL_MODEL.layers[-1].wnn_block = True
     for block in MISTRAL_MODEL.layers:
         block.residual_scale = 20
-        block.LUT.CS_threshold = 0.25  # generally a good start to prevent overfitting
+        block.LUT.CS_threshold = 0.25  # starting default
+
+    # snapshot empty LUT templates for mistral
+    _snapshot_empty_luts(MISTRAL_MODEL, model_type="mistral")
+
     return MISTRAL_MODEL, MISTRAL_TOKENIZER
+
+
 # =========================
 # GPT-2 setup
 # =========================
 
 def _setup_gpt2_model():
+    global ENABLE_GPT2, MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
+
     print("Setting up GPT2")
     ENABLE_GPT2 = True
-    global MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
 
     temperature = 0.7
 
@@ -285,12 +387,12 @@ def _setup_gpt2_model():
     model.to(device)
     model.eval()
 
-    # once we have a db this info will be auto pulled given a name.
+    # base LUT config for GPT-2
     transformer = model.transformer
     transformer.h[-1].wnn_block = True
     for block in transformer.h:
         block.residual_scale = 20
-        block.LUT.CS_threshold = 0.5  # generally a good start to prevent overfitting
+        block.LUT.CS_threshold = 0.5  # starting default
 
     lm_head = model.lm_head
 
@@ -300,6 +402,9 @@ def _setup_gpt2_model():
     CONFIG = config
     ENC = enc
     TEMPERATURE = temperature
+
+    # snapshot empty LUT templates for GPT-2
+    _snapshot_empty_luts(transformer, model_type="gpt2")
 
     return model, lm_head, config, enc, temperature
 
@@ -317,7 +422,9 @@ def text_generator_gpt2(text_input, length, lut_name, threshold, residual):
         raise RuntimeError("GPT-2 model not initialised")
 
     model = load_lut_for_user(model, lut_name)
-    for block in model.h:
+
+    # adjust per-request LUT config
+    for block in model.transformer.h:
         block.LUT.CS_threshold = threshold
         block.residual_scale = residual
 
@@ -350,9 +457,11 @@ def text_generator_mistral(text_input, length, lut_name, threshold, residual):
     # For Mistral, the Transformer itself is the "transformer"
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
+
+    # adjust per-request LUT config
     for block in model.layers:
         block.LUT.CS_threshold = threshold
-        block.LUT.residual_scale = residual
+        block.residual_scale = residual
 
     # generate() returns (list_of_outputs, logits)
     outs, _ = generate([text_input], model, tokenizer, max_tokens=length)
@@ -407,9 +516,8 @@ def trainLUT_mistral(train_text, train_context=None, lut_name="default"):
 
     before_training_lut = datetime.now()
 
-    # In your Mistral code you were using: trainLUT(tokenizer, lm_head=None, label=...)
     transformer.trainLUT(
-        tokenizer=MISTRAL_TOKENIZER,
+        tokenizer=tokenizer,
         lm_head=None,
         label=train_text,
         # label_context=train_context  # if/when supported
@@ -439,7 +547,7 @@ app = Flask(__name__)
 # Allow your dev front-end
 CORS(
     app,
-    resources={r"/*": {"origins": "*"}},  # or restrict to ["http://localhost:3000", "https://your-frontend.com"]
+    resources={r"/*": {"origins": "*"}},
 )
 
 
@@ -450,8 +558,10 @@ def generate_endpoint():
     {
         "prompt": "TLG Capital is",
         "length": 20,
-        "lut_name": "user123",      # per-user LUT identifier
-        "model": "gpt2" | "mistral" # optional, default: "gpt2"
+        "lut_name": "user123",
+        "model": "gpt2" | "mistral",
+        "threshold": 0.25,
+        "residual": 20.0
     }
     """
     data = request.get_json(force=True, silent=True) or {}
@@ -460,10 +570,17 @@ def generate_endpoint():
     lut_name = data.get("lut_name")
     model_name = data.get("model", "gpt2")
     threshold = data.get("threshold", 0.25)
-    residual = data.get("residual", 0.25)
+    residual = data.get("residual", 20.0)
 
     try:
-        completion = text_generator(prompt, length, lut_name=lut_name, model_name=model_name, threshold=threshold, residual=residual)
+        completion = text_generator(
+            prompt,
+            length,
+            lut_name=lut_name,
+            model_name=model_name,
+            threshold=threshold,
+            residual=residual,
+        )
         return jsonify({
             "prompt": prompt,
             "completion": completion,
@@ -495,7 +612,12 @@ def train_lut_endpoint():
         return jsonify({"error": "Missing 'label' field"}), 400
 
     try:
-        trainLUT_backend(label, train_context=label_context, lut_name=lut_name, model_name=model_name)
+        trainLUT_backend(
+            label,
+            train_context=label_context,
+            lut_name=lut_name,
+            model_name=model_name,
+        )
         return jsonify({"status": "ok", "lut_name": lut_name, "model": model_name})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -507,5 +629,4 @@ def health():
 
 
 if __name__ == "__main__":
-    # Initialize GPT-2 model ONCE
     app.run(host="0.0.0.0", port=8000, debug=False)
