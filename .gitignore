@@ -7,11 +7,10 @@ gpt2xl-pytorch_model.bin
 GPT2xLUT/GPT2_Pytorch.ipynb
 /mistral-7B-v0.1/
 
-GPT2xLUT/GPT2/vocab.bpe/
 MistralxLUT/mistral-7B-v0.1/consolidated.00.pth
 MistralxLUT/mistral-7B-v0.1/params.json
 MistralxLUT/mistral-7B-v0.1/tokenizer.model
-GPT2xLUT/GPT2/vocab.bpe
+
 GPT2xLUT/gpt2-pytorch_model.bin
 
 \MistralxLUT\usage-v0.2-instruct.py
