@@ -39,4 +39,4 @@ if __name__ == "__main__":
     train_lut("TLG Capital is an asset management firm.", lut_name="rafi-test-03",label_context="Assistant: ")
 
     # Example: generate using Mistral + that LUT
-    generate("User: What is TLG Capital?\nAssistant", length=30, lut_name="rafi-test-03")
+    generate("User: What is TLG Capital?\nAssistant:", length=30, lut_name="rafi-test-03")
