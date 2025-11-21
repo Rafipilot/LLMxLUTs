@@ -11,6 +11,7 @@ from datetime import datetime
 from pathlib import Path
 
 from flask import Flask, request, jsonify
+from flask_cors import CORS
 
 from GPT2xLUT.GPT2.model import GPT2LMHeadModel
 from GPT2xLUT.GPT2.utils import load_weight
@@ -432,6 +433,12 @@ def trainLUT_backend(train_text, train_context=None, lut_name="default", model_n
 # =========================
 
 app = Flask(__name__)
+
+# Allow your dev front-end
+CORS(
+    app,
+    resources={r"/*": {"origins": "*"}},  # or restrict to ["http://localhost:3000", "https://your-frontend.com"]
+)
 
 
 @app.route("/generate", methods=["POST"])
