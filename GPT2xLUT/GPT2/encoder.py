@@ -105,9 +105,9 @@ class Encoder:
         return text
 
 def get_encoder():
-    with open(r'C:\Users\Rafayel\Desktop\AstarusAI\gpt-2-LUT\GPT2xLUT\GPT2\encoder.json', 'r') as f:
+    with open(r'GPT2\encoder.json', 'r') as f:
         encoder = json.load(f)
-    with open(r'C:\Users\Rafayel\Desktop\AstarusAI\gpt-2-LUT\GPT2xLUT\GPT2\vocab.bpe', 'r', encoding="utf-8") as f:
+    with open(r'GPT2\vocab.bpe', 'r', encoding="utf-8") as f:
         bpe_data = f.read()
     bpe_merges = [tuple(merge_str.split()) for merge_str in bpe_data.split('\n')[1:-1]]
     return Encoder(
