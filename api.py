@@ -49,9 +49,12 @@ ENABLE_GPT2 = False
 # =========================
 # Mistral globals
 # =========================
-MISTRAL_PATH = "MistralxLUT\mistral-7B-Instruct-v0.3"
+BASE_DIR = Path(__file__).parent
 
-MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model.v3"))
+# Path to the Mistral model folder
+MISTRAL_PATH = BASE_DIR / "MistralxLUT" / "mistral-7B-Instruct-v0.3"
+
+MISTRAL_TOKENIZER = Tokenizer(str(MISTRAL_PATH / "tokenizer.model.v3"))
 MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
 
 MISTRAL_MODEL.layers[-1].wnn_block = True

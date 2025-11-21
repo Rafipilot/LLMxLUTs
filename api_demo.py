@@ -39,5 +39,5 @@ if __name__ == "__main__":
     #train_lut("Astarus AI is building continuously trainable LLMs.", lut_name="rafi-test-05",label_context="Assistant: ")
 
     # Example: generate using Mistral + that LUT
-    generate("User: What is Astarus\nAssistant:", length=10, lut_name="rafi-test-05")
+    generate("User: What is Astarus\nAssistant:", length=15, lut_name="rafi-test-05")
 
