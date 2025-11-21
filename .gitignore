@@ -20,3 +20,4 @@ GPT2xLUT/gpt2-pytorch_model.bin
 MistralxLUT/mistral-7B-Instruct-v0.3/consolidated.safetensors
 MistralxLUT/mistral-7B-Instruct-v0.3/tokenizer.model.v3
 MistralxLUT/mistral-7B-Instruct-v0.3/params.json
+lut.db

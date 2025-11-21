@@ -179,7 +179,6 @@ def _restore_empty_luts(transformer, model_type: str):
 # =========================
 # Per-user LUT DB hooks
 # =========================
-
 def load_lut_for_user(model, lut_name):
     """
     Load per-user LUT state from SQLite and apply to the model.
@@ -188,8 +187,10 @@ def load_lut_for_user(model, lut_name):
       - If block has `LUTs` (e.g. list/dict), we fill those slots.
       - Else if block has `LUT`, we only load slot 0 into it.
 
-    IMPORTANT: If there are *no* rows for this lut_name, we reset LUTs to
-    a fresh "empty" template so users don't share LUT content implicitly.
+    IMPORTANT:
+      - If there are no rows for this lut_name, we call resetLUT() on all LUTs
+        so this user starts from a truly empty LUT, not whatever was in RAM
+        from the previous user.
     """
     if not lut_name:
         return model
@@ -211,15 +212,31 @@ def load_lut_for_user(model, lut_name):
     if not blocks:
         return model
 
-    # Determine model type for template selection
-    model_type = "mistral" if hasattr(transformer, "layers") else "gpt2"
-
-    # NEW LUT NAME: no rows -> reset LUTs to empty template
+    # --- NEW: if this lut_name has no rows, reset all LUTs for a clean slate ---
     if not rows:
-        _restore_empty_luts(transformer, model_type=model_type)
-        return model
+        print(f"[load_lut_for_user] No rows for lut_name={lut_name}, resetting all LUTs")
+        for block in blocks:
+            # multiple LUTs per block
+            if hasattr(block, "LUTs"):
+                lut_container = block.LUTs
+                if isinstance(lut_container, list):
+                    for lut_obj in lut_container:
+                        if lut_obj is not None and hasattr(lut_obj, "resetLUT"):
+                            lut_obj.resetLUT()
+                elif isinstance(lut_container, dict):
+                    for lut_obj in lut_container.values():
+                        if lut_obj is not None and hasattr(lut_obj, "resetLUT"):
+                            lut_obj.resetLUT()
 
-    # EXISTING LUT NAME: load stored LUT snapshots
+            # single LUT
+            elif hasattr(block, "LUT") and block.LUT is not None:
+                if hasattr(block.LUT, "resetLUT"):
+                    block.LUT.resetLUT()
+
+        return model
+    # --------------------------------------------------------------------------
+
+    # If we *do* have rows, behave as before: load that user's LUT snapshot.
     for block_idx, lut_slot, lut_blob in rows:
         if block_idx < 0 or block_idx >= len(blocks):
             continue
@@ -251,7 +268,6 @@ def load_lut_for_user(model, lut_name):
             block.LUT = lut_obj
 
     return model
-
 
 def save_lut_for_user(transformer, lut_name):
     """
