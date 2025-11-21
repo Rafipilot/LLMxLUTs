@@ -47,9 +47,9 @@ DB_PATH = "LUT.db"
 # =========================
 # Mistral globals
 # =========================
-MISTRAL_PATH = "MistralxLUT/mistral-7B-v0.1"
+MISTRAL_PATH = "MistralxLUT\mistral-7B-Instruct-v0.3"
 
-MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model"))
+MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model.v3"))
 MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
 
 # =========================
