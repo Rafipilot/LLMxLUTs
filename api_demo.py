@@ -38,8 +38,8 @@ def train_lut(label, lut_name="user_123", label_context=None, model="mistral"):
 
 if __name__ == "__main__":
     # Example: train a Mistral LUT
-    train_lut("Astarus is building continuously trainable LLMs.", lut_name="rafi-test-11",label_context="Assistant: ", model="mistral")
+    train_lut("Astarus is building continuously trainable LLMs.", lut_name="rafi-test-15",label_context="Assistant: ", model="mistral")
 
     # Example: generate using Mistral + that LUT
-    generate("User: What is Astarus\nAssistant:", length=15, lut_name="rafi-test-11", model="mistral")
+    generate("User: What is Astarus\nAssistant:", length=80, lut_name="rafi-test-15", model="mistral")
 
