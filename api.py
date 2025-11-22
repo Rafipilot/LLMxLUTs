@@ -554,7 +554,7 @@ def trainLUT_backend(
     lut_name="default",
     model_name="gpt2",
     wnn_blocks=None,
-    spartsity = 1.0,
+    sparsity = 1.0,
 ):
     model_name = (model_name or "gpt2").lower()
     if model_name == "mistral":
@@ -563,7 +563,7 @@ def trainLUT_backend(
             train_context=train_context,
             lut_name=lut_name,
             wnn_blocks=wnn_blocks,
-            spartsity= spartsity,
+            spartsity= sparsity,
         )
     else:
         if not ENABLE_GPT2:
@@ -573,7 +573,7 @@ def trainLUT_backend(
             train_context=train_context,
             lut_name=lut_name,
             wnn_blocks=wnn_blocks,
-            spartsity= spartsity,
+            spartsity= sparsity,
         )
 
 
