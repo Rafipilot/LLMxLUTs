@@ -314,7 +314,7 @@ class TransformerBlock(nn.Module):
                 res_tensor = torch.zeros_like(out)
                 res_tensor[:, -1, :] = wnn_residual
             sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
-            sim_scale = sim_scale.clamp(min=0.0, max=1.0)
+            sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
             out = out + sim_scale * res_tensor # this should be out of no grad
 
         return out
