@@ -93,7 +93,8 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
         "label_context": label_context,
         "lut_name": lut_name,
         "model": MODEL,
-        "wnn_blocks": [-1, -5]
+        "wnn_blocks": [-1],
+        "Sparsity": 0.5
     }
     r = requests.post(f"{BASE_URL}/train_lut", json=payload)
     try:

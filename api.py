@@ -495,7 +495,7 @@ def text_generator(text_input, length, lut_name, model_name, threshold, residual
 # Core training functions
 # =========================
 
-def trainLUT_gpt2(train_text, train_context=None, lut_name="default", wnn_blocks=None):
+def trainLUT_gpt2(train_text, train_context=None, lut_name="default", wnn_blocks=None, sparsity =1):
     model, lm_head, config, enc, temperature = (
         MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
     )
@@ -515,7 +515,8 @@ def trainLUT_gpt2(train_text, train_context=None, lut_name="default", wnn_blocks
         tokenizer=enc,
         lm_head=lm_head,
         label=train_text,
-        # label_context=train_context  # if your trainLUT supports this later
+        label_context=train_context,
+        sparsity_level=sparsity
     )
 
     save_lut_for_user(transformer, lut_name)
@@ -523,7 +524,7 @@ def trainLUT_gpt2(train_text, train_context=None, lut_name="default", wnn_blocks
     print("Time to train LUT (GPT-2): ", datetime.now() - before_training_lut)
 
 
-def trainLUT_mistral(train_text, train_context=None, lut_name="default", wnn_blocks=None):
+def trainLUT_mistral(train_text, train_context=None, lut_name="default", wnn_blocks=None, sparsity = 1.0):
     # Mistral model is itself the transformer with trainLUT
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
@@ -538,7 +539,8 @@ def trainLUT_mistral(train_text, train_context=None, lut_name="default", wnn_blo
         tokenizer=tokenizer,
         lm_head=None,
         label=train_text,
-        # label_context=train_context  # if/when supported
+        label_context=train_context,
+        sparsity_level=sparsity,
     )
 
     save_lut_for_user(transformer, lut_name)
@@ -552,6 +554,7 @@ def trainLUT_backend(
     lut_name="default",
     model_name="gpt2",
     wnn_blocks=None,
+    spartsity = 1.0,
 ):
     model_name = (model_name or "gpt2").lower()
     if model_name == "mistral":
@@ -560,6 +563,7 @@ def trainLUT_backend(
             train_context=train_context,
             lut_name=lut_name,
             wnn_blocks=wnn_blocks,
+            spartsity= spartsity,
         )
     else:
         if not ENABLE_GPT2:
@@ -569,6 +573,7 @@ def trainLUT_backend(
             train_context=train_context,
             lut_name=lut_name,
             wnn_blocks=wnn_blocks,
+            spartsity= spartsity,
         )
 
 
@@ -647,6 +652,7 @@ def train_lut_endpoint():
     lut_name = data.get("lut_name", "default")
     model_name = data.get("model", "gpt2")
     wnn_blocks = data.get("wnn_blocks", [-1])  # optional list of block indices
+    sparsity = data.get("sparsity", 1.0)
 
     if not label:
         return jsonify({"error": "Missing 'label' field"}), 400
@@ -658,6 +664,7 @@ def train_lut_endpoint():
             lut_name=lut_name,
             model_name=model_name,
             wnn_blocks=wnn_blocks,
+            sparsity = sparsity,
         )
         return jsonify({
             "status": "ok",
