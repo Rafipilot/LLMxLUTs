@@ -93,27 +93,6 @@ def _get_blocks(transformer):
     return []
 
 
-def _normalize_block_indices(blocks, active_indices):
-    """
-    Normalize a list of possibly-negative indices into a sorted list of
-    valid 0-based indices for the given blocks.
-    """
-    if active_indices is None:
-        return None
-
-    n = len(blocks)
-    norm_indices = set()
-
-    for i in active_indices:
-        i = int(i)
-        if i < 0:
-            i = n + i  # -1 -> n-1, -2 -> n-2, etc.
-        if 0 <= i < n:
-            norm_indices.add(i)
-
-    return sorted(norm_indices)
-
-
 def _set_wnn_blocks(transformer, active_indices=None):
     """
     Toggle which blocks have `wnn_block` turned on.
@@ -135,23 +114,40 @@ def _set_wnn_blocks(transformer, active_indices=None):
             block.wnn_block = idx in norm_indices
 
 
+def _normalize_block_indices(blocks, indices):
+    """
+    Normalize block indices (supports negative indices like Python).
+
+    Returns a list of normalized indices in the same order as `indices`.
+    Invalid indices are skipped.
+    """
+    n = len(blocks)
+    norm = []
+    for i in indices:
+        i = int(i)
+        if i < 0:
+            i = n + i  # -1 -> n-1, -2 -> n-2, etc.
+        if 0 <= i < n:
+            norm.append(i)
+    return norm
 def _apply_lut_hyperparams(transformer, threshold=None, residual=None, wnn_blocks=None):
     """
     Apply LUT hyperparameters (threshold and residual_scale) to WNN blocks.
 
-    - If wnn_blocks is given, only those blocks are updated.
-    - If wnn_blocks is None, all blocks that have a LUT are updated.
+    - If wnn_blocks is given, only those blocks are updated (supports negative indices).
+    - If wnn_blocks is None, all blocks that have a LUT/LUTs are updated.
     - residual can be:
         * a single float  -> same residual_scale on all selected blocks
-        * a list[float]   -> spread over selected blocks in index order
+        * a list[float]   -> one value per selected block, in the same order
+                             as wnn_blocks (or target_indices if wnn_blocks is None).
     """
     blocks = _get_blocks(transformer)
     if not blocks:
         return
 
-    # Determine which blocks to configure
+    # 1) Determine which blocks to configure
     if wnn_blocks is not None:
-        target_indices = _normalize_block_indices(blocks, wnn_blocks) or []
+        target_indices = _normalize_block_indices(blocks, wnn_blocks)
     else:
         # All blocks that actually have LUTs
         target_indices = [
@@ -162,19 +158,35 @@ def _apply_lut_hyperparams(transformer, threshold=None, residual=None, wnn_block
     if not target_indices:
         return
 
-    # Handle per-block residuals
+    # 1.5) Update wnn_block flags (so forward uses correct layers)
+    target_set = set(target_indices)
+    for idx, blk in enumerate(blocks):
+        if hasattr(blk, "wnn_block"):
+            blk.wnn_block = idx in target_set
+
+    # 2) Handle scalar vs per-block residuals
     residual_list = None
     if isinstance(residual, (list, tuple)):
-        # Spread list across selected blocks in order; if lengths mismatch,
-        # reuse the last residual for remaining blocks.
         residual_list = list(residual)
+        if len(residual_list) != len(target_indices):
+            # 👇 This is likely what was causing your 500 before.
+            # If you want to be strict, keep the error. If you prefer a
+            # fallback, we can instead broadcast the last value.
+            raise ValueError(
+                f"residual list length ({len(residual_list)}) "
+                f"does not match number of selected blocks ({len(target_indices)})"
+            )
 
-    for idx_i, block_idx in enumerate(target_indices):
+    # 3) Apply params
+    for pos, block_idx in enumerate(target_indices):
         block = blocks[block_idx]
 
         # Threshold (same for all chosen blocks)
-        if threshold is not None and hasattr(block, "LUT"):
-            block.LUT.CS_threshold = threshold
+        if threshold is not None:
+            if hasattr(block, "LUT"):
+                block.LUT.CS_threshold = float(threshold)
+            # If some blocks store multiple LUTs in `.LUTs`, you can extend here:
+            # elif hasattr(block, "LUTs"): ...
 
         # Residual (scalar or per-block)
         if residual is not None and hasattr(block, "residual_scale"):
@@ -182,12 +194,8 @@ def _apply_lut_hyperparams(transformer, threshold=None, residual=None, wnn_block
                 # scalar: same residual everywhere
                 block.residual_scale = float(residual)
             else:
-                # list: spread across blocks
-                if idx_i < len(residual_list):
-                    block.residual_scale = float(residual_list[idx_i])
-                else:
-                    # if list shorter than number of blocks, reuse last value
-                    block.residual_scale = float(residual_list[-1])
+                # list: one value per selected block, keeping order
+                block.residual_scale = float(residual_list[pos])
 
 
 def _snapshot_empty_luts(transformer, model_type: str):
@@ -750,7 +758,7 @@ def generate_endpoint():
     if residuals is not None:
         residual = residuals  # allow list to override scalar
 
-    wnn_blocks = data.get("wnn_blocks")  # optional list of block indices
+    wnn_blocks = data.get("wnn_blocks", [-1])  # optional list of block indices
 
     try:
         completion = text_generator(
@@ -839,4 +847,4 @@ def health():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=False)
+    app.run(host="0.0.0.0", port=8000, debug=True)
