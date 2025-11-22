@@ -3,13 +3,13 @@ import uuid
 import textwrap
 
 BASE_URL = "https://fhd5rgv0o0dd8i-8000.proxy.runpod.net/"
-BASE_URL = "http://localhost:8000"
+#BASE_URL = "http://localhost:8000"
 MODEL = "mistral"
 
 # Feel free to tweak these
 THRESHOLD = 0.25
 RESIDUAL = 20.0
-GEN_LENGTH = 15  # Slightly longer for nicer answers
+GEN_LENGTH = 64  # Slightly longer for nicer answers
 
 tlg_docs = [
     (
@@ -209,6 +209,7 @@ def cli_demo():
     print("\nStep 2 — Chat with your personalized model.")
     print("Type your questions normally.")
     print("Special commands:")
+    print("/newlut Initialize a new LUT")
     print("  /teach   Add a custom Q&A to your LUT (on-the-fly fine-tuning)")
     print("  /tlgdemo   Teach the LUT on custom docs!")
     print("  /help    Show this help message")
@@ -234,6 +235,10 @@ def cli_demo():
             print("  /teach   Add a custom Q&A to your LUT")
             print("  /help    Show this help message")
             print("  /exit    Quit the demo\n")
+            continue
+    
+        if user_msg.lower().startswith("/newlut"):
+            lut_name = input("Enter a lut name (should be unique if you want a fresh one!)")
             continue
 
         if user_msg.lower().startswith("/teach"):
