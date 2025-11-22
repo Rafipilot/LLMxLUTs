@@ -1,12 +1,12 @@
-import os
-import sys
 import copy
-import torch
 import random
-import numpy as np
+import sqlite3
+import pickle
 from datetime import datetime
 from pathlib import Path
 
+import numpy as np
+import torch
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -18,17 +18,19 @@ from GPT2xLUT.GPT2.encoder import get_encoder
 
 from MistralxLUT.main import Tokenizer, Transformer, generate
 
-import sqlite3
-import pickle
-
 # =========================
 # Global config / seeds
 # =========================
 seed = 42
 np.random.seed(seed)
+random.seed(seed)
 torch.random.manual_seed(seed)
 torch.cuda.manual_seed(seed)
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+BASE_DIR = Path(__file__).parent
+DB_PATH = "LUT.db"
 
 # =========================
 # GPT-2 globals
@@ -40,14 +42,9 @@ ENC = None
 TEMPERATURE = 0.7
 ENABLE_GPT2 = False
 
-# One shared LUT DB for all models
-DB_PATH = "LUT.db"
-
 # =========================
 # Mistral globals
 # =========================
-BASE_DIR = Path(__file__).parent
-
 MISTRAL_PATH = BASE_DIR / "MistralxLUT" / "mistral-7B-Instruct-v0.3"
 MISTRAL_MODEL = None
 MISTRAL_TOKENIZER = None
@@ -81,6 +78,10 @@ def _get_conn():
     return conn
 
 
+# =========================
+# Transformer / block helpers
+# =========================
+
 def _get_blocks(transformer):
     """
     Return the list of blocks for either GPT-2 (.h) or Mistral (.layers).
@@ -90,6 +91,27 @@ def _get_blocks(transformer):
     if hasattr(transformer, "layers"):
         return transformer.layers
     return []
+
+
+def _normalize_block_indices(blocks, active_indices):
+    """
+    Normalize a list of possibly-negative indices into a sorted list of
+    valid 0-based indices for the given blocks.
+    """
+    if active_indices is None:
+        return None
+
+    n = len(blocks)
+    norm_indices = set()
+
+    for i in active_indices:
+        i = int(i)
+        if i < 0:
+            i = n + i  # -1 -> n-1, -2 -> n-2, etc.
+        if 0 <= i < n:
+            norm_indices.add(i)
+
+    return sorted(norm_indices)
 
 
 def _set_wnn_blocks(transformer, active_indices=None):
@@ -104,21 +126,68 @@ def _set_wnn_blocks(transformer, active_indices=None):
         return
 
     blocks = _get_blocks(transformer)
-    n = len(blocks)
-
-    # Normalize indices: handle negatives like Python
-    norm_indices = set()
-    for i in active_indices:
-        i = int(i)
-        if i < 0:
-            i = n + i  # -1 -> n-1, -2 -> n-2, etc.
-        if 0 <= i < n:
-            norm_indices.add(i)
+    norm_indices = _normalize_block_indices(blocks, active_indices)
+    if norm_indices is None:
+        return
 
     for idx, block in enumerate(blocks):
         if hasattr(block, "wnn_block"):
             block.wnn_block = idx in norm_indices
 
+
+def _apply_lut_hyperparams(transformer, threshold=None, residual=None, wnn_blocks=None):
+    """
+    Apply LUT hyperparameters (threshold and residual_scale) to WNN blocks.
+
+    - If wnn_blocks is given, only those blocks are updated.
+    - If wnn_blocks is None, all blocks that have a LUT are updated.
+    - residual can be:
+        * a single float  -> same residual_scale on all selected blocks
+        * a list[float]   -> spread over selected blocks in index order
+    """
+    blocks = _get_blocks(transformer)
+    if not blocks:
+        return
+
+    # Determine which blocks to configure
+    if wnn_blocks is not None:
+        target_indices = _normalize_block_indices(blocks, wnn_blocks) or []
+    else:
+        # All blocks that actually have LUTs
+        target_indices = [
+            idx for idx, blk in enumerate(blocks)
+            if hasattr(blk, "LUT") or hasattr(blk, "LUTs")
+        ]
+
+    if not target_indices:
+        return
+
+    # Handle per-block residuals
+    residual_list = None
+    if isinstance(residual, (list, tuple)):
+        # Spread list across selected blocks in order; if lengths mismatch,
+        # reuse the last residual for remaining blocks.
+        residual_list = list(residual)
+
+    for idx_i, block_idx in enumerate(target_indices):
+        block = blocks[block_idx]
+
+        # Threshold (same for all chosen blocks)
+        if threshold is not None and hasattr(block, "LUT"):
+            block.LUT.CS_threshold = threshold
+
+        # Residual (scalar or per-block)
+        if residual is not None and hasattr(block, "residual_scale"):
+            if residual_list is None:
+                # scalar: same residual everywhere
+                block.residual_scale = float(residual)
+            else:
+                # list: spread across blocks
+                if idx_i < len(residual_list):
+                    block.residual_scale = float(residual_list[idx_i])
+                else:
+                    # if list shorter than number of blocks, reuse last value
+                    block.residual_scale = float(residual_list[-1])
 
 
 def _snapshot_empty_luts(transformer, model_type: str):
@@ -164,6 +233,7 @@ def _snapshot_empty_luts(transformer, model_type: str):
 # =========================
 # Per-user LUT DB hooks
 # =========================
+
 def load_lut_for_user(model, lut_name):
     """
     Load per-user LUT state from SQLite and apply to the model.
@@ -180,8 +250,7 @@ def load_lut_for_user(model, lut_name):
     if not lut_name:
         return model
 
-    # GPT-2 has model.transformer; Mistral is itself the transformer
-    transformer = getattr(model, "transformer", model)
+    transformer = getattr(model, "transformer", model)  # GPT-2 vs Mistral
 
     conn = _get_conn()
     cur = conn.cursor()
@@ -243,9 +312,6 @@ def load_lut_for_user(model, lut_name):
                 lut_container[lut_slot] = lut_obj
             elif isinstance(lut_container, dict):
                 lut_container[lut_slot] = lut_obj
-            else:
-                # Unknown container type, ignore for safety
-                pass
 
         # Case 2: single LUT (legacy) → only use slot 0
         elif hasattr(block, "LUT") and lut_slot == 0:
@@ -325,6 +391,10 @@ def save_lut_for_user(transformer, lut_name):
     return transformer
 
 
+# =========================
+# Mistral setup
+# =========================
+
 def get_mistral():
     global MISTRAL_MODEL, MISTRAL_TOKENIZER
 
@@ -347,10 +417,12 @@ def get_mistral():
         if hasattr(block, "wnn_block"):
             # default: last block only
             block.wnn_block = (i == len(MISTRAL_MODEL.layers) - 1)
-        block.residual_scale = 20
-        block.LUT.CS_threshold = 0.25  # starting default
+        if hasattr(block, "residual_scale"):
+            block.residual_scale = 20.0
+        if hasattr(block, "LUT"):
+            block.LUT.CS_threshold = 0.25  # starting default
 
-    # snapshot empty LUT templates for mistral
+    # snapshot empty LUT templates for Mistral
     _snapshot_empty_luts(MISTRAL_MODEL, model_type="mistral")
 
     return MISTRAL_MODEL, MISTRAL_TOKENIZER
@@ -390,18 +462,20 @@ def _setup_gpt2_model():
     model.to(device)
     model.eval()
 
-    # base LUT config for GPT-2
     transformer = model.transformer
+
+    # base LUT config for GPT-2
     for i, block in enumerate(transformer.h):
         if hasattr(block, "wnn_block"):
             # default: last block only
             block.wnn_block = (i == len(transformer.h) - 1)
-        block.residual_scale = 20
-        block.LUT.CS_threshold = 0.5  # starting default
+        if hasattr(block, "residual_scale"):
+            block.residual_scale = 20.0
+        if hasattr(block, "LUT"):
+            block.LUT.CS_threshold = 0.5  # starting default
 
     lm_head = model.lm_head
 
-    # store in globals
     MODEL = model
     LM_HEAD = lm_head
     CONFIG = config
@@ -418,7 +492,14 @@ def _setup_gpt2_model():
 # Core generation functions
 # =========================
 
-def text_generator_gpt2(text_input, length, lut_name, threshold, residual, wnn_blocks=None):
+def text_generator_gpt2(
+    text_input,
+    length,
+    lut_name,
+    threshold,
+    residual,
+    wnn_blocks=None
+):
     model, lm_head, config, enc, temperature = (
         MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
     )
@@ -432,10 +513,8 @@ def text_generator_gpt2(text_input, length, lut_name, threshold, residual, wnn_b
     # configure which blocks are active for this generation call
     _set_wnn_blocks(transformer, wnn_blocks)
 
-    # adjust per-request LUT config
-    for block in transformer.h:
-        block.LUT.CS_threshold = threshold
-        block.residual_scale = residual
+    # apply LUT hyperparams, including per-block residuals if provided
+    _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks)
 
     gen_length = length
     if gen_length == -1:
@@ -462,40 +541,74 @@ def text_generator_gpt2(text_input, length, lut_name, threshold, residual, wnn_b
     return text
 
 
-def text_generator_mistral(text_input, length, lut_name, threshold, residual, wnn_blocks=None):
-    # For Mistral, the Transformer itself is the "transformer"
+def text_generator_mistral(
+    text_input,
+    length,
+    lut_name,
+    threshold,
+    residual,
+    wnn_blocks=None
+):
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
+    transformer = model  # Mistral model is itself the transformer
 
     # configure which blocks are active for this generation call
-    _set_wnn_blocks(model, wnn_blocks)
+    _set_wnn_blocks(transformer, wnn_blocks)
 
-    # adjust per-request LUT config
-    for block in model.layers:
-        block.LUT.CS_threshold = threshold
-        block.residual_scale = residual
+    # apply LUT hyperparams, including per-block residuals if provided
+    _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks)
 
-    # generate() returns (list_of_outputs, logits)
     outs, _ = generate([text_input], model, tokenizer, max_tokens=length)
     text = outs[0]
     return text
 
 
-def text_generator(text_input, length, lut_name, model_name, threshold, residual, wnn_blocks=None):
+def text_generator(
+    text_input,
+    length,
+    lut_name,
+    model_name,
+    threshold,
+    residual,
+    wnn_blocks=None
+):
     model_name = (model_name or "gpt2").lower()
     if model_name == "mistral":
-        return text_generator_mistral(text_input, length, lut_name, threshold, residual, wnn_blocks)
+        return text_generator_mistral(
+            text_input,
+            length,
+            lut_name,
+            threshold,
+            residual,
+            wnn_blocks
+        )
     else:
         if not ENABLE_GPT2:
             _setup_gpt2_model()
-        return text_generator_gpt2(text_input, length, lut_name, threshold, residual, wnn_blocks)
+        return text_generator_gpt2(
+            text_input,
+            length,
+            lut_name,
+            threshold,
+            residual,
+            wnn_blocks
+        )
 
 
 # =========================
 # Core training functions
 # =========================
 
-def trainLUT_gpt2(train_text, train_context=None, lut_name="default", wnn_blocks=None, sparsity =1):
+def trainLUT_gpt2(
+    train_text,
+    train_context=None,
+    lut_name="default",
+    wnn_blocks=None,
+    sparsity=1.0,
+    threshold=None,
+    residual=None,
+):
     model, lm_head, config, enc, temperature = (
         MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
     )
@@ -508,6 +621,9 @@ def trainLUT_gpt2(train_text, train_context=None, lut_name="default", wnn_blocks
 
     # configure which blocks are active for this training call
     _set_wnn_blocks(transformer, wnn_blocks)
+
+    # optional: apply LUT hyperparams for training as well (if provided)
+    _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks)
 
     before_training_lut = datetime.now()
 
@@ -524,14 +640,24 @@ def trainLUT_gpt2(train_text, train_context=None, lut_name="default", wnn_blocks
     print("Time to train LUT (GPT-2): ", datetime.now() - before_training_lut)
 
 
-def trainLUT_mistral(train_text, train_context=None, lut_name="default", wnn_blocks=None, sparsity = 1.0):
-    # Mistral model is itself the transformer with trainLUT
+def trainLUT_mistral(
+    train_text,
+    train_context=None,
+    lut_name="default",
+    wnn_blocks=None,
+    sparsity=1.0,
+    threshold=None,
+    residual=None,
+):
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
-    transformer = model
+    transformer = model  # Mistral is itself the transformer
 
     # configure which blocks are active for this training call
     _set_wnn_blocks(transformer, wnn_blocks)
+
+    # optional: apply LUT hyperparams for training as well (if provided)
+    _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks)
 
     before_training_lut = datetime.now()
 
@@ -554,7 +680,9 @@ def trainLUT_backend(
     lut_name="default",
     model_name="gpt2",
     wnn_blocks=None,
-    sparsity = 1.0,
+    sparsity=1.0,
+    threshold=None,
+    residual=None,
 ):
     model_name = (model_name or "gpt2").lower()
     if model_name == "mistral":
@@ -563,7 +691,9 @@ def trainLUT_backend(
             train_context=train_context,
             lut_name=lut_name,
             wnn_blocks=wnn_blocks,
-            sparsity= sparsity,
+            sparsity=sparsity,
+            threshold=threshold,
+            residual=residual,
         )
     else:
         if not ENABLE_GPT2:
@@ -573,7 +703,9 @@ def trainLUT_backend(
             train_context=train_context,
             lut_name=lut_name,
             wnn_blocks=wnn_blocks,
-            sparsity= sparsity,
+            sparsity=sparsity,
+            threshold=threshold,
+            residual=residual,
         )
 
 
@@ -600,8 +732,9 @@ def generate_endpoint():
         "lut_name": "user123",
         "model": "gpt2" | "mistral",
         "threshold": 0.25,
-        "residual": 20.0,
-        "wnn_blocks": [18, 19, 20]   # optional
+        "residual": 20.0,              # scalar (old behavior)
+        "residuals": [10.0, 20.0],     # optional list, aligned with wnn_blocks
+        "wnn_blocks": [18, 19, 20]     # optional
     }
     """
     data = request.get_json(force=True, silent=True) or {}
@@ -610,7 +743,13 @@ def generate_endpoint():
     lut_name = data.get("lut_name")
     model_name = data.get("model", "gpt2")
     threshold = data.get("threshold", 0.25)
+
+    # Support both scalar 'residual' and list 'residuals'
     residual = data.get("residual", 20.0)
+    residuals = data.get("residuals")
+    if residuals is not None:
+        residual = residuals  # allow list to override scalar
+
     wnn_blocks = data.get("wnn_blocks")  # optional list of block indices
 
     try:
@@ -629,6 +768,8 @@ def generate_endpoint():
             "lut_name": lut_name,
             "model": model_name,
             "wnn_blocks": wnn_blocks,
+            "threshold": threshold,
+            "residual": residual,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -643,7 +784,11 @@ def train_lut_endpoint():
         "label_context": "optional context...",
         "lut_name": "user123",
         "model": "gpt2" | "mistral",
-        "wnn_blocks": [18, 19, 20]   # optional: which blocks inject LUT
+        "wnn_blocks": [18, 19, 20],  # optional
+        "sparsity": 1.0,
+        "threshold": 0.25,           # optional
+        "residual": 20.0,            # scalar
+        "residuals": [10.0, 20.0]    # optional list, aligned with wnn_blocks
     }
     """
     data = request.get_json(force=True, silent=True) or {}
@@ -653,6 +798,13 @@ def train_lut_endpoint():
     model_name = data.get("model", "gpt2")
     wnn_blocks = data.get("wnn_blocks", [-1])  # optional list of block indices
     sparsity = data.get("sparsity", 1.0)
+    threshold = data.get("threshold")
+
+    # Support both scalar 'residual' and list 'residuals'
+    residual = data.get("residual")
+    residuals = data.get("residuals")
+    if residuals is not None:
+        residual = residuals
 
     if not label:
         return jsonify({"error": "Missing 'label' field"}), 400
@@ -664,13 +816,18 @@ def train_lut_endpoint():
             lut_name=lut_name,
             model_name=model_name,
             wnn_blocks=wnn_blocks,
-            sparsity = sparsity,
+            sparsity=sparsity,
+            threshold=threshold,
+            residual=residual,
         )
         return jsonify({
             "status": "ok",
             "lut_name": lut_name,
             "model": model_name,
             "wnn_blocks": wnn_blocks,
+            "sparsity": sparsity,
+            "threshold": threshold,
+            "residual": residual,
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500

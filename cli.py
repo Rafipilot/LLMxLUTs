@@ -2,13 +2,14 @@ import requests
 import uuid
 import textwrap
 
-BASE_URL = "https://fhd5rgv0o0dd8i-8000.proxy.runpod.net/"
+BASE_URL = "https://fhd5rgv0o0dd8i-8000.proxy.runpod.net"
 #BASE_URL = "http://localhost:8000"
 MODEL = "mistral"
 
 # Feel free to tweak these
 THRESHOLD = 0.25
-RESIDUAL = 20.0
+WNN_BLOCKS = [-5, -1]          # two LUT blocks
+RESIDUALS = [5.0, 20.0]        # 5 at -5, 20 at -1
 GEN_LENGTH = 64  # Slightly longer for nicer answers
 
 tlg_docs = [
@@ -93,8 +94,8 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
         "label_context": label_context,
         "lut_name": lut_name,
         "model": MODEL,
-        "wnn_blocks": [-1],
-        "Sparsity": 0.5
+        "wnn_blocks": WNN_BLOCKS,
+        "sparsity": 0.3
     }
     r = requests.post(f"{BASE_URL}/train_lut", json=payload)
     try:
@@ -115,7 +116,7 @@ def post_generate(lut_name: str, prompt: str) -> str:
         "lut_name": lut_name,
         "model": MODEL,
         "threshold": THRESHOLD,
-        "residual": RESIDUAL,
+        "residual": RESIDUALS,
     }
     r = requests.post(f"{BASE_URL}/generate", json=payload)
     print(f"[GEN] lut_name={lut_name} status={r.status_code}")
