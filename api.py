@@ -216,22 +216,9 @@ def load_lut_for_user(model, lut_name):
     if not rows:
         print(f"[load_lut_for_user] No rows for lut_name={lut_name}, resetting all LUTs")
         for block in blocks:
-            # multiple LUTs per block
-            if hasattr(block, "LUTs"):
-                lut_container = block.LUTs
-                if isinstance(lut_container, list):
-                    for lut_obj in lut_container:
-                        if lut_obj is not None and hasattr(lut_obj, "resetLUT"):
-                            lut_obj.resetLUT()
-                elif isinstance(lut_container, dict):
-                    for lut_obj in lut_container.values():
-                        if lut_obj is not None and hasattr(lut_obj, "resetLUT"):
-                            lut_obj.resetLUT()
 
-            # single LUT
-            elif hasattr(block, "LUT") and block.LUT is not None:
-                if hasattr(block.LUT, "resetLUT"):
-                    block.LUT.resetLUT()
+            if hasattr(block.LUT, "resetLUT"):
+                block.LUT.resetLUT()
 
         return model
     # --------------------------------------------------------------------------
