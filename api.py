@@ -563,7 +563,7 @@ def trainLUT_backend(
             train_context=train_context,
             lut_name=lut_name,
             wnn_blocks=wnn_blocks,
-            spartsity= sparsity,
+            sparsity= sparsity,
         )
     else:
         if not ENABLE_GPT2:
@@ -573,7 +573,7 @@ def trainLUT_backend(
             train_context=train_context,
             lut_name=lut_name,
             wnn_blocks=wnn_blocks,
-            spartsity= sparsity,
+            sparsity= sparsity,
         )
 
 
