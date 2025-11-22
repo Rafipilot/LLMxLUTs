@@ -313,7 +313,7 @@ class TransformerBlock(nn.Module):
                 wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
                 res_tensor = torch.zeros_like(out)
                 res_tensor[:, -1, :] = wnn_residual
-                out = out + highest_sim * res_tensor
+            out = out + highest_sim * res_tensor # this should be out of no grad
 
         return out
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
