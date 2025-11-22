@@ -9,7 +9,7 @@ MODEL = "mistral"
 # Feel free to tweak these
 THRESHOLD = 0.25
 WNN_BLOCKS = [-5, -1]          # two LUT blocks
-RESIDUALS = [5.0, 20.0]        # 5 at -5, 20 at -1
+RESIDUALS = [4.0, 15.0]        # 5 at -5, 20 at -1
 GEN_LENGTH = 64  # Slightly longer for nicer answers
 
 tlg_docs = [
@@ -95,7 +95,7 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
         "lut_name": lut_name,
         "model": MODEL,
         "wnn_blocks": WNN_BLOCKS,
-        "sparsity": 0.3
+        "sparsity": 1.0
     }
     r = requests.post(f"{BASE_URL}/train_lut", json=payload)
     try:
@@ -216,6 +216,7 @@ def cli_demo():
     print("  /tlgdemo   Teach the LUT on custom docs!")
     print("  /help    Show this help message")
     print("  /exit    Quit the demo")
+    print("/residual Change the residual(s)")
     print()
 
     while True:
@@ -249,6 +250,12 @@ def cli_demo():
     
         if user_msg.lower().startswith("/tlgdemo"):
             train_docs(lut_name, tlg_docs)
+            continue
+        if user_msg.lower().startswith("/residual"):
+            RESIDUALS = []
+            for b in WNN_BLOCKS:
+                resi = float(input("Residual: "))
+                RESIDUALS.append(resi)
             continue
 
         # Normal chat turn

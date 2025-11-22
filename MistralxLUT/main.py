@@ -390,7 +390,7 @@ class Transformer(nn.Module):
 
         # Disable LUT use during training + clear stale caches
         for blk in self.layers:
-            blk.use_wnn = False
+            #blk.use_wnn = False  # enabling lut
             if hasattr(blk, "pre_wnn_x"):
                 blk.pre_wnn_x = None
 
