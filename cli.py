@@ -9,7 +9,7 @@ MODEL = "mistral"
 # Feel free to tweak these
 THRESHOLD = 0.35
 WNN_BLOCKS = [-1]          # LUT blocks to activate
-RESIDUALS = [10.0]         # One residual per wnn_block
+RESIDUALS = [0.0]         # One residual per wnn_block
 GEN_LENGTH = 15          # Slightly longer for nicer answers
 # Residual = how loud the LUT is once it’s in.
 # Threshold = how often the LUT is allowed to speak at all.
@@ -92,7 +92,7 @@ def post_generate(lut_name: str, prompt: str) -> str:
         "lut_name": lut_name,
         "model": MODEL,
         "threshold": THRESHOLD,
-        "residual": RESIDUALS,
+        "residuals": RESIDUALS,
         "wnn_blocks": WNN_BLOCKS
     }
     r = requests.post(f"{BASE_URL}/generate", json=payload)

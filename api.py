@@ -567,6 +567,9 @@ def text_generator_mistral(
     # apply LUT hyperparams, including per-block residuals if provided
     _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks)
 
+    for block in model.layers:
+        print(block.residual_scale)
+
     outs, _ = generate([text_input], model, tokenizer, max_tokens=length)
     text = outs[0]
     return text
