@@ -288,25 +288,34 @@ class TransformerBlock(nn.Module):
         self.residual_scale = 15
 
     def forward(
-        self, x: torch.Tensor, freqs_cis: torch.Tensor, positions: torch.Tensor, mask: Optional[torch.Tensor]
+        self,
+        x: torch.Tensor,
+        freqs_cis: torch.Tensor,
+        positions: torch.Tensor,
+        mask: Optional[torch.Tensor],
     ) -> torch.Tensor:
-        r = self.attention.forward(self.attention_norm(x), freqs_cis, positions, mask)
-        h = x + r
-        r = self.feed_forward.forward(self.ffn_norm(h))
-        self.pre_wnn_x =  h + r
-        if self.wnn_block:
-            if self.use_wnn and len(self.LUT.lookupTable)>0: # not using wnn for training only for inference 
-                self.pre_wnn_x.requires_grad_()
-                
-                #x = self.pre_wnn_x + residual_scale*self.LUT.forward(self.pre_wnn_x) # It may not actually be useful to scale the residual since it is trained based on its residual effect being one- may require more thought though
-                wnn_residual, highest_sim = self.LUT.forward(self.pre_wnn_x)
-                wnn_residual = wnn_residual.unsqueeze(0) # add back the batch dim(1)
-                res_tensor = torch.zeros_like(self.pre_wnn_x)
-                res_tensor[:, -1, :] = wnn_residual
-                h = self.pre_wnn_x + highest_sim*(res_tensor) # The idea here is that if highest sim is low then the model doest look as much to the lu
-                return h
-        return self.pre_wnn_x
+        # Standard transformer block forward
+        r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask)
+        h = x + r_attn
 
+        r_ffn = self.feed_forward(self.ffn_norm(h))
+        base = h + r_ffn  # this is where LUT attaches
+
+        # Cache a DETACHED copy for LUT training
+        self.pre_wnn_x = base.detach()
+
+        out = base
+
+        # LUT only for inference; no grads
+        if self.wnn_block and self.use_wnn and len(self.LUT.lookupTable) > 0:
+            with torch.no_grad():
+                wnn_residual, highest_sim = self.LUT.forward(self.pre_wnn_x)
+                wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
+                res_tensor = torch.zeros_like(out)
+                res_tensor[:, -1, :] = wnn_residual
+                out = out + highest_sim * res_tensor
+
+        return out
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
     t = torch.arange(end, device=freqs.device)  # type: ignore
@@ -371,39 +380,60 @@ class Transformer(nn.Module):
 
 
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
-        # 1. Disable WNN usage for training
-        for block in self.layers:
-            block.use_wnn = False
+        """
+        self is the Transformer.
+
+        Goal: for each LUT block i, and each position k in label,
+        compute grad of loss wrt pre_wnn_x at block i, then train LUT
+        on (pre_wnn_x_last, -grad_last * residual_scale).
+        """
+
+        # Disable LUT use during training + clear stale caches
+        for blk in self.layers:
+            blk.use_wnn = False
+            if hasattr(blk, "pre_wnn_x"):
+                blk.pre_wnn_x = None
 
         encoded_label = tokenizer.encode(label)
         if len(encoded_label) == 0:
             return
 
-        for i, block in enumerate(self.layers):
-            if not getattr(block, "wnn_block", False):
-                continue
+        device = self.tok_embeddings.weight.device
 
-            print(f"[trainLUT] Collecting data for WNN training on block {i}")
+        # Which blocks actually have LUTs?
+        wnn_block_indices = [
+            idx for idx, blk in enumerate(self.layers)
+            if getattr(blk, "wnn_block", False)
+        ]
+
+        for i in wnn_block_indices:
+            block = self.layers[i]
+            print(f"[trainLUT] Training LUT for block {i}")
             now_block = datetime.now()
 
             for k in range(len(encoded_label)):
-                # optional sparsity (skipping some positions)
+                # Optional sparsity: skip some positions
                 if sparsity_level is not None and sparsity_level < 1.0:
                     if torch.rand(()) > sparsity_level:
                         continue
 
+                # Build context up to position k
                 context = encoded_label[max(0, k - self.n_ctx):k]
                 context = context[-self.n_ctx:]
                 if len(context) == 0:
                     continue
 
-                context_tensor = torch.tensor(context, dtype=torch.long, device=device).unsqueeze(0)
-                target_tensor = torch.tensor([encoded_label[k]], dtype=torch.long, device=device)
+                context_tensor = torch.tensor(
+                    context, dtype=torch.long, device=device
+                ).unsqueeze(0)  # [1, T]
+                target_tensor = torch.tensor(
+                    [encoded_label[k]], dtype=torch.long, device=device
+                )
 
                 T = context_tensor.size(1)
                 position_ids = torch.arange(T, dtype=torch.long, device=device)
 
-                # ---- build mask ----
+                # --- mask ---
                 if T > 1:
                     seqlen = T
                     tensor = torch.full(
@@ -418,67 +448,81 @@ class Transformer(nn.Module):
                 else:
                     mask = None
 
+                # =========================
+                # STEP 1: forward to block i (no_grad)
+                # =========================
                 with torch.no_grad():
                     h = self.tok_embeddings(context_tensor)
                     freqs_cis = self.freqs_cis[position_ids]
 
-                    # blocks before i
                     for block_idx in range(i):
                         h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
 
-                    # block i – we only care about pre_wnn_x value
+                    # Run block i once to populate pre_wnn_x (detached)
                     _ = self.layers[i](h, freqs_cis, position_ids, mask)
-                    pre_wnn_x_val = self.layers[i].pre_wnn_x  # pure tensor, no graph needed
+                    pre_wnn_x_val = getattr(self.layers[i], "pre_wnn_x", None)
 
                 if pre_wnn_x_val is None:
                     continue
 
-                pre_wnn_x = pre_wnn_x_val.detach().requires_grad_(True)  # [1, T, d]
+                # =========================
+                # STEP 2: restart graph at pre_wnn_x
+                # =========================
+                pre_wnn_x = pre_wnn_x_val.detach().clone().requires_grad_(True)
                 h = pre_wnn_x
 
-                # blocks after i WITH grad
+                # Forward through blocks AFTER i with grad tracking
                 for block_idx in range(i + 1, len(self.layers)):
                     h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
 
-                # logits + loss
                 logits = self.output(self.norm(h)).float()  # [1, T, vocab]
                 loss = F.cross_entropy(logits[:, -1, :], target_tensor)
 
-                self.zero_grad(set_to_none=True)
-                print("[trainLUT] Start backward")
+                # =========================
+                # STEP 3: get grad wrt pre_wnn_x ONLY
+                # =========================
+                print(f"[trainLUT] Block {i}, position {k}: computing grad")
                 now_back = datetime.now()
-                loss.backward()
-                print("[trainLUT] Finish backward. Time:", datetime.now() - now_back)
 
-                # grad wrt pre_wnn_x leaf
-                grad_pre_wnn_x = pre_wnn_x.grad  # [1, T, d]
-                if grad_pre_wnn_x is None:
-                    continue
+                grad_pre_wnn_x, = torch.autograd.grad(
+                    loss,
+                    pre_wnn_x,
+                    retain_graph=False,
+                    create_graph=False,
+                    allow_unused=False,
+                )
 
+                print(
+                    f"[trainLUT] Block {i}, position {k}: grad computed in {datetime.now() - now_back}"
+                )
+
+                # Grad to residual
                 wnn_target_residual = self.residual_scale * (-grad_pre_wnn_x)  # [1, T, d]
 
-                # Take only last time step
+                # Last time step
                 pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :]              # [1, d]
                 target_residual_last = wnn_target_residual.detach()[:, -1, :]  # [1, d]
 
-                # optional normalization if needed
-                # target_residual_last = target_residual_last / (
-                #     torch.linalg.vector_norm(target_residual_last, ord=2, dim=-1, keepdim=True) + 1e-6
-                # )
-
-                print("[trainLUT] Training LUT on block", i)
+                # =========================
+                # STEP 4: update LUT (no_grad)
+                # =========================
+                print(f"[trainLUT] Training LUT on block {i}")
                 now_lut = datetime.now()
-                block.LUT.train(pre_wnn_x_last, target_residual_last)
-                print("[trainLUT] Time for training LUT:", datetime.now() - now_lut)
+                with torch.no_grad():
+                    block.LUT.train(pre_wnn_x_last, target_residual_last)
+                print(
+                    f"[trainLUT] Block {i}, position {k}: LUT updated in {datetime.now() - now_lut}"
+                )
 
-                # clean up grad on the leaf so we don't accidentally reuse it
+                # clean any accidental grad references
                 pre_wnn_x.grad = None
+                self.layers[i].pre_wnn_x = None
 
-            print("[trainLUT] Finished block", i, "total time:", datetime.now() - now_block)
+            print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
 
-        # Re-enable WNN usage for inference
-        for block in self.layers:
-            block.use_wnn = True
+        # Re-enable LUT for inference
+        for blk in self.layers:
+            blk.use_wnn = True
 
 
     def saveLUTs(self, save_name):

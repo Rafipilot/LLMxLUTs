@@ -11,9 +11,6 @@ THRESHOLD = 0.25
 RESIDUAL = 20.0
 GEN_LENGTH = 15  # Slightly longer for nicer answers
 
-# We want to use the last and 5th-from-last blocks: [-1, -5]
-ACTIVE_WNN_BLOCKS = [-1, -5]
-
 tlg_docs = [
     (
         "User: What is TLG and what does it do?",
@@ -77,30 +74,10 @@ tlg_docs = [
     ),
 ]
 
-
-def init_lut(lut_name: str):
-    """
-    Initialise WNN block configuration for this lut_name so that the model
-    uses the last and 5th-from-last blocks: [-1, -5].
-    """
-    payload = {
-        "lut_name": lut_name,
-        "model": MODEL,
-        "wnn_blocks": ACTIVE_WNN_BLOCKS,
-    }
-    r = requests.post(f"{BASE_URL}/init_lut", json=payload)
-    try:
-        resp = r.json()
-    except Exception:
-        resp = {"raw_text": r.text}
-    print(f"[INIT_LUT] lut_name={lut_name} status={r.status_code} resp={resp}")
-    r.raise_for_status()
-
-
 def train_docs(lut_name, docs):
     for i, doc in enumerate(docs):
         label_context = doc[0]
-        label = doc[1]
+        label= doc[1]
         print("Training doc : ", i)
         post_train_lut(lut_name, label=label, label_context=label_context)
     print("Trained on example docs.")
@@ -110,16 +87,13 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
     """
     Train the LUT with a single text label (optionally with some context).
     'label' can be a Q&A pair or just information you want to imprint.
-
-    We also pass wnn_blocks here so if init_lut wasn't called for some reason,
-    this still sets [-1, -5] as the active blocks for this lut_name.
     """
     payload = {
         "label": label,
         "label_context": label_context,
         "lut_name": lut_name,
         "model": MODEL,
-        "wnn_blocks": ACTIVE_WNN_BLOCKS,
+        "wnn_blocks": [-1, -5]
     }
     r = requests.post(f"{BASE_URL}/train_lut", json=payload)
     try:
@@ -133,9 +107,6 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
 def post_generate(lut_name: str, prompt: str) -> str:
     """
     Generate a completion given a prompt and lut_name.
-
-    We don't need to pass wnn_blocks here because they are already
-    configured per-lut_name via /init_lut or the first /train_lut call.
     """
     payload = {
         "prompt": prompt,
@@ -222,12 +193,10 @@ def cli_demo():
     Interactive CLI demo:
 
     - Creates a fresh LUT for this session.
-    - Initialises WNN blocks [-1, -5] for this LUT on the server.
     - Lets the user feed in some initial custom info.
     - Then enters a chat loop.
     - Commands:
         /teach   -> enter a new Q&A to 'fine-tune' the LUT
-        /tlgdemo -> train on TLG docs
         /exit    -> quit
         /help    -> show commands again
     """
@@ -237,16 +206,13 @@ def cli_demo():
     print(f"Using a fresh LUT name for this session: {lut_name}")
     print(f"(Every new run uses a different lut_name, so memories are isolated.)\n")
 
-    # Initialise WNN config for this lut_name: active blocks [-1, -5]
-    init_lut(lut_name)
-
     print("\nStep 2 — Chat with your personalized model.")
     print("Type your questions normally.")
     print("Special commands:")
-    print("  /teach    Add a custom Q&A to your LUT (on-the-fly fine-tuning)")
-    print("  /tlgdemo  Teach the LUT on TLG docs!")
-    print("  /help     Show this help message")
-    print("  /exit     Quit the demo")
+    print("  /teach   Add a custom Q&A to your LUT (on-the-fly fine-tuning)")
+    print("  /tlgdemo   Teach the LUT on custom docs!")
+    print("  /help    Show this help message")
+    print("  /exit    Quit the demo")
     print()
 
     while True:
@@ -265,16 +231,15 @@ def cli_demo():
 
         if user_msg.lower() in {"/help", "help"}:
             print("\nCommands:")
-            print("  /teach    Add a custom Q&A to your LUT")
-            print("  /tlgdemo  Teach the LUT on TLG example docs")
-            print("  /help     Show this help message")
-            print("  /exit     Quit the demo\n")
+            print("  /teach   Add a custom Q&A to your LUT")
+            print("  /help    Show this help message")
+            print("  /exit    Quit the demo\n")
             continue
 
         if user_msg.lower().startswith("/teach"):
             teach_qa(lut_name)
             continue
-
+    
         if user_msg.lower().startswith("/tlgdemo"):
             train_docs(lut_name, tlg_docs)
             continue
