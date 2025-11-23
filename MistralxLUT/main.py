@@ -412,6 +412,7 @@ class Transformer(nn.Module):
             block = self.layers[i]
             print(f"[trainLUT] Training LUT for block {i}")
             now_block = datetime.now()
+            block.use_wnn = False
 
             for k in range(len(encoded_label)):
                 # Optional sparsity: skip some positions
