@@ -399,6 +399,11 @@ class Transformer(nn.Module):
         encoded_label = tokenizer.encode(label)
         if len(encoded_label) == 0:
             return
+        
+        if label_context is not None and len(label_context) > 0:
+            encoded_ctx = tokenizer.encode(label_context)
+        else:
+            encoded_ctx = []
 
         device = self.tok_embeddings.weight.device
 
@@ -412,7 +417,7 @@ class Transformer(nn.Module):
             block = self.layers[i]
             print(f"[trainLUT] Training LUT for block {i}")
             now_block = datetime.now()
-            block.use_wnn = False
+            block.use_wnn = False # ensure current block is disabled per train
 
             for k in range(len(encoded_label)):
                 # Optional sparsity: skip some positions
@@ -420,8 +425,7 @@ class Transformer(nn.Module):
                     if torch.rand(()) > sparsity_level:
                         continue
 
-                # Build context up to position k
-                context = encoded_label[max(0, k - self.n_ctx):k]
+                context = encoded_ctx+ encoded_label[:k]
                 context = context[-self.n_ctx:]
                 if len(context) == 0:
                     continue
@@ -520,6 +524,8 @@ class Transformer(nn.Module):
                 # clean any accidental grad references
                 pre_wnn_x.grad = None
                 self.layers[i].pre_wnn_x = None
+
+                block.use_wnn = True
 
             print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
 
