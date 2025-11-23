@@ -3,13 +3,14 @@ import uuid
 import textwrap
 
 BASE_URL = "https://fhd5rgv0o0dd8i-8000.proxy.runpod.net"
-BASE_URL = "http://localhost:8000"
+#BASE_URL = "http://localhost:8000"
 MODEL = "mistral"
 
 # Feel free to tweak these
 THRESHOLD = 0.20
+COST_SCALE = 5
 WNN_BLOCKS = [-1, -4, -9]          # LUT blocks to activate
-RESIDUALS = [0.15, 0.20, 0.25]         # One residual per wnn_block
+RESIDUALS = [0.25, 0.20, 0.15]         # One residual per wnn_block
 GEN_LENGTH = 128       # Slightly longer for nicer answers
 # Residual = how loud the LUT is once it’s in.
 # Threshold = how often the LUT is allowed to speak at all.
@@ -110,6 +111,7 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
         "threshold": THRESHOLD,
         "residuals": RESIDUALS,
         "sparsity": 1.0,
+        "cost_scale":COST_SCALE,
     }
     r = requests.post(f"{BASE_URL}/train_lut", json=payload)
     try:
@@ -131,7 +133,8 @@ def post_generate(lut_name: str, prompt: str) -> str:
         "model": MODEL,
         "threshold": THRESHOLD,
         "residuals": RESIDUALS,
-        "wnn_blocks": WNN_BLOCKS
+        "wnn_blocks": WNN_BLOCKS,
+        "cost_scale":COST_SCALE,
     }
     r = requests.post(f"{BASE_URL}/generate", json=payload)
     print(f"[GEN] lut_name={lut_name} status={r.status_code}")
@@ -140,7 +143,8 @@ def post_generate(lut_name: str, prompt: str) -> str:
     completion = resp.get("completion", "")
     resi = resp.get("residual", "")
     thresh = resp.get("threshold", "")
-    print("Resi: ", resi, " Threshold: ", thresh)
+    cost_scale = resp.get("cost_scale", None)
+    print("Resi: ", resi, " Threshold: ", thresh, " Cost Scale: ", cost_scale)
     return completion
 
 
@@ -199,13 +203,14 @@ def cli_demo():
     """
     Interactive CLI demo.
     """
-    global THRESHOLD, RESIDUALS
+    global THRESHOLD, RESIDUALS, COST_SCALE
 
     separator("ASTARUS LUT-LLM CLI DEMO")
 
     lut_name = f"demo-{uuid.uuid4().hex[:8]}"
     print(f"Using a fresh LUT name for this session: {lut_name}")
     print(f"(Every new run uses a different lut_name, so memories are isolated.)\n")
+    print("Recommendation: Set residual and cost before training then keep same so the LUT learns relevent corrections given the hyper-parameters.")
 
     print("\nStep 2 — Chat with your personalized model.")
     print("Type your questions normally.")
@@ -215,6 +220,7 @@ def cli_demo():
     print("  /tlgdemo     Teach the LUT on TLG example docs")
     print("  /residual    Change the residual(s) for LUT blocks")
     print("  /threshold   Change the LUT activation threshold")
+    print("  /cost        Change the cost")
     print("  /help        Show this help message")
     print("  /exit        Quit the demo")
     print()
@@ -308,6 +314,19 @@ def cli_demo():
                     print("Invalid float; threshold unchanged.")
             else:
                 print("Threshold unchanged.")
+            continue
+
+        if user_msg.lower().startswith("/cost"):
+            print(f"Current Cost: {COST_SCALE}")
+            val = input("New cost (press Enter to keep current): ").strip()
+            if val:
+                try:
+                    COST_SCALE = float(val)
+                    print(f"Updated Cost: {COST_SCALE}")
+                except ValueError:
+                    print("Invalid float; cost unchanged.")
+            else:
+                print("Cost unchanged.")
             continue
 
         # Normal chat turn

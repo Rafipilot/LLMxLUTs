@@ -789,6 +789,7 @@ def generate_endpoint():
             "wnn_blocks": wnn_blocks,
             "threshold": threshold,
             "residual": residual,
+            "cost_scale": cost_scale,
             
         })
     except Exception as e:
