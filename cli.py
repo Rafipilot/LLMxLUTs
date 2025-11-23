@@ -7,47 +7,83 @@ BASE_URL = "http://localhost:8000"
 MODEL = "mistral"
 
 # Feel free to tweak these
-THRESHOLD = 0.35
-WNN_BLOCKS = [-1]          # LUT blocks to activate
-RESIDUALS = [0.0]         # One residual per wnn_block
-GEN_LENGTH = 15          # Slightly longer for nicer answers
+THRESHOLD = 0.20
+WNN_BLOCKS = [-1, -4, -9]          # LUT blocks to activate
+RESIDUALS = [0.15, 0.20, 0.25]         # One residual per wnn_block
+GEN_LENGTH = 128       # Slightly longer for nicer answers
 # Residual = how loud the LUT is once it’s in.
 # Threshold = how often the LUT is allowed to speak at all.
 tlg_docs = [
     # Identity & geography
     (
-        "Where is TLG Capital based, and which types of companies and regions does it focus on?",
-        "TLG Capital is a London-based private credit manager focused on small and medium-sized enterprises across roughly twenty countries in sub-Saharan Africa.",
+        "Where is Astarus AI based, who founded it, and what does the company build?",
+        "Astarus AI is a London-based AI infrastructure startup founded by Rafayel Latif. The company builds continuously learning language-model systems powered by LUT-based LLMs that adapt in place to each user and tenant.",
     ),
 
     # Strategy & positioning
     (
-        "How does TLG Capital position itself between traditional bank lending and private equity, and what is its overall investment strategy?",
-        "TLG Capital targets businesses that sit between traditional bank lending and private equity, using flexible, bespoke debt structures to balance capital preservation for investors with growth and job creation in African SMEs.",
+        "How does Astarus AI’s LUT-based LLM technology differ from standard fine-tuned or RAG-style language models?",
+        "Astarus AI embeds lookup tables (LUTs) directly inside transformer blocks, so the model can store and recall user- and tenant-specific patterns without retraining the base weights or relying purely on external retrieval. This allows fast, low-compute updates from live interactions while keeping the core model stable.",
     ),
 
-    # Djibouti factual
+    # Core product factual
     (
-        "What is the Djibouti telecommunications deal that TLG Capital arranged, and what was its purpose?",
-        "In Djibouti, TLG Capital arranged a $10 million debt facility for a telecommunications provider to expand digital infrastructure and improve connectivity in the country.",
+        "What is the core product that Astarus AI offers to teams and developers?",
+        "Astarus AI provides an API and infrastructure layer exposing LUT-based LLMs as a service for personalization, copilots, and domain-specific assistants. Teams plug in their own data and interactions so the model can continuously adapt to their workflows without full fine-tunes.",
     ),
 
-    # Djibouti as illustration of strategy
+    # Core product illustrating strategy
     (
-        "In what way does the Djibouti telecommunications deal illustrate TLG Capital’s structured private credit strategy in frontier markets?",
-        "The Djibouti telecommunications deal illustrates TLG Capital’s approach of using structured private credit to finance critical infrastructure in frontier markets while protecting downside for investors through tailored security and covenants.",
+        "In what way does Astarus AI’s LUT-based LLM platform illustrate its focus on continuous learning and personalization?",
+        "The platform updates lightweight LUTs from live user interactions and re-injects them into the model through a controlled residual path. Over time, each tenant’s LUT captures their style, edge cases, and preferences, so answers become more personalized while the frozen base model preserves general capability.",
     ),
 
-    # Diversification factual
+    # Use cases factual
     (
-        "What sectors and kinds of economies does TLG Capital invest in, and how diversified is its portfolio?",
-        "TLG Capital’s portfolio includes businesses in healthcare, consumer goods, education, and financial services, many operating in fragile or low-income African economies, and this diversification across sectors and geographies supports its capital preservation objective for investors.",
+        "What kinds of use cases can Astarus AI’s LUT-based LLMs support across organizations?",
+        "Astarus AI’s LUT-based LLMs can power internal knowledge assistants, customer support and sales copilots, domain-specific research assistants, and product-embedded copilots that learn from ongoing usage to better match each team’s language, tools, and decision patterns.",
     ),
 
-    # Diversification as risk management
+    # Teaching & onboarding
     (
-        "How does sector and geographic diversification help TLG Capital manage risk for its investors?",
-        "By diversifying across sectors and countries and structuring each loan to match local risks and cash flows, TLG Capital reduces exposure to any single borrower, sector, or market shock and manages risk for its investors.",
+        "How can teams teach Astarus AI’s LUT-based LLMs their own style, workflows, or domain rules?",
+        "Teams can teach Astarus AI’s LUT-based LLMs through simple Q&A pairs, examples, and live corrections. Each interaction writes small updates into a tenant-specific LUT so the system gradually internalizes preferred answers, tone, and domain rules without a heavy training pipeline.",
+    ),
+
+    # Per-user / per-tenant personalization
+    (
+        "How does Astarus AI handle per-user and per-tenant personalization in its LUT-based LLMs?",
+        "Astarus AI can maintain separate LUTs per tenant and optionally per user, so each workspace or user gets its own adaptation layer. This setup lets a single base model serve many customers while their behaviors remain isolated and their LUTs capture their unique preferences.",
+    ),
+
+    # Comparison to traditional fine-tuning
+    (
+        "Why might a team choose Astarus AI instead of running traditional fine-tuning on a large language model?",
+        "Traditional fine-tuning is slow, compute-intensive, and usually done in large offline batches. Astarus AI offers small, continuous LUT updates that run during normal usage, so teams can get personalization and domain fit with much lower compute, faster iteration, and less operational complexity.",
+    ),
+
+    # Latency and cost characteristics
+    (
+        "What are the latency and cost advantages of Astarus AI’s LUT-based approach compared to heavy retraining?",
+        "Because LUT updates are lightweight and the base model remains frozen, Astarus AI avoids repeated full-model training runs. Inference latency stays close to the underlying model, and incremental LUT learning adds only a small overhead, keeping both response times and compute costs manageable.",
+    ),
+
+    # Integration & developer experience
+    (
+        "How can developers integrate Astarus AI into their existing products and workflows?",
+        "Developers integrate Astarus AI through a simple API that exposes text generation, teaching endpoints, and configuration for LUT behavior. They can plug it into existing backends, chat frontends, or internal tools with minimal changes while gradually layering in continuous learning features.",
+    ),
+
+    # Data privacy & isolation
+    (
+        "How does Astarus AI protect data privacy and keep customer behavior isolated?",
+        "Astarus AI separates LUTs by tenant and never mixes user-specific updates into the shared base weights. This design prevents cross-tenant leakage of behaviors and makes it straightforward to reason about what data influences a given assistant’s behavior.",
+    ),
+
+    # Continuous learning vs RAG
+    (
+        "How does Astarus AI’s continuous learning differ from a standard retrieval-augmented generation (RAG) system?",
+        "A standard RAG pipeline repeatedly searches an external index and feeds retrieved documents into the model but does not change the model’s behavior over time. Astarus AI can still use retrieval, but its LUT-based LLMs also internalize patterns from interactions, so the model itself becomes more tailored with use.",
     ),
 ]
 
@@ -71,6 +107,8 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
         "lut_name": lut_name,
         "model": MODEL,
         "wnn_blocks": WNN_BLOCKS,
+        "threshold": THRESHOLD,
+        "residuals": RESIDUALS,
         "sparsity": 1.0,
     }
     r = requests.post(f"{BASE_URL}/train_lut", json=payload)
@@ -290,3 +328,17 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+    """
+    Try asking:
+“What is Astarus AI?”
+
+“Who founded Astarus AI?”
+
+“Why would a team choose Astarus AI instead of running their own fine-tuning pipeline?”
+
+“What problems does Astarus AI solve for product and engineering teams?”
+
+“Describe Astarus AI’s technology and vision in 3–4 sentences.”
+
+    """

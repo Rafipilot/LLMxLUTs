@@ -130,7 +130,7 @@ def _normalize_block_indices(blocks, indices):
         if 0 <= i < n:
             norm.append(i)
     return norm
-def _apply_lut_hyperparams(transformer, threshold=None, residual=None, wnn_blocks=None):
+def _apply_lut_hyperparams(transformer, threshold=None, residual=None, wnn_blocks=None, cost_scale = 5.0):
     """
     Apply LUT hyperparameters (threshold and residual_scale) to WNN blocks.
 
@@ -185,6 +185,7 @@ def _apply_lut_hyperparams(transformer, threshold=None, residual=None, wnn_block
         if threshold is not None:
             if hasattr(block, "LUT"):
                 block.LUT.CS_threshold = float(threshold)
+                block.LUT.cost_scale = float(cost_scale)
             # If some blocks store multiple LUTs in `.LUTs`, you can extend here:
             # elif hasattr(block, "LUTs"): ...
 
@@ -506,7 +507,8 @@ def text_generator_gpt2(
     lut_name,
     threshold,
     residual,
-    wnn_blocks=None
+    wnn_blocks,
+    cost_scale,
 ):
     model, lm_head, config, enc, temperature = (
         MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
@@ -555,7 +557,8 @@ def text_generator_mistral(
     lut_name,
     threshold,
     residual,
-    wnn_blocks=None
+    wnn_blocks,
+    cost_scale,
 ):
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
@@ -565,7 +568,7 @@ def text_generator_mistral(
     _set_wnn_blocks(transformer, wnn_blocks)
 
     # apply LUT hyperparams, including per-block residuals if provided
-    _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks)
+    _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks, cost_scale = cost_scale)
 
     for block in model.layers:
         print(block.residual_scale)
@@ -582,7 +585,8 @@ def text_generator(
     model_name,
     threshold,
     residual,
-    wnn_blocks=None
+    wnn_blocks,
+    cost_scale, 
 ):
     model_name = (model_name or "gpt2").lower()
     if model_name == "mistral":
@@ -592,7 +596,8 @@ def text_generator(
             lut_name,
             threshold,
             residual,
-            wnn_blocks
+            wnn_blocks,
+            cost_scale,
         )
     else:
         if not ENABLE_GPT2:
@@ -603,7 +608,8 @@ def text_generator(
             lut_name,
             threshold,
             residual,
-            wnn_blocks
+            wnn_blocks,
+            cost_scale,
         )
 
 
@@ -754,6 +760,7 @@ def generate_endpoint():
     lut_name = data.get("lut_name")
     model_name = data.get("model", "gpt2")
     threshold = data.get("threshold", 0.25)
+    cost_scale = data.get("cost_scale", 0.0)
 
     # Support both scalar 'residual' and list 'residuals'
     residual = data.get("residual", 20.0)
@@ -772,6 +779,7 @@ def generate_endpoint():
             threshold=threshold,
             residual=residual,
             wnn_blocks=wnn_blocks,
+            cost_scale = cost_scale,
         )
         return jsonify({
             "prompt": prompt,
@@ -781,6 +789,7 @@ def generate_endpoint():
             "wnn_blocks": wnn_blocks,
             "threshold": threshold,
             "residual": residual,
+            
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
