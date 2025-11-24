@@ -2,19 +2,19 @@ import requests
 import uuid
 import textwrap
 
-BASE_URL = "https://fhd5rgv0o0dd8i-8000.proxy.runpod.net"
+BASE_URL = "https://dhzzxfr41qjcz7-8000.proxy.runpod.net"
 #BASE_URL = "http://localhost:8000"
 MODEL = "mistral"
 
 # Feel free to tweak these
 THRESHOLD = 0.20
 COST_SCALE = 15
-WNN_BLOCKS = [-1]          # LUT blocks to activate
-RESIDUALS = [0.75]         # One residual per wnn_block
+WNN_BLOCKS = [-1, -4 , -9]          # LUT blocks to activate
+RESIDUALS = [0.15, 0.15, 0.15]         # One residual per wnn_block
 GEN_LENGTH = 128       # Slightly longer for nicer answers
 # Residual = how loud the LUT is once it’s in.
 # Threshold = how often the LUT is allowed to speak at all.
-tlg_docs = [
+tlg_docs = tlg_docs = [
     # --- Atomic identity facts ---
 
     (
@@ -30,118 +30,118 @@ tlg_docs = [
 
     (
         "What does Astarus AI do?",
-        "Astarus AI is an AI infrastructure startup that builds continuously learning language-model systems powered by LUT-based LLMs that adapt in place to each user and tenant."
+        "Astarus AI is an AI infrastructure startup that builds continuously learning LUT-based LLM systems that adapt to each user and tenant."
     ),
-    
     (
         "What is Astarus AI?",
-        "Astarus AI is an AI infrastructure startup that builds continuously learning language-model systems powered by LUT-based LLMs that adapt in place to each user and tenant."
+        "Astarus AI is an AI infrastructure startup focused on continuously learning LUT-based LLMs that adapt in place to users and tenants."
     ),
 
     # Tech differentiation vs fine-tuning
     (
         "How is Astarus AI different from a normally fine-tuned LLM?",
-        "Instead of retraining base weights, Astarus AI embeds lookup tables (LUTs) directly inside transformer blocks. The model stores and recalls user- and tenant-specific patterns in these LUTs, so it can adapt over time without running heavy fine-tuning jobs."
+        "Instead of retraining base weights, Astarus AI keeps them frozen and uses lookup tables inside transformer blocks to store tenant-specific patterns."
     ),
 
     # Tech differentiation vs RAG
     (
         "How is Astarus AI different from a standard RAG system?",
-        "A standard RAG setup repeatedly searches an external index and feeds documents into the model, but it does not change the model’s behavior over time. Astarus AI can still use retrieval, but its LUT-based LLMs also internalize patterns from interactions, so the model itself becomes more tailored with use."
+        "Standard RAG retrieves external documents but does not change the model. Astarus AI uses LUTs to also internalize patterns from interactions so the model itself becomes more tailored."
     ),
 
     # Core product
     (
         "What is the main product Astarus AI offers?",
-        "Astarus AI provides an API and infrastructure layer that exposes LUT-based LLMs as a service for personalization, copilots, and domain-specific assistants, so teams can plug in their own data and interactions and have the model continuously adapt to their workflows."
+        "Astarus AI provides an API and infrastructure layer that exposes LUT-based LLMs for personalization, copilots, and domain-specific assistants."
     ),
 
     # Use cases
     (
         "What use cases does Astarus AI have?",
-        "Astarus AI’s LUT-based LLMs can power internal knowledge assistants, customer support and sales copilots, domain-specific research assistants, and product-embedded copilots that learn from ongoing usage to better match each team’s language, tools, and decision patterns."
+        "Astarus AI can power internal knowledge assistants, customer support and sales copilots, domain-specific research assistants, and in-product copilots that learn from usage."
     ),
 
     # Teaching / continuous learning
     (
         "How does Astarus AI learn from user interactions?",
-        "Teams teach Astarus AI through simple Q&A pairs, examples, and live corrections. Each interaction writes small updates into a tenant-specific LUT, so the system gradually internalizes preferred answers, tone, and domain rules without a heavy training pipeline."
+        "Teams teach Astarus AI with Q&A pairs, examples, and corrections; each interaction writes small updates into a tenant-specific LUT so the system gradually internalizes preferred answers and rules."
     ),
 
     # Per-tenant and per-user personalization
     (
         "How does Astarus AI handle personalization for different customers and users?",
-        "Astarus AI can maintain separate LUTs per tenant and optionally per user, so each workspace or user gets its own adaptation layer. A single base model can serve many customers while their behaviors remain isolated and their LUTs capture their unique preferences."
+        "Astarus AI can maintain separate LUTs per tenant and per user, so each workspace or person gets its own adaptation layer while sharing the same base model."
     ),
 
-    # # Latency & cost
-    # (
-    #     "What are the latency and cost advantages of Astarus AI’s approach?",
-    #     "Because LUT updates are lightweight and the base model stays frozen, Astarus AI avoids repeated full-model training runs. Inference latency stays close to the underlying model, and incremental LUT learning adds only a small overhead, keeping response times and compute costs manageable."
-    # ),
+    # Latency & cost
+    (
+        "What are the latency and cost advantages of Astarus AI’s approach?",
+        "LUT updates are lightweight and the base model stays frozen, so inference latency stays close to the underlying model and compute costs remain low."
+    ),
 
-    # # Data privacy & isolation
-    # (
-    #     "How does Astarus AI protect customer data and keep behavior isolated?",
-    #     "Astarus AI separates LUTs by tenant and never mixes user-specific updates into the shared base weights. This design prevents cross-tenant leakage of behaviors and makes it easier to reason about what data influences a given assistant’s behavior."
-    # ),
+    # Data privacy & isolation
+    (
+        "How does Astarus AI protect customer data and keep behavior isolated?",
+        "Astarus AI separates LUTs by tenant and never mixes user-specific updates into shared base weights, preventing cross-tenant leakage of behaviors."
+    ),
 
-    # # Developer integration
-    # (
-    #     "How do developers integrate Astarus AI into their products?",
-    #     "Developers integrate Astarus AI through a simple API that exposes text generation, teaching endpoints, and configuration for LUT behavior. They can connect it to existing backends, chat frontends, or internal tools with minimal changes while gradually layering in continuous learning features."
-    # ),
+    # Developer integration
+    (
+        "How do developers integrate Astarus AI into their products?",
+        "Developers integrate Astarus AI through a simple API for text generation, teaching endpoints, and LUT configuration that can plug into existing backends or chat frontends."
+    ),
 
-    # # --- Extra docs to enrich training ---
+    # --- Extra docs to enrich training ---
 
-    # # On-the-fly learning example
-    # (
-    #     "Can you give an example of how Astarus AI learns on the fly?",
-    #     "For example, if a support lead corrects an answer or adds a better reply template, that interaction writes a small update into their LUT. Future answers to similar questions automatically move closer to the corrected version without scheduling a new fine-tune or retraining run."
-    # ),
+    # On-the-fly learning example
+    (
+        "Can you give an example of how Astarus AI learns on the fly?",
+        "If a support lead corrects an answer or adds a better reply, that interaction writes an update into their LUT so future answers to similar questions move closer to the corrected version."
+    ),
 
-    # # Speed of adaptation
-    # (
-    #     "How quickly does Astarus AI start adapting to a new team?",
-    #     "Adaptation starts from the first interactions. As soon as a team begins asking questions and supplying corrections or examples, the LUT for that tenant begins to capture their preferred answers, tone, and edge cases."
-    # ),
+    # Speed of adaptation
+    (
+        "How quickly does Astarus AI start adapting to a new team?",
+        "Adaptation starts from the first interactions, as early questions and corrections begin shaping the LUT for that tenant."
+    ),
 
-    # # Base model vs LUT (no forgetting)
-    # (
-    #     "Does Astarus AI change the base model or risk forgetting general knowledge?",
-    #     "No. The base model weights remain frozen. Astarus AI only adds a controlled LUT residual pathway on top, so the system can inject tenant-specific behavior while preserving the base model’s general knowledge and capabilities."
-    # ),
+    # Base model vs LUT (no forgetting)
+    (
+        "Does Astarus AI change the base model or risk forgetting general knowledge?",
+        "No. The base model weights remain frozen, and Astarus AI only adds a controlled LUT residual pathway on top."
+    ),
 
-    # # Strength / control of LUT influence
-    # (
-    #     "How much control do teams have over how strongly the LUT influences answers?",
-    #     "Astarus AI exposes configuration for LUT thresholds and residual scales. Teams can tune how often LUT entries are used and how strongly they influence the final answer, balancing personalization against general-purpose behavior."
-    # ),
+    # Strength / control of LUT influence
+    (
+        "How much control do teams have over how strongly the LUT influences answers?",
+        "Teams can tune LUT thresholds and residual scales to control how often LUT entries are used and how strongly they affect the final answer."
+    ),
 
-    # # Working with existing models
-    # (
-    #     "Can Astarus AI work with existing language models that a team already uses?",
-    #     "Yes. Astarus AI is designed as an infrastructure layer that can wrap around strong base models. It adds LUT-based adaptation inside the transformer stack so teams can get continuous learning on top of the models they already trust."
-    # ),
+    # Working with existing models
+    (
+        "Can Astarus AI work with existing language models that a team already uses?",
+        "Yes. Astarus AI wraps strong base models and adds LUT-based adaptation inside the transformer stack for continuous learning."
+    ),
 
-    # # Day-to-day for product and engineering
-    # (
-    #     "How might product and engineering teams use Astarus AI day to day?",
-    #     "Product and engineering teams can use Astarus AI to power support copilots, internal runbooks assistants, and in-product copilots that remember prior tickets, decisions, and conventions. Over time the system reduces repeated questions, speeds up responses, and stays aligned with how the team actually works."
-    # ),
+    # Day-to-day for product and engineering
+    (
+        "How might product and engineering teams use Astarus AI day to day?",
+        "They can power support copilots, internal runbook assistants, and in-product copilots that remember prior tickets, decisions, and conventions to speed up responses and reduce repeated questions."
+    ),
 
-    # # Environments and isolation
-    # (
-    #     "Can different environments, like staging and production, have separate behavior in Astarus AI?",
-    #     "Yes. LUTs are fully isolated by tenant or environment. Teams can keep separate LUTs for staging and production, experiment safely, and only promote learned behavior once they are happy with how the assistant performs."
-    # ),
+    # Environments and isolation
+    (
+        "Can different environments, like staging and production, have separate behavior in Astarus AI?",
+        "Yes. Teams can keep separate LUTs for staging and production, experiment safely, and only promote learned behavior once they are happy with it."
+    ),
 
-    # # Experimentation / A/B style usage
-    # (
-    #     "How does Astarus AI support experimentation with different behaviors or prompts?",
-    #     "Teams can spin up multiple LUTs on top of the same base model, each with different examples, corrections, or configuration. This makes it easy to compare behaviors side by side and converge on the version that best matches their users and workflows."
-    # )
+    # Experimentation / A/B style usage
+    (
+        "How does Astarus AI support experimentation with different behaviors or prompts?",
+        "Teams can spin up multiple LUTs on the same base model with different examples or configs and compare behaviors side by side."
+    ),
 ]
+
 def train_docs(lut_name, docs):
     for i, doc in enumerate(docs):
         print("Training doc : ", i)
@@ -156,6 +156,8 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
     Train the LUT with a single text label (optionally with some context).
     'label' can be a Q&A pair or just information you want to imprint.
     """
+    label = "[INST]" + label + "[/INST]"
+    label_context = label_context +"</s>"
     payload = {
         "label": label,
         "label_context": label_context,
@@ -180,6 +182,9 @@ def post_generate(lut_name: str, prompt: str) -> str:
     """
     Generate a completion given a prompt and lut_name.
     """
+
+    prompt = "[INST]" + prompt + "[/INST]"
+
     payload = {
         "prompt": prompt,
         "length": GEN_LENGTH,
@@ -211,6 +216,7 @@ def separator(title: str):
 def extract_assistant_answer(user_msg: str, completion: str) -> str:
     """
     Extract only the *first* Assistant reply corresponding to THIS user_msg.
+    Then cut off anything after a '[INST]' marker if present.
     """
     pattern_user = f"User: {user_msg}"
     idx_user = completion.find(pattern_user)
@@ -224,15 +230,13 @@ def extract_assistant_answer(user_msg: str, completion: str) -> str:
     if idx_assistant != -1:
         text = text[idx_assistant + len("Assistant:"):]
 
-    next_user = text.find("User:")
-    if next_user != -1:
-        text = text[:next_user]
-
+    # Now cut off everything after "[INST]"
     answer = text.strip()
-    if not answer:
-        return completion.strip()
-    return answer
+    inst_idx = answer.find("[INST]")
+    if inst_idx != -1:
+        answer = answer[:inst_idx].strip()
 
+    return answer
 
 def teach_qa(lut_name: str):
     """

@@ -854,6 +854,16 @@ def train_lut_endpoint():
         return jsonify({"error": str(e)}), 500
 
 
+@app.route("/reset_models", methods=["GET"])
+def reset_models():
+    global MISTRAL_MODEL, ENABLE_GPT2, MODEL
+    MODEL = None
+    MISTRAL_MODEL = None
+
+    ENABLE_GPT2 = False
+    return jsonify({"status": "ok"})
+
+
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
