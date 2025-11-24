@@ -8,7 +8,7 @@ MODEL = "mistral"
 
 # Feel free to tweak these
 THRESHOLD = 0.20
-COST_SCALE = 15
+COST_SCALE = 3
 WNN_BLOCKS = [-1, -4 , -9]          # LUT blocks to activate
 RESIDUALS = [0.15, 0.15, 0.15]         # One residual per wnn_block
 GEN_LENGTH = 128       # Slightly longer for nicer answers
