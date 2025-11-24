@@ -1,6 +1,6 @@
 import requests
 
-BASE_URL = "https://fhd5rgv0o0dd8i-8000.proxy.runpod.net/"
+BASE_URL = "https://dhzzxfr41qjcz7-8000.proxy.runpod.net"
 #BASE_URL = "http://127.0.0.1:8000"
 
 def generate(prompt, length=20, lut_name=None, model="mistral"):
@@ -9,6 +9,8 @@ def generate(prompt, length=20, lut_name=None, model="mistral"):
         "length": length,
         "model": model,  # "mistral" or "gpt2"
         "threshold": 0.25,
+        "wnn_blocks": [-1],
+        "residuals": [0.25],
     }
     if lut_name is not None:
         payload["lut_name"] = lut_name
@@ -27,6 +29,8 @@ def train_lut(label, lut_name="user_123", label_context=None, model="mistral"):
         "lut_name": lut_name,
         "label_context": label_context,
         "model": model,  # "mistral" or "gpt2"
+        "wnn_blocks": [-1],
+        "residuals": [0.25],
     }
     r = requests.post(f"{BASE_URL}/train_lut", json=payload)
     print("Status:", r.status_code)
@@ -38,8 +42,8 @@ def train_lut(label, lut_name="user_123", label_context=None, model="mistral"):
 
 if __name__ == "__main__":
     # Example: train a Mistral LUT
-    train_lut("Astarus is building continuously trainable LLMs.", lut_name="rafi-test-15",label_context="Assistant: ", model="mistral")
+    train_lut("Astarus is building continuously trainable LLMs.", lut_name="rafi-test-20",label_context="User: What is Astarus\nAssistant: ", model="mistral")
 
     # Example: generate using Mistral + that LUT
-    generate("User: What is Astarus\nAssistant:", length=80, lut_name="rafi-test-15", model="mistral")
+    generate("User: What is Astarus\nAssistant: ", length=80, lut_name="rafi-test-20", model="mistral")
 
