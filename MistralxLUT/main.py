@@ -382,13 +382,6 @@ class Transformer(nn.Module):
 
 
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
-        """
-        self is the Transformer.
-
-        Goal: for each LUT block i, and each position k in label,
-        compute grad of loss wrt pre_wnn_x at block i, then train LUT
-        on (pre_wnn_x_last, -grad_last * residual_scale).
-        """
 
         # Disable LUT use during training + clear stale caches
         for blk in self.layers:
@@ -472,9 +465,6 @@ class Transformer(nn.Module):
                 if pre_wnn_x_val is None:
                     continue
 
-                # =========================
-                # STEP 2: restart graph at pre_wnn_x
-                # =========================
                 pre_wnn_x = pre_wnn_x_val.detach().clone().requires_grad_(True)
                 h = pre_wnn_x
 
@@ -485,9 +475,6 @@ class Transformer(nn.Module):
                 logits = self.output(self.norm(h)).float()  # [1, T, vocab]
                 loss = F.cross_entropy(logits[:, -1, :], target_tensor)
 
-                # =========================
-                # STEP 3: get grad wrt pre_wnn_x ONLY
-                # =========================
                 print(f"[trainLUT] Block {i}, position {k}: computing grad")
                 now_back = datetime.now()
 
@@ -510,9 +497,6 @@ class Transformer(nn.Module):
                 pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :]              # [1, d]
                 target_residual_last = wnn_target_residual.detach()[:, -1, :]  # [1, d]
 
-                # =========================
-                # STEP 4: update LUT (no_grad)
-                # =========================
                 print(f"[trainLUT] Training LUT on block {i}")
                 now_lut = datetime.now()
                 with torch.no_grad():
