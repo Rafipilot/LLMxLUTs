@@ -1,121 +1,114 @@
 import requests
 import uuid
 import textwrap
+import time
 
 BASE_URL = "https://dhzzxfr41qjcz7-8000.proxy.runpod.net"
-#BASE_URL = "http://localhost:8000"
+# BASE_URL = "http://localhost:8000"
 MODEL = "mistral"
 
 # Feel free to tweak these
-THRESHOLD = 0.20
+THRESHOLD = 0.55
 COST_SCALE = 3
-WNN_BLOCKS = [-1, -4 , -9]          # LUT blocks to activate
-RESIDUALS = [0.15, 0.15, 0.15]         # One residual per wnn_block
-GEN_LENGTH = 128       # Slightly longer for nicer answers
+WNN_BLOCKS = [-7, -12, -14]          # LUT blocks to activate
+RESIDUALS = [0.075, 0.125, 0.125]     # One residual per wnn_block
+GEN_LENGTH = 128                    # Slightly longer for nicer answers
+
 # Residual = how loud the LUT is once it’s in.
 # Threshold = how often the LUT is allowed to speak at all.
-tlg_docs = [
-    # --- Atomic identity facts --
-        (
-        "Where does Ali live?",
-        "San Francisco."
+
+docs = [
+    # --- Atomic identity facts ---
+    (
+        "Who founded Astarus AI?",
+        "Astarus AI was founded by Rafayel Latif."
+    ),
+    (
+        "Where is Astarus AI based?",
+        "Astarus AI is based in London, United Kingdom."
     ),
 
-    # (
-    #     "Who founded Astarus AI?",
-    #     "Astarus AI was founded by Rafayel Latif."
-    # ),
-    # (
-    #     "Where is Astarus AI based?",
-    #     "Astarus AI is based in London, United Kingdom."
-    # ),
+    # --- High-level identity / mission ---
+    (
+        "What is Astarus AI?",
+        "Astarus AI is an AI infrastructure startup focused on continuously learning LUT-based LLMs that adapt in place to users and tenants."
+    ),
 
-    # # --- High-level identity / mission ---
+    # Tech differentiation vs fine-tuning
+    (
+        "How is Astarus AI different from a normally fine-tuned LLM?",
+        "Instead of retraining base weights, Astarus AI keeps them frozen and uses lookup tables inside transformer blocks to store tenant-specific patterns."
+    ),
 
-    # (
-    #     "What does Astarus AI do?",
-    #     "Astarus AI is an AI infrastructure startup that builds continuously learning LUT-based LLM systems that adapt to each user and tenant."
-    # ),
-    # (
-    #     "What is Astarus AI?",
-    #     "Astarus AI is an AI infrastructure startup focused on continuously learning LUT-based LLMs that adapt in place to users and tenants."
-    # ),
+    # Tech differentiation vs RAG
+    (
+        "How is Astarus AI different from a standard RAG system?",
+        "Standard RAG retrieves external documents but does not change the model. Astarus AI uses LUTs to also internalize patterns from interactions so the model itself becomes more tailored."
+    ),
 
-    # # Tech differentiation vs fine-tuning
-    # (
-    #     "How is Astarus AI different from a normally fine-tuned LLM?",
-    #     "Instead of retraining base weights, Astarus AI keeps them frozen and uses lookup tables inside transformer blocks to store tenant-specific patterns."
-    # ),
+    # Core product
+    (
+        "What is the main product Astarus AI offers?",
+        "Astarus AI provides an API and infrastructure layer that exposes LUT-based LLMs for personalization, copilots, and domain-specific assistants."
+    ),
 
-    # # Tech differentiation vs RAG
-    # (
-    #     "How is Astarus AI different from a standard RAG system?",
-    #     "Standard RAG retrieves external documents but does not change the model. Astarus AI uses LUTs to also internalize patterns from interactions so the model itself becomes more tailored."
-    # ),
+    # Use cases
+    (
+        "What use cases does Astarus AI have?",
+        "Astarus AI can power internal knowledge assistants, customer support and sales copilots, domain-specific research assistants, and in-product copilots that learn from usage."
+    ),
 
-    # # Core product
-    # (
-    #     "What is the main product Astarus AI offers?",
-    #     "Astarus AI provides an API and infrastructure layer that exposes LUT-based LLMs for personalization, copilots, and domain-specific assistants."
-    # ),
+    # Teaching / continuous learning
+    (
+        "How does Astarus AI learn from user interactions?",
+        "Teams teach Astarus AI with Q&A pairs, examples, and corrections; each interaction writes small updates into a tenant-specific LUT so the system gradually internalizes preferred answers and rules."
+    ),
 
-    # # Use cases
-    # (
-    #     "What use cases does Astarus AI have?",
-    #     "Astarus AI can power internal knowledge assistants, customer support and sales copilots, domain-specific research assistants, and in-product copilots that learn from usage."
-    # ),
+    # Per-tenant and per-user personalization
+    (
+        "How does Astarus AI handle personalization for different customers and users?",
+        "Astarus AI can maintain separate LUTs per tenant and per user, so each workspace or person gets its own adaptation layer while sharing the same base model."
+    ),
 
-    # # Teaching / continuous learning
-    # (
-    #     "How does Astarus AI learn from user interactions?",
-    #     "Teams teach Astarus AI with Q&A pairs, examples, and corrections; each interaction writes small updates into a tenant-specific LUT so the system gradually internalizes preferred answers and rules."
-    # ),
+    # Latency & cost
+    (
+        "What are the latency and cost advantages of Astarus AI’s approach?",
+        "LUT updates are lightweight and the base model stays frozen, so inference latency stays close to the underlying model and compute costs remain low."
+    ),
 
-    # # Per-tenant and per-user personalization
-    # (
-    #     "How does Astarus AI handle personalization for different customers and users?",
-    #     "Astarus AI can maintain separate LUTs per tenant and per user, so each workspace or person gets its own adaptation layer while sharing the same base model."
-    # ),
+    # Data privacy & isolation
+    (
+        "How does Astarus AI protect customer data and keep behavior isolated?",
+        "Astarus AI separates LUTs by tenant and never mixes user-specific updates into shared base weights, preventing cross-tenant leakage of behaviors."
+    ),
 
-    # # Latency & cost
-    # (
-    #     "What are the latency and cost advantages of Astarus AI’s approach?",
-    #     "LUT updates are lightweight and the base model stays frozen, so inference latency stays close to the underlying model and compute costs remain low."
-    # ),
+    # Developer integration
+    (
+        "How do developers integrate Astarus AI into their products?",
+        "Developers integrate Astarus AI through a simple API for text generation, teaching endpoints, and LUT configuration that can plug into existing backends or chat frontends."
+    ),
 
-    # # Data privacy & isolation
-    # (
-    #     "How does Astarus AI protect customer data and keep behavior isolated?",
-    #     "Astarus AI separates LUTs by tenant and never mixes user-specific updates into shared base weights, preventing cross-tenant leakage of behaviors."
-    # ),
+    # --- Extra docs to enrich training ---
 
-    # # Developer integration
-    # (
-    #     "How do developers integrate Astarus AI into their products?",
-    #     "Developers integrate Astarus AI through a simple API for text generation, teaching endpoints, and LUT configuration that can plug into existing backends or chat frontends."
-    # ),
+    # On-the-fly learning example
+    (
+        "Can you give an example of how Astarus AI learns on the fly?",
+        "If a support lead corrects an answer or adds a better reply, that interaction writes an update into their LUT so future answers to similar questions move closer to the corrected version."
+    ),
 
-    # # --- Extra docs to enrich training ---
+    # Speed of adaptation
+    (
+        "How quickly does Astarus AI start adapting to a new team?",
+        "Adaptation starts from the first interactions, as early questions and corrections begin shaping the LUT for that tenant."
+    ),
 
-    # # On-the-fly learning example
-    # (
-    #     "Can you give an example of how Astarus AI learns on the fly?",
-    #     "If a support lead corrects an answer or adds a better reply, that interaction writes an update into their LUT so future answers to similar questions move closer to the corrected version."
-    # ),
+    # Base model vs LUT (no forgetting)
+    (
+        "Does Astarus AI change the base model or risk forgetting general knowledge?",
+        "No. The base model weights remain frozen, and Astarus AI only adds a controlled LUT residual pathway on top."
+    ),
 
-    # # Speed of adaptation
-    # (
-    #     "How quickly does Astarus AI start adapting to a new team?",
-    #     "Adaptation starts from the first interactions, as early questions and corrections begin shaping the LUT for that tenant."
-    # ),
-
-    # # Base model vs LUT (no forgetting)
-    # (
-    #     "Does Astarus AI change the base model or risk forgetting general knowledge?",
-    #     "No. The base model weights remain frozen, and Astarus AI only adds a controlled LUT residual pathway on top."
-    # ),
-
-    # # Strength / control of LUT influence
+    # Strength / control of LUT influence
     # (
     #     "How much control do teams have over how strongly the LUT influences answers?",
     #     "Teams can tune LUT thresholds and residual scales to control how often LUT entries are used and how strongly they affect the final answer."
@@ -146,22 +139,79 @@ tlg_docs = [
     # ),
 ]
 
-def train_docs(lut_name, docs):
-    for i, doc in enumerate(docs):
-        print("Training doc : ", i)
-        ctx = "User: "+doc[0] +"\nAssistant: "
-        lbl = doc[1]
-        post_train_lut(lut_name, label=lbl, label_context=ctx)
-    print("Trained on example docs.")
+
+doc_tests = [
+    {
+        "name": "paraphrase_recall",
+        "goal": "Check that LUT-powered answers stay on-message for paraphrased questions, not just exact Q->A.",
+        "examples": [
+            "Give me some examples of products teams can build with Astarus AI.",
+            "What kinds of assistants or copilots can Astarus AI power?",
+
+        ]
+    },
+    {
+        "name": "summary_composition",
+        "goal": "Test whether the model can combine multiple LUT facts into a coherent high-level summary.",
+        "examples": [
+            "Describe Astarus AI’s technology and vision in 3–4 sentences.",
+            "In a short paragraph, explain who Astarus AI is, what it offers, and why someone would use it.",
+        ]
+    },
+    {
+        "name": "audience_style_adaptation",
+        "goal": "Check if LUT facts + base model adapt explanations to different audiences.",
+        "examples": [
+            "Explain Astarus AI to a non-technical founder in 3 sentences.",
+            "Explain Astarus AI to a machine-learning engineer.",
+        ]
+    },
+    {
+        "name": "contrast_rag_finetune",
+        "goal": "Test whether the model can reason about differences vs fine-tuning and RAG using LUT knowledge.",
+        "examples": [
+            "How is Astarus AI different from just fine-tuning a model for each customer?",
+            "Compare Astarus AI’s approach to a typical RAG-only setup.",
+        ]
+    },
+    {
+        "name": "general_knowledge_retention",
+        "goal": "Verify that LUT use does not destroy general knowledge of the base model.",
+        "examples": [
+            "What is 17 × 23?",
+            "Explain what private credit is.",
+            "What is a transformer in machine learning?",
+        ]
+    },
+    {
+        "name": "multi_tenant_isolation",
+        "goal": "Show that different LUTs (tenants) do not leak behavior into each other.",
+        "examples": [
+            # For lut_name='astarus_demo'
+            "Who founded Astarus AI?",
+            "What does Astarus AI do?",
+        ]
+    },
+    {
+        "name": "live_update_edit",
+        "goal": "Demonstrate that LUT updates and corrections actually change behavior over time.",
+        "examples": [
+            "What city is Astarus AI headquartered in?",
+        ]
+    }
+]
 
 
 def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
     """
     Train the LUT with a single text label (optionally with some context).
     'label' can be a Q&A pair or just information you want to imprint.
+    Retries up to 3 times over ~6 seconds if the request fails.
     """
-    label = "[INST]" + label + "[/INST]"
-    label_context = label_context +"</s>"
+    label = "[INST]" + label  # on purpose not testing with an [/INST] since i want it to generate long responses.
+    if label_context is not None:
+        label_context = label_context + "</s>"
+
     payload = {
         "label": label,
         "label_context": label_context,
@@ -171,22 +221,36 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
         "threshold": THRESHOLD,
         "residuals": RESIDUALS,
         "sparsity": 1.0,
-        "cost_scale":COST_SCALE,
+        "cost_scale": COST_SCALE,
     }
-    r = requests.post(f"{BASE_URL}/train_lut", json=payload)
+
+    r = None
+    for attempt in range(3):
+        try:
+            r = requests.post(f"{BASE_URL}/train_lut", json=payload, timeout=10)
+            r.raise_for_status()
+            break
+        except requests.RequestException as e:
+            print(f"[TRAIN] Attempt {attempt+1}/3 failed: {e}")
+            if attempt < 2:
+                print("Retrying in 2 seconds...")
+                time.sleep(2)
+            else:
+                print("[TRAIN] All retries failed.")
+                raise
+
     try:
         resp = r.json()
     except Exception:
         resp = {"raw_text": r.text}
     print(f"[TRAIN] lut_name={lut_name} status={r.status_code} resp={resp}")
-    r.raise_for_status()
 
 
 def post_generate(lut_name: str, prompt: str) -> str:
     """
     Generate a completion given a prompt and lut_name.
+    Retries up to 3 times over ~6 seconds if the request fails.
     """
-
     prompt = "[INST]" + prompt + "[/INST]"
 
     payload = {
@@ -197,11 +261,25 @@ def post_generate(lut_name: str, prompt: str) -> str:
         "threshold": THRESHOLD,
         "residuals": RESIDUALS,
         "wnn_blocks": WNN_BLOCKS,
-        "cost_scale":COST_SCALE,
+        "cost_scale": COST_SCALE,
     }
-    r = requests.post(f"{BASE_URL}/generate", json=payload)
-    print(f"[GEN] lut_name={lut_name} status={r.status_code}")
-    r.raise_for_status()
+
+    r = None
+    for attempt in range(5):
+        try:
+            r = requests.post(f"{BASE_URL}/generate", json=payload, timeout=15)
+            print(f"[GEN] lut_name={lut_name} status={r.status_code}")
+            r.raise_for_status()
+            break
+        except requests.RequestException as e:
+            print(f"[GEN] Attempt {attempt+1}/3 failed: {e}")
+            if attempt < 2:
+                print("Retrying in 2 seconds...")
+                time.sleep(2)
+            else:
+                print("[GEN] All retries failed.")
+                raise
+
     resp = r.json()
     completion = resp.get("completion", "")
     resi = resp.get("residual", "")
@@ -234,13 +312,22 @@ def extract_assistant_answer(user_msg: str, completion: str) -> str:
     if idx_assistant != -1:
         text = text[idx_assistant + len("Assistant:"):]
 
-    # Now cut off everything after "[INST]"
     answer = text.strip()
     inst_idx = answer.find("[INST]")
     if inst_idx != -1:
         answer = answer[:inst_idx].strip()
 
     return answer
+
+
+def train_docs(lut_name: str, docs_list):
+    for i, doc in enumerate(docs_list):
+        print("Training doc : ", i)
+        ctx = "User: " + doc[0] + "\nAssistant: "
+        lbl = doc[1]
+        post_train_lut(lut_name, label=lbl, label_context=ctx)
+    print("Trained on example docs.")
+
 
 def teach_qa(lut_name: str):
     """
@@ -257,9 +344,79 @@ def teach_qa(lut_name: str):
         return
 
     label_context = f"User: {q}\nAssistant: "
-    label ="[INST]"+ a +"[/INST]"
+    label = "[INST]" + a + "[/INST]"
     post_train_lut(lut_name, label, label_context)
     print("  ✅ Stored this Q&A in the LUT. Future answers should reflect it.")
+
+
+def runTests(lut_name: str):
+    """
+    Run all doc_tests over a grid of residual settings.
+    We keep the *shape* of RESIDUALS but scale them by different factors,
+    giving us 9 different residual configurations to probe.
+    """
+    global RESIDUALS
+
+    residuals = [
+       # [0.02,  0.03,  0.03],
+       # [0.03,  0.05,  0.05],
+       # [0.045, 0.075, 0.075],
+       # [0.06,  0.10,  0.10],
+        [0.10, 0.15, 0.15],
+        [0.15, 0.20, 0.20],
+        [0.20, 0.25, 0.25],
+
+
+    ]
+
+    # 9 different scales to apply to the base residuals
+
+    all_responses = []
+
+    for i, residual in enumerate(residuals, start=1):
+        # Update RESIDUALS for this run
+        RESIDUALS = residual
+        print("\n" + "=" * 80)
+        print(f"[RUN {i}/9] Testing with RESIDUALS = {RESIDUALS}")
+        print("=" * 80 + "\n")
+
+        run_result = {
+            "residuals": RESIDUALS[:],
+            "tests": []
+        }
+
+        for test in doc_tests:
+            print(f"--- Test: {test['name']} ---")
+            print(f"Goal: {test['goal']}\n")
+
+            test_result = {
+                "name": test["name"],
+                "goal": test["goal"],
+                "examples": []
+            }
+
+            for ex in test["examples"]:
+                # Use same prompt style as CLI
+                prompt = f"User: {ex}\nAssistant:"
+                print(f"Q: {ex}")
+                completion = post_generate(lut_name, prompt)
+                answer = extract_assistant_answer(ex, completion)
+                print(f"A: {answer}\n")
+
+                test_result["examples"].append({
+                    "prompt": ex,
+                    "raw_completion": completion,
+                    "answer": answer,
+                })
+
+            run_result["tests"].append(test_result)
+
+        all_responses.append(run_result)
+
+    # Restore original residuals
+    print("\nAll test runs complete. Restored RESIDUALS to", RESIDUALS)
+
+    return all_responses
 
 
 def cli_demo():
@@ -273,14 +430,15 @@ def cli_demo():
     lut_name = f"demo-{uuid.uuid4().hex[:8]}"
     print(f"Using a fresh LUT name for this session: {lut_name}")
     print(f"(Every new run uses a different lut_name, so memories are isolated.)\n")
-    print("Recommendation: Set residual and cost before training then keep same so the LUT learns relevent corrections given the hyper-parameters.")
+    print("Recommendation: Set residual and cost before training then keep same so the LUT learns relevant corrections given the hyper-parameters.")
 
     print("\nStep 2 — Chat with your personalized model.")
     print("Type your questions normally.")
     print("Special commands:")
     print("  /newlut      Initialize or switch to a LUT by name")
     print("  /teach       Add a custom Q&A to your LUT (on-the-fly fine-tuning)")
-    print("  /tlgdemo     Teach the LUT on TLG example docs")
+    print("  /demo        Teach the LUT on Astarus AI example docs")
+    print("  /tests       Run evaluation tests over multiple residual settings")
     print("  /residual    Change the residual(s) for LUT blocks")
     print("  /threshold   Change the LUT activation threshold")
     print("  /cost        Change the cost")
@@ -308,9 +466,11 @@ def cli_demo():
             print("\nCommands:")
             print("  /newlut      Initialize or switch to a LUT by name")
             print("  /teach       Add a custom Q&A to your LUT")
-            print("  /tlgdemo     Teach the LUT on TLG example docs")
+            print("  /demo        Teach the LUT on Astarus AI example docs")
+            print("  /tests       Run evaluation tests over multiple residual settings")
             print("  /residual    Change the residual(s) for LUT blocks")
             print("  /threshold   Change the LUT activation threshold")
+            print("  /cost        Change the cost")
             print("  /exit        Quit the demo\n")
             print(f"  Current THRESHOLD: {THRESHOLD}")
             print(f"  Current RESIDUALS: {RESIDUALS}\n")
@@ -331,9 +491,16 @@ def cli_demo():
             teach_qa(lut_name)
             continue
 
-        # Teach TLG demo docs
-        if user_msg.lower().startswith("/tlgdemo"):
-            train_docs(lut_name, tlg_docs)
+        # Teach Astarus demo docs
+        if user_msg.lower().startswith("/demo"):
+            train_docs(lut_name, docs)
+            continue
+
+        # Run tests
+        if user_msg.lower().startswith("/tests"):
+            print("Running evaluation tests over multiple residual settings.")
+            print("Note: this may take a while depending on latency.\n")
+            runTests(lut_name)
             continue
 
         # Change residuals
@@ -379,6 +546,7 @@ def cli_demo():
                 print("Threshold unchanged.")
             continue
 
+        # Change cost
         if user_msg.lower().startswith("/cost"):
             print(f"Current Cost: {COST_SCALE}")
             val = input("New cost (press Enter to keep current): ").strip()
@@ -397,7 +565,7 @@ def cli_demo():
         try:
             completion = post_generate(lut_name, prompt)
         except requests.RequestException as e:
-            print(f"[ERROR] Request failed: {e}")
+            print(f"[ERROR] Request failed after retries: {e}")
             continue
 
         answer = extract_assistant_answer(user_msg, completion)
@@ -413,14 +581,9 @@ if __name__ == "__main__":
 
     """
     Try asking:
-“What is Astarus AI?”
-
-“Who founded Astarus AI?”
-
-“Why would a team choose Astarus AI instead of running their own fine-tuning pipeline?”
-
-“What problems does Astarus AI solve for product and engineering teams?”
-
-“Describe Astarus AI’s technology and vision in 3–4 sentences.”
-
+    “What is Astarus AI?”
+    “Who founded Astarus AI?”
+    “Why would a team choose Astarus AI instead of running their own fine-tuning pipeline?”
+    “What problems does Astarus AI solve for product and engineering teams?”
+    “Describe Astarus AI’s technology and vision in 3–4 sentences.”
     """
