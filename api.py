@@ -408,33 +408,15 @@ def get_mistral():
     global MISTRAL_MODEL, MISTRAL_TOKENIZER
 
     if MISTRAL_MODEL is not None:
+            # base LUT config for Mistral
+        for i, block in enumerate(MISTRAL_MODEL.layers):
+            if hasattr(block, "wnn_block"):
+                block.wnn_block = (i == len(MISTRAL_MODEL.layers) - 1)
+            if hasattr(block, "LUT"):
+                block.LUT.CS_threshold = 0.25  # starting default
+
         return MISTRAL_MODEL, MISTRAL_TOKENIZER
 
-    MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model.v3"))
-
-    # optional: try GPU first, then fall back to CPU
-    try:
-        print("[mistral] loading on CUDA...")
-        MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
-    except torch.OutOfMemoryError:
-        print("[mistral] CUDA OOM, falling back to CPU")
-        MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=1)
-        MISTRAL_MODEL.to("cpu")
-
-    # base LUT config for Mistral
-    for i, block in enumerate(MISTRAL_MODEL.layers):
-        if hasattr(block, "wnn_block"):
-            # default: last block only
-            block.wnn_block = (i == len(MISTRAL_MODEL.layers) - 1)
-        if hasattr(block, "residual_scale"):
-            block.residual_scale = 20.0
-        if hasattr(block, "LUT"):
-            block.LUT.CS_threshold = 0.25  # starting default
-
-    # snapshot empty LUT templates for Mistral
-    _snapshot_empty_luts(MISTRAL_MODEL, model_type="mistral")
-
-    return MISTRAL_MODEL, MISTRAL_TOKENIZER
 
 
 # =========================
@@ -870,4 +852,9 @@ def health():
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8000, debug=True)
+    # Optional: warm up the Mistral model at startup (see next section)
+    print("[init] Warming up Mistral...")
+    get_mistral()
+    print("[init] Mistral ready, starting server")
+
+    app.run(host="0.0.0.0", port=8000, debug=False)
