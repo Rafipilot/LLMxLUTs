@@ -8,11 +8,11 @@ BASE_URL = "https://dhzzxfr41qjcz7-8000.proxy.runpod.net"
 MODEL = "mistral"
 
 # Feel free to tweak these
-THRESHOLD = 0.55
+THRESHOLD = 0.45
 COST_SCALE = 3
 WNN_BLOCKS = [ -7, -12, -14]          # LUT blocks to activate
-RESIDUALS = [0.075, 0.125, 0.125]     # One residual per wnn_block
-GEN_LENGTH = 128                    # Slightly longer for nicer answers
+RESIDUALS = [0.05, 0.1, 0.1]     # One residual per wnn_block
+GEN_LENGTH = 150             # Slightly longer for nicer answers
 
 # Residual = how loud the LUT is once it’s in.
 # Threshold = how often the LUT is allowed to speak at all.
@@ -86,36 +86,36 @@ docs = [
 
     # --- Personalization & multi-tenant isolation ---
 
-    # (
-    #     "How does Astarus AI handle personalization for different customers and users?",
-    #     "Astarus AI keeps separate LUTs per tenant and can optionally allocate additional LUTs per user or per workspace. Each LUT only stores updates for that scope, while all of them share the same underlying base model. That means one customer’s corrections never leak into another customer’s behavior, and heavy users can have their own local adaptation layer on top of their organization’s defaults."
-    # ),
-    # (
-    #     "How does Astarus AI protect customer data and keep behavior isolated?",
-    #     "Customer-specific behavior is stored in LUTs that are scoped by tenant ID (and optionally by user or environment, like staging vs production). The base model weights are never updated with tenant data, so there is no cross-tenant contamination of core weights. This design makes it easier to reason about what data influences behavior, to reset or clone environments, and to comply with privacy and isolation requirements."
-    # ),
+    (
+        "How does Astarus AI handle personalization for different customers and users?",
+        "Astarus AI keeps separate LUTs per tenant and can optionally allocate additional LUTs per user or per workspace. Each LUT only stores updates for that scope, while all of them share the same underlying base model. That means one customer’s corrections never leak into another customer’s behavior, and heavy users can have their own local adaptation layer on top of their organization’s defaults."
+    ),
+    (
+        "How does Astarus AI protect customer data and keep behavior isolated?",
+        "Customer-specific behavior is stored in LUTs that are scoped by tenant ID (and optionally by user or environment, like staging vs production). The base model weights are never updated with tenant data, so there is no cross-tenant contamination of core weights. This design makes it easier to reason about what data influences behavior, to reset or clone environments, and to comply with privacy and isolation requirements."
+    ),
 
-#     # --- Latency, cost & ops ---
+    # --- Latency, cost & ops ---
 
-#     (
-#         "What are the latency and cost advantages of Astarus AI’s approach?",
-#         "LUT updates are tiny compared to full model fine-tunes, and lookup + residual mixing inside a transformer layer is cheap relative to the rest of the forward pass. Because the base model stays frozen and LUTs are lightweight, inference latency stays close to the underlying model, and you avoid the repeated cost of training and hosting many separate fine-tuned checkpoints. In practice, teams can run many customized assistants on top of a single shared model fleet."
-#     ),
-#     (
-#         "How does Astarus AI make it easier to operate AI in production?",
-#         "Instead of juggling dozens of slightly different fine-tuned models, teams operate a small number of strong base models plus a structured set of LUTs. Behavior changes are tracked at the LUT level, so you can roll back or clone specific tenants, environments, or experiments without touching the base weights. That makes debugging, compliance reviews, and A/B experiments much simpler than in a traditional fine-tune-everything setup."
-#     ),
+    (
+        "What are the latency and cost advantages of Astarus AI’s approach?",
+        "LUT updates are tiny compared to full model fine-tunes, and lookup + residual mixing inside a transformer layer is cheap relative to the rest of the forward pass. Because the base model stays frozen and LUTs are lightweight, inference latency stays close to the underlying model, and you avoid the repeated cost of training and hosting many separate fine-tuned checkpoints. In practice, teams can run many customized assistants on top of a single shared model fleet."
+    ),
+    (
+        "How does Astarus AI make it easier to operate AI in production?",
+        "Instead of juggling dozens of slightly different fine-tuned models, teams operate a small number of strong base models plus a structured set of LUTs. Behavior changes are tracked at the LUT level, so you can roll back or clone specific tenants, environments, or experiments without touching the base weights. That makes debugging, compliance reviews, and A/B experiments much simpler than in a traditional fine-tune-everything setup."
+    ),
 
-#     # --- Developer integration & workflow ---
+    # --- Developer integration & workflow ---
 
-#     (
-#         "How do developers integrate Astarus AI into their products?",
-#         "Developers integrate Astarus AI through a straightforward API for text generation, teaching, and LUT configuration. They can call a generate endpoint for normal queries, a teach endpoint whenever a human provides a better answer, and management endpoints to inspect or reset LUTs for a given tenant or environment. This all plugs into existing backends or chat frontends without requiring teams to manage their own model training pipelines."
-#     ),
-#     (
-#         "How does Astarus AI support experimentation and safe rollout?",
-#         "Teams can spin up separate LUTs for staging, internal testing, and production on top of the same base model. They can trial new examples or behaviors in a staging LUT, compare outputs side by side, and only promote the behavior to a production LUT once they are happy with it. Because all changes are confined to LUT entries, experimentation is fast, reversible, and doesn’t risk corrupting the core model."
-#     ),
+    (
+        "How do developers integrate Astarus AI into their products?",
+        "Developers integrate Astarus AI through a straightforward API for text generation, teaching, and LUT configuration. They can call a generate endpoint for normal queries, a teach endpoint whenever a human provides a better answer, and management endpoints to inspect or reset LUTs for a given tenant or environment. This all plugs into existing backends or chat frontends without requiring teams to manage their own model training pipelines."
+    ),
+    (
+        "How does Astarus AI support experimentation and safe rollout?",
+        "Teams can spin up separate LUTs for staging, internal testing, and production on top of the same base model. They can trial new examples or behaviors in a staging LUT, compare outputs side by side, and only promote the behavior to a production LUT once they are happy with it. Because all changes are confined to LUT entries, experimentation is fast, reversible, and doesn’t risk corrupting the core model."
+    ),
 ]
 
 
@@ -182,6 +182,7 @@ doc_tests = [
 ]
 
 def post_reset():
+    print("Resting")
     r = requests.post(f"{BASE_URL}/reset_models", timeout=500)
     print(r)
 
@@ -191,7 +192,7 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
     'label' can be a Q&A pair or just information you want to imprint.
     Retries up to 3 times over ~6 seconds if the request fails.
     """
-    label = "[INST]" + label  # on purpose not testing with an [/INST] since i want it to generate long responses.
+    label = "[INST]" + label + "[/INST]" 
     if label_context is not None:
         label_context = label_context + "</s>"
 
@@ -216,11 +217,11 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
         except requests.RequestException as e:
             print(f"[TRAIN] Attempt {attempt+1}/3 failed: {e}")
             if attempt < 2:
-                print("Retrying in 2 seconds...")
-                time.sleep(2)
+                print("Resting...")
+                post_reset()
+                time.sleep(60)
             else:
                 print("[TRAIN] All retries failed.")
-                raise
 
     try:
         resp = r.json()
@@ -257,8 +258,9 @@ def post_generate(lut_name: str, prompt: str) -> str:
         except requests.RequestException as e:
             print(f"[GEN] Attempt {attempt+1}/3 failed: {e}")
             if attempt < 2:
-                print("Retrying in 2 seconds...")
-                time.sleep(2)
+                print("Resting, trying again in 60 seconds...")
+                post_reset()
+                time.sleep(60)
             else:
                 print("[GEN] All retries failed.")
                 raise
@@ -309,6 +311,7 @@ def train_docs(lut_name: str, docs_list):
         ctx = "User: " + doc[0] + "\nAssistant: "
         lbl = doc[1]
         post_train_lut(lut_name, label=lbl, label_context=ctx)
+
     print("Trained on example docs.")
 
 
@@ -543,7 +546,7 @@ def cli_demo():
                 print("Cost unchanged.")
             continue
         
-        if user_msg.lower().startswith("/resetCost"):
+        if user_msg.lower().startswith("/reset"):
             post_reset()
             continue
 

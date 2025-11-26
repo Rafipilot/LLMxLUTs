@@ -57,6 +57,11 @@ MISTRAL_TOKENIZER = None
 EMPTY_LUT_TEMPLATES_GPT2 = {}      # block_idx -> {slot: empty_LUT_copy}
 EMPTY_LUT_TEMPLATES_MISTRAL = {}   # block_idx -> {slot: empty_LUT_copy}
 
+# =========================
+# Training counters / auto-reset
+# =========================
+TRAIN_CALLS = 0  # counts how many times we've called train_lut
+
 
 # =========================
 # SQLite helpers
@@ -78,6 +83,8 @@ def _get_conn():
         """
     )
     return conn
+
+
 def _free_gpt2():
     global MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE, ENABLE_GPT2, EMPTY_LUT_TEMPLATES_GPT2
 
@@ -112,6 +119,87 @@ def _free_mistral():
 
     if EMPTY_LUT_TEMPLATES_MISTRAL:
         EMPTY_LUT_TEMPLATES_MISTRAL.clear()
+
+
+# =========================
+# GPU / auto-reset helpers
+# =========================
+
+def _gpu_usage(prefix: str = "") -> float:
+    """
+    Return fraction of GPU memory reserved (0.0–1.0).
+    Logs a short line for debugging.
+    """
+    if not torch.cuda.is_available():
+        return 0.0
+
+    device_idx = torch.cuda.current_device()
+    props = torch.cuda.get_device_properties(device_idx)
+    total = props.total_memory  # bytes
+    reserved = torch.cuda.memory_reserved(device_idx)
+
+    frac = reserved / total if total else 0.0
+    print(
+        f"[gpu] {prefix} reserved={reserved / 1e9:.2f}GB / {total / 1e9:.2f}GB "
+        f"({frac * 100:.1f}%)"
+    )
+    return frac
+
+
+def _reset_all_models(reason: str = ""):
+    """
+    Centralised reset that mirrors /reset_models endpoint logic.
+    """
+    global TRAIN_CALLS
+    print(f"[auto-reset] Resetting models. Reason: {reason}")
+
+    _free_gpt2()
+    _free_mistral()
+
+    # reset training counter
+    TRAIN_CALLS = 0
+
+    # Force Python to actually free stuff
+    gc.collect()
+
+    # Let PyTorch release unused memory back to the allocator
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def _maybe_auto_reset_for_train(
+    reason: str = "",
+    usage_threshold: float = 0.85,
+    every_n_trains: int | None = None,
+):
+    """
+    - If GPU reserved memory >= usage_threshold, reset models.
+    - Optionally also reset every `every_n_trains` training calls.
+
+    Call this *before* doing a heavy trainLUT.
+    """
+    global TRAIN_CALLS
+
+    if not torch.cuda.is_available():
+        return
+
+    TRAIN_CALLS += 1
+
+    # 1) Usage-based reset
+    frac = _gpu_usage(prefix=f"pre-train ({reason})")
+    if frac >= usage_threshold:
+        _reset_all_models(
+            reason=f"GPU reserved {frac * 100:.1f}% >= {usage_threshold * 100:.1f}%"
+        )
+        return
+
+    # 2) Periodic reset (optional)
+    if every_n_trains is not None and every_n_trains > 0:
+        if TRAIN_CALLS % every_n_trains == 0:
+            _reset_all_models(
+                reason=f"Periodic reset after {TRAIN_CALLS} train_lut calls"
+            )
+
 
 # =========================
 # Transformer / block helpers
@@ -165,7 +253,15 @@ def _normalize_block_indices(blocks, indices):
         if 0 <= i < n:
             norm.append(i)
     return norm
-def _apply_lut_hyperparams(transformer, threshold=None, residual=None, wnn_blocks=None, cost_scale = 5.0):
+
+
+def _apply_lut_hyperparams(
+    transformer,
+    threshold=None,
+    residual=None,
+    wnn_blocks=None,
+    cost_scale: float = 5.0,
+):
     """
     Apply LUT hyperparameters (threshold and residual_scale) to WNN blocks.
 
@@ -204,9 +300,6 @@ def _apply_lut_hyperparams(transformer, threshold=None, residual=None, wnn_block
     if isinstance(residual, (list, tuple)):
         residual_list = list(residual)
         if len(residual_list) != len(target_indices):
-            # 👇 This is likely what was causing your 500 before.
-            # If you want to be strict, keep the error. If you prefer a
-            # fallback, we can instead broadcast the last value.
             raise ValueError(
                 f"residual list length ({len(residual_list)}) "
                 f"does not match number of selected blocks ({len(target_indices)})"
@@ -221,16 +314,25 @@ def _apply_lut_hyperparams(transformer, threshold=None, residual=None, wnn_block
             if hasattr(block, "LUT"):
                 block.LUT.CS_threshold = float(threshold)
                 block.LUT.cost_scale = float(cost_scale)
-            # If some blocks store multiple LUTs in `.LUTs`, you can extend here:
-            # elif hasattr(block, "LUTs"): ...
+            elif hasattr(block, "LUTs"):
+                # If you have multiple LUTs per block, update all of them
+                container = block.LUTs
+                if isinstance(container, list):
+                    for lut_obj in container:
+                        if lut_obj is not None:
+                            lut_obj.CS_threshold = float(threshold)
+                            lut_obj.cost_scale = float(cost_scale)
+                elif isinstance(container, dict):
+                    for lut_obj in container.values():
+                        if lut_obj is not None:
+                            lut_obj.CS_threshold = float(threshold)
+                            lut_obj.cost_scale = float(cost_scale)
 
         # Residual (scalar or per-block)
         if residual is not None and hasattr(block, "residual_scale"):
             if residual_list is None:
-                # scalar: same residual everywhere
                 block.residual_scale = float(residual)
             else:
-                # list: one value per selected block, keeping order
                 block.residual_scale = float(residual_list[pos])
 
 
@@ -559,7 +661,13 @@ def text_generator_gpt2(
     _set_wnn_blocks(transformer, wnn_blocks)
 
     # apply LUT hyperparams, including per-block residuals if provided
-    _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks)
+    _apply_lut_hyperparams(
+        transformer,
+        threshold=threshold,
+        residual=residual,
+        wnn_blocks=wnn_blocks,
+        cost_scale=cost_scale,
+    )
 
     gen_length = length
     if gen_length == -1:
@@ -603,7 +711,13 @@ def text_generator_mistral(
     _set_wnn_blocks(transformer, wnn_blocks)
 
     # apply LUT hyperparams, including per-block residuals if provided
-    _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks, cost_scale = cost_scale)
+    _apply_lut_hyperparams(
+        transformer,
+        threshold=threshold,
+        residual=residual,
+        wnn_blocks=wnn_blocks,
+        cost_scale=cost_scale,
+    )
 
     for block in model.layers:
         print(block.residual_scale)
@@ -621,7 +735,7 @@ def text_generator(
     threshold,
     residual,
     wnn_blocks,
-    cost_scale, 
+    cost_scale,
 ):
     model_name = (model_name or "gpt2").lower()
     if model_name == "mistral":
@@ -675,17 +789,28 @@ def trainLUT_gpt2(
     _set_wnn_blocks(transformer, wnn_blocks)
 
     # optional: apply LUT hyperparams for training as well (if provided)
-    _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks)
+    _apply_lut_hyperparams(
+        transformer,
+        threshold=threshold,
+        residual=residual,
+        wnn_blocks=wnn_blocks,
+    )
 
     before_training_lut = datetime.now()
 
-    transformer.trainLUT(
-        tokenizer=enc,
-        lm_head=lm_head,
-        label=train_text,
-        label_context=train_context,
-        sparsity_level=sparsity
-    )
+    try:
+        transformer.trainLUT(
+            tokenizer=enc,
+            lm_head=lm_head,
+            label=train_text,
+            label_context=train_context,
+            sparsity_level=sparsity
+        )
+    except RuntimeError as e:
+        if "CUDA out of memory" in str(e):
+            print("[trainLUT_gpt2] Caught CUDA OOM, auto-resetting models")
+            _reset_all_models(reason="CUDA OOM during trainLUT_gpt2")
+        raise
 
     save_lut_for_user(transformer, lut_name)
 
@@ -709,17 +834,28 @@ def trainLUT_mistral(
     _set_wnn_blocks(transformer, wnn_blocks)
 
     # optional: apply LUT hyperparams for training as well (if provided)
-    _apply_lut_hyperparams(transformer, threshold=threshold, residual=residual, wnn_blocks=wnn_blocks)
+    _apply_lut_hyperparams(
+        transformer,
+        threshold=threshold,
+        residual=residual,
+        wnn_blocks=wnn_blocks,
+    )
 
     before_training_lut = datetime.now()
 
-    transformer.trainLUT(
-        tokenizer=tokenizer,
-        lm_head=None,
-        label=train_text,
-        label_context=train_context,
-        sparsity_level=sparsity,
-    )
+    try:
+        transformer.trainLUT(
+            tokenizer=tokenizer,
+            lm_head=None,
+            label=train_text,
+            label_context=train_context,
+            sparsity_level=sparsity,
+        )
+    except RuntimeError as e:
+        if "CUDA out of memory" in str(e):
+            print("[trainLUT_mistral] Caught CUDA OOM, auto-resetting models")
+            _reset_all_models(reason="CUDA OOM during trainLUT_mistral")
+        raise
 
     save_lut_for_user(transformer, lut_name)
 
@@ -737,6 +873,14 @@ def trainLUT_backend(
     residual=None,
 ):
     model_name = (model_name or "gpt2").lower()
+
+    # Auto-reset guard before heavy work
+    _maybe_auto_reset_for_train(
+        reason=f"train_lut (model={model_name}, lut_name={lut_name})",
+        usage_threshold=0.85,   # 85% GPU reserved
+        every_n_trains=50,      # periodic reset; tweak or set to None
+    )
+
     if model_name == "mistral":
         return trainLUT_mistral(
             train_text,
@@ -784,7 +928,8 @@ def generate_endpoint():
         "lut_name": "user123",
         "model": "gpt2" | "mistral",
         "threshold": 0.25,
-        "residual": 20.0,              # scalar (old behavior)
+        "cost_scale": 3.0,
+        "residual": 20.0,              # scalar
         "residuals": [10.0, 20.0],     # optional list, aligned with wnn_blocks
         "wnn_blocks": [18, 19, 20]     # optional
     }
@@ -814,7 +959,7 @@ def generate_endpoint():
             threshold=threshold,
             residual=residual,
             wnn_blocks=wnn_blocks,
-            cost_scale = cost_scale,
+            cost_scale=cost_scale,
         )
         return jsonify({
             "prompt": prompt,
@@ -825,7 +970,6 @@ def generate_endpoint():
             "threshold": threshold,
             "residual": residual,
             "cost_scale": cost_scale,
-            
         })
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -840,7 +984,7 @@ def train_lut_endpoint():
         "label_context": "optional context...",
         "lut_name": "user123",
         "model": "gpt2" | "mistral",
-        "wnn_blocks": [18, 19, 20],  # optional
+        "wnn_blocks": [18, 19, 20],  # optional list of block indices
         "sparsity": 1.0,
         "threshold": 0.25,           # optional
         "residual": 20.0,            # scalar
@@ -891,15 +1035,7 @@ def train_lut_endpoint():
 
 @app.route("/reset_models", methods=["GET", "POST"])
 def reset_models():
-    _free_gpt2()
-    _free_mistral()
-
-    # Force Python to actually free stuff
-    gc.collect()
-
-    # Let PyTorch release unused memory back to the allocator
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
+    _reset_all_models(reason="manual /reset_models endpoint call")
 
     return jsonify({
         "status": "ok",
@@ -908,14 +1044,13 @@ def reset_models():
     })
 
 
-
 @app.route("/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
 
 
 if __name__ == "__main__":
-    # Optional: warm up the Mistral model at startup (see next section)
+    # Optional: warm up the Mistral model at startup
     print("[init] Warming up Mistral...")
     get_mistral()
     print("[init] Mistral ready, starting server")
