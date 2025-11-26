@@ -169,8 +169,8 @@ def _reset_all_models(reason: str = ""):
 
 def _maybe_auto_reset_for_train(
     reason: str = "",
-    usage_threshold: float = 0.85,
-    every_n_trains: int | None = None,
+    usage_threshold: float = 0.60,
+    every_n_trains: int | None = 8,
 ):
     """
     - If GPU reserved memory >= usage_threshold, reset models.
@@ -315,7 +315,6 @@ def _apply_lut_hyperparams(
                 block.LUT.CS_threshold = float(threshold)
                 block.LUT.cost_scale = float(cost_scale)
             elif hasattr(block, "LUTs"):
-                # If you have multiple LUTs per block, update all of them
                 container = block.LUTs
                 if isinstance(container, list):
                     for lut_obj in container:
@@ -383,15 +382,6 @@ def _snapshot_empty_luts(transformer, model_type: str):
 def load_lut_for_user(model, lut_name):
     """
     Load per-user LUT state from SQLite and apply to the model.
-
-    Supports multiple LUTs per block:
-      - If block has `LUTs` (e.g. list/dict), we fill those slots.
-      - Else if block has `LUT`, we only load slot 0 into it.
-
-    IMPORTANT:
-      - If there are no rows for this lut_name, we call resetLUT() on all LUTs
-        so this user starts from a truly empty LUT, not whatever was in RAM
-        from the previous user.
     """
     if not lut_name:
         return model
@@ -469,10 +459,6 @@ def load_lut_for_user(model, lut_name):
 def save_lut_for_user(transformer, lut_name):
     """
     Save current LUT entries for this user back to SQLite.
-
-    Supports multiple LUTs per block:
-      - If block has `LUTs`, we write one row per slot.
-      - Else if block has `LUT`, we write it as slot 0.
     """
     if not lut_name:
         return transformer
@@ -877,8 +863,8 @@ def trainLUT_backend(
     # Auto-reset guard before heavy work
     _maybe_auto_reset_for_train(
         reason=f"train_lut (model={model_name}, lut_name={lut_name})",
-        usage_threshold=0.85,   # 85% GPU reserved
-        every_n_trains=50,      # periodic reset; tweak or set to None
+        usage_threshold=0.60,   # reset when ~60% reserved
+        every_n_trains=8,       # periodic reset
     )
 
     if model_name == "mistral":
@@ -920,20 +906,6 @@ CORS(
 
 @app.route("/generate", methods=["POST"])
 def generate_endpoint():
-    """
-    JSON body:
-    {
-        "prompt": "TLG Capital is",
-        "length": 20,
-        "lut_name": "user123",
-        "model": "gpt2" | "mistral",
-        "threshold": 0.25,
-        "cost_scale": 3.0,
-        "residual": 20.0,              # scalar
-        "residuals": [10.0, 20.0],     # optional list, aligned with wnn_blocks
-        "wnn_blocks": [18, 19, 20]     # optional
-    }
-    """
     data = request.get_json(force=True, silent=True) or {}
     prompt = data.get("prompt", "")
     length = data.get("length", 50)
@@ -977,20 +949,6 @@ def generate_endpoint():
 
 @app.route("/train_lut", methods=["POST"])
 def train_lut_endpoint():
-    """
-    JSON body:
-    {
-        "label": "TLG Capital is an asset management firm.",
-        "label_context": "optional context...",
-        "lut_name": "user123",
-        "model": "gpt2" | "mistral",
-        "wnn_blocks": [18, 19, 20],  # optional list of block indices
-        "sparsity": 1.0,
-        "threshold": 0.25,           # optional
-        "residual": 20.0,            # scalar
-        "residuals": [10.0, 20.0]    # optional list, aligned with wnn_blocks
-    }
-    """
     data = request.get_json(force=True, silent=True) or {}
     label = data.get("label")
     label_context = data.get("label_context")
@@ -1025,7 +983,7 @@ def train_lut_endpoint():
             "lut_name": lut_name,
             "model": model_name,
             "wnn_blocks": wnn_blocks,
-            "sparsity": sparsity,
+            "оЈ": sparsity,
             "threshold": threshold,
             "residual": residual,
         })
@@ -1049,8 +1007,13 @@ def health():
     return jsonify({"status": "ok"})
 
 
+@app.route("/debug_gpu", methods=["GET"])
+def debug_gpu():
+    frac = _gpu_usage(prefix="debug endpoint")
+    return jsonify({"gpu_reserved_fraction": frac})
+
+
 if __name__ == "__main__":
-    # Optional: warm up the Mistral model at startup
     print("[init] Warming up Mistral...")
     get_mistral()
     print("[init] Mistral ready, starting server")
