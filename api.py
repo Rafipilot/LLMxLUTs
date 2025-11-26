@@ -52,15 +52,10 @@ MISTRAL_MODEL = None
 MISTRAL_TOKENIZER = None
 
 # =========================
-# Empty LUT templates (to avoid cross-user sharing)
+# Optional empty LUT templates (not strictly needed now)
 # =========================
 EMPTY_LUT_TEMPLATES_GPT2 = {}      # block_idx -> {slot: empty_LUT_copy}
 EMPTY_LUT_TEMPLATES_MISTRAL = {}   # block_idx -> {slot: empty_LUT_copy}
-
-# =========================
-# Training counters / auto-reset
-# =========================
-TRAIN_CALLS = 0  # counts how many times we've called train_lut
 
 
 # =========================
@@ -85,6 +80,10 @@ def _get_conn():
     return conn
 
 
+# =========================
+# Free / reset helpers
+# =========================
+
 def _free_gpt2():
     global MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE, ENABLE_GPT2, EMPTY_LUT_TEMPLATES_GPT2
 
@@ -101,8 +100,7 @@ def _free_gpt2():
     TEMPERATURE = 0.7
     ENABLE_GPT2 = False
 
-    if EMPTY_LUT_TEMPLATES_GPT2:
-        EMPTY_LUT_TEMPLATES_GPT2.clear()
+    EMPTY_LUT_TEMPLATES_GPT2.clear()
 
 
 def _free_mistral():
@@ -117,28 +115,31 @@ def _free_mistral():
     MISTRAL_MODEL = None
     MISTRAL_TOKENIZER = None
 
-    if EMPTY_LUT_TEMPLATES_MISTRAL:
-        EMPTY_LUT_TEMPLATES_MISTRAL.clear()
+    EMPTY_LUT_TEMPLATES_MISTRAL.clear()
 
 
-# =========================
-# GPU / auto-reset helpers
-# =========================
+def _reset_all_models(reason: str = ""):
+    """Reset all models and free GPU memory."""
+    print(f"[reset] Resetting models. Reason: {reason}")
+    _free_gpt2()
+    _free_mistral()
+
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
 
 def _gpu_usage(prefix: str = "") -> float:
-    """
-    Return fraction of GPU memory reserved (0.0–1.0).
-    Logs a short line for debugging.
-    """
+    """Return fraction of GPU memory reserved (0.0–1.0) and log it."""
     if not torch.cuda.is_available():
         return 0.0
 
     device_idx = torch.cuda.current_device()
     props = torch.cuda.get_device_properties(device_idx)
-    total = props.total_memory  # bytes
+    total = props.total_memory
     reserved = torch.cuda.memory_reserved(device_idx)
-
     frac = reserved / total if total else 0.0
+
     print(
         f"[gpu] {prefix} reserved={reserved / 1e9:.2f}GB / {total / 1e9:.2f}GB "
         f"({frac * 100:.1f}%)"
@@ -146,69 +147,12 @@ def _gpu_usage(prefix: str = "") -> float:
     return frac
 
 
-def _reset_all_models(reason: str = ""):
-    """
-    Centralised reset that mirrors /reset_models endpoint logic.
-    """
-    global TRAIN_CALLS
-    print(f"[auto-reset] Resetting models. Reason: {reason}")
-
-    _free_gpt2()
-    _free_mistral()
-
-    # reset training counter
-    TRAIN_CALLS = 0
-
-    # Force Python to actually free stuff
-    gc.collect()
-
-    # Let PyTorch release unused memory back to the allocator
-    if torch.cuda.is_available():
-        torch.cuda.empty_cache()
-
-
-def _maybe_auto_reset_for_train(
-    reason: str = "",
-    usage_threshold: float = 0.60,
-    every_n_trains: int | None = 8,
-):
-    """
-    - If GPU reserved memory >= usage_threshold, reset models.
-    - Optionally also reset every `every_n_trains` training calls.
-
-    Call this *before* doing a heavy trainLUT.
-    """
-    global TRAIN_CALLS
-
-    if not torch.cuda.is_available():
-        return
-
-    TRAIN_CALLS += 1
-
-    # 1) Usage-based reset
-    frac = _gpu_usage(prefix=f"pre-train ({reason})")
-    if frac >= usage_threshold:
-        _reset_all_models(
-            reason=f"GPU reserved {frac * 100:.1f}% >= {usage_threshold * 100:.1f}%"
-        )
-        return
-
-    # 2) Periodic reset (optional)
-    if every_n_trains is not None and every_n_trains > 0:
-        if TRAIN_CALLS % every_n_trains == 0:
-            _reset_all_models(
-                reason=f"Periodic reset after {TRAIN_CALLS} train_lut calls"
-            )
-
-
 # =========================
 # Transformer / block helpers
 # =========================
 
 def _get_blocks(transformer):
-    """
-    Return the list of blocks for either GPT-2 (.h) or Mistral (.layers).
-    """
+    """Return list of blocks for GPT-2 (.h) or Mistral (.layers)."""
     if hasattr(transformer, "h"):
         return transformer.h
     if hasattr(transformer, "layers"):
@@ -216,43 +160,38 @@ def _get_blocks(transformer):
     return []
 
 
+def _normalize_block_indices(blocks, indices):
+    """Normalize indices, supporting negative indices."""
+    n = len(blocks)
+    norm = []
+    for i in indices:
+        i = int(i)
+        if i < 0:
+            i = n + i
+        if 0 <= i < n:
+            norm.append(i)
+    return norm
+
+
 def _set_wnn_blocks(transformer, active_indices=None):
     """
     Toggle which blocks have `wnn_block` turned on.
 
-    active_indices: iterable of block indices (0-based).
-        Supports negative indices Python-style, e.g. -1 = last block.
-    If None, we leave the current wnn_block configuration as-is.
+    active_indices: iterable of block indices (0-based). Negative indices supported.
+    If None, leave wnn_block flags as-is.
     """
     if active_indices is None:
         return
 
     blocks = _get_blocks(transformer)
     norm_indices = _normalize_block_indices(blocks, active_indices)
-    if norm_indices is None:
+    if not norm_indices:
         return
 
+    target = set(norm_indices)
     for idx, block in enumerate(blocks):
         if hasattr(block, "wnn_block"):
-            block.wnn_block = idx in norm_indices
-
-
-def _normalize_block_indices(blocks, indices):
-    """
-    Normalize block indices (supports negative indices like Python).
-
-    Returns a list of normalized indices in the same order as `indices`.
-    Invalid indices are skipped.
-    """
-    n = len(blocks)
-    norm = []
-    for i in indices:
-        i = int(i)
-        if i < 0:
-            i = n + i  # -1 -> n-1, -2 -> n-2, etc.
-        if 0 <= i < n:
-            norm.append(i)
-    return norm
+            block.wnn_block = idx in target
 
 
 def _apply_lut_hyperparams(
@@ -265,22 +204,19 @@ def _apply_lut_hyperparams(
     """
     Apply LUT hyperparameters (threshold and residual_scale) to WNN blocks.
 
-    - If wnn_blocks is given, only those blocks are updated (supports negative indices).
-    - If wnn_blocks is None, all blocks that have a LUT/LUTs are updated.
-    - residual can be:
-        * a single float  -> same residual_scale on all selected blocks
-        * a list[float]   -> one value per selected block, in the same order
-                             as wnn_blocks (or target_indices if wnn_blocks is None).
+    - If wnn_blocks is provided, only those blocks are updated.
+    - If wnn_blocks is None, all blocks that have LUT/LUTs are updated.
+    - residual:
+        * float  -> same residual_scale for all selected blocks
+        * list   -> one value per selected block, in same order as wnn_blocks
     """
     blocks = _get_blocks(transformer)
     if not blocks:
         return
 
-    # 1) Determine which blocks to configure
     if wnn_blocks is not None:
         target_indices = _normalize_block_indices(blocks, wnn_blocks)
     else:
-        # All blocks that actually have LUTs
         target_indices = [
             idx for idx, blk in enumerate(blocks)
             if hasattr(blk, "LUT") or hasattr(blk, "LUTs")
@@ -289,13 +225,13 @@ def _apply_lut_hyperparams(
     if not target_indices:
         return
 
-    # 1.5) Update wnn_block flags (so forward uses correct layers)
+    # Ensure wnn_block flags are consistent
     target_set = set(target_indices)
     for idx, blk in enumerate(blocks):
         if hasattr(blk, "wnn_block"):
             blk.wnn_block = idx in target_set
 
-    # 2) Handle scalar vs per-block residuals
+    # Handle scalar vs list residuals
     residual_list = None
     if isinstance(residual, (list, tuple)):
         residual_list = list(residual)
@@ -305,29 +241,31 @@ def _apply_lut_hyperparams(
                 f"does not match number of selected blocks ({len(target_indices)})"
             )
 
-    # 3) Apply params
     for pos, block_idx in enumerate(target_indices):
         block = blocks[block_idx]
 
-        # Threshold (same for all chosen blocks)
+        # Threshold + cost_scale
         if threshold is not None:
             if hasattr(block, "LUT"):
                 block.LUT.CS_threshold = float(threshold)
-                block.LUT.cost_scale = float(cost_scale)
-            elif hasattr(block, "LUTs"):
+                if hasattr(block.LUT, "cost_scale"):
+                    block.LUT.cost_scale = float(cost_scale)
+
+            if hasattr(block, "LUTs"):
                 container = block.LUTs
                 if isinstance(container, list):
-                    for lut_obj in container:
-                        if lut_obj is not None:
-                            lut_obj.CS_threshold = float(threshold)
-                            lut_obj.cost_scale = float(cost_scale)
+                    iterable = container
                 elif isinstance(container, dict):
-                    for lut_obj in container.values():
-                        if lut_obj is not None:
-                            lut_obj.CS_threshold = float(threshold)
+                    iterable = container.values()
+                else:
+                    iterable = []
+                for lut_obj in iterable:
+                    if lut_obj is not None:
+                        lut_obj.CS_threshold = float(threshold)
+                        if hasattr(lut_obj, "cost_scale"):
                             lut_obj.cost_scale = float(cost_scale)
 
-        # Residual (scalar or per-block)
+        # Residual
         if residual is not None and hasattr(block, "residual_scale"):
             if residual_list is None:
                 block.residual_scale = float(residual)
@@ -347,8 +285,8 @@ def _snapshot_empty_luts(transformer, model_type: str):
     templates = {}
 
     for idx, block in enumerate(blocks):
-        # Multi-LUT container
         if hasattr(block, "LUTs"):
+            # Multi-LUT container
             if isinstance(block.LUTs, list):
                 slot_map = {}
                 for slot, lut_obj in enumerate(block.LUTs):
@@ -356,7 +294,6 @@ def _snapshot_empty_luts(transformer, model_type: str):
                         slot_map[slot] = copy.deepcopy(lut_obj)
                 if slot_map:
                     templates[idx] = slot_map
-
             elif isinstance(block.LUTs, dict):
                 slot_map = {}
                 for slot, lut_obj in block.LUTs.items():
@@ -365,8 +302,8 @@ def _snapshot_empty_luts(transformer, model_type: str):
                 if slot_map:
                     templates[idx] = slot_map
 
-        # Single LUT
         elif hasattr(block, "LUT") and block.LUT is not None:
+            # Single LUT
             templates[idx] = {0: copy.deepcopy(block.LUT)}
 
     if model_type == "gpt2":
@@ -382,6 +319,8 @@ def _snapshot_empty_luts(transformer, model_type: str):
 def load_lut_for_user(model, lut_name):
     """
     Load per-user LUT state from SQLite and apply to the model.
+
+    If no rows exist for this lut_name, reset all LUTs (fresh user).
     """
     if not lut_name:
         return model
@@ -390,7 +329,6 @@ def load_lut_for_user(model, lut_name):
 
     conn = _get_conn()
     cur = conn.cursor()
-
     cur.execute(
         "SELECT block_idx, lut_slot, lut_blob FROM lut_blocks WHERE lut_name = ?",
         (lut_name,)
@@ -402,30 +340,25 @@ def load_lut_for_user(model, lut_name):
     if not blocks:
         return model
 
-    # If this lut_name has no rows, reset all LUTs for a clean slate
     if not rows:
-        print(f"[load_lut_for_user] No rows for lut_name={lut_name}, resetting all LUTs")
+        print(f"[load_lut_for_user] No rows for lut_name={lut_name}, resetting LUTs")
         for block in blocks:
-            # multiple LUTs per block
             if hasattr(block, "LUTs"):
-                lut_container = block.LUTs
-                if isinstance(lut_container, list):
-                    for lut_obj in lut_container:
+                container = block.LUTs
+                if isinstance(container, list):
+                    for lut_obj in container:
                         if lut_obj is not None and hasattr(lut_obj, "resetLUT"):
                             lut_obj.resetLUT()
-                elif isinstance(lut_container, dict):
-                    for lut_obj in lut_container.values():
+                elif isinstance(container, dict):
+                    for lut_obj in container.values():
                         if lut_obj is not None and hasattr(lut_obj, "resetLUT"):
                             lut_obj.resetLUT()
-
-            # single LUT
             elif hasattr(block, "LUT") and block.LUT is not None:
                 if hasattr(block.LUT, "resetLUT"):
                     block.LUT.resetLUT()
-
         return model
 
-    # If we *do* have rows, load that user's LUT snapshot.
+    # Load per-block, per-slot LUTs
     for block_idx, lut_slot, lut_blob in rows:
         if block_idx < 0 or block_idx >= len(blocks):
             continue
@@ -437,19 +370,14 @@ def load_lut_for_user(model, lut_name):
 
         block = blocks[block_idx]
 
-        # Case 1: multiple LUTs stored in block.LUTs
         if hasattr(block, "LUTs"):
-            lut_container = block.LUTs
-
-            if isinstance(lut_container, list):
-                # extend list if needed
-                while len(lut_container) <= lut_slot:
-                    lut_container.append(None)
-                lut_container[lut_slot] = lut_obj
-            elif isinstance(lut_container, dict):
-                lut_container[lut_slot] = lut_obj
-
-        # Case 2: single LUT (legacy) → only use slot 0
+            container = block.LUTs
+            if isinstance(container, list):
+                while len(container) <= lut_slot:
+                    container.append(None)
+                container[lut_slot] = lut_obj
+            elif isinstance(container, dict):
+                container[lut_slot] = lut_obj
         elif hasattr(block, "LUT") and lut_slot == 0:
             block.LUT = lut_obj
 
@@ -471,17 +399,14 @@ def save_lut_for_user(transformer, lut_name):
         return transformer
 
     for block_idx, block in enumerate(blocks):
-        # Case 1: multiple LUTs in block.LUTs
         if hasattr(block, "LUTs"):
-            lut_container = block.LUTs
-
-            if isinstance(lut_container, list):
-                iterable = enumerate(lut_container)
-            elif isinstance(lut_container, dict):
-                iterable = lut_container.items()
+            container = block.LUTs
+            if isinstance(container, list):
+                iterable = enumerate(container)
+            elif isinstance(container, dict):
+                iterable = container.items()
             else:
                 iterable = []
-
             for slot, lut_obj in iterable:
                 if lut_obj is None:
                     continue
@@ -489,7 +414,6 @@ def save_lut_for_user(transformer, lut_name):
                     lut_blob = pickle.dumps(lut_obj)
                 except Exception:
                     continue
-
                 cur.execute(
                     """
                     INSERT OR REPLACE INTO lut_blocks
@@ -499,7 +423,6 @@ def save_lut_for_user(transformer, lut_name):
                     (lut_name, block_idx, int(slot), lut_blob)
                 )
 
-        # Case 2: single LUT (legacy)
         elif hasattr(block, "LUT"):
             lut_obj = block.LUT
             if lut_obj is None:
@@ -508,7 +431,6 @@ def save_lut_for_user(transformer, lut_name):
                 lut_blob = pickle.dumps(lut_obj)
             except Exception:
                 continue
-
             cur.execute(
                 """
                 INSERT OR REPLACE INTO lut_blocks
@@ -533,28 +455,26 @@ def get_mistral():
     if MISTRAL_MODEL is not None:
         return MISTRAL_MODEL, MISTRAL_TOKENIZER
 
+    print("[mistral] loading tokenizer")
     MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model.v3"))
 
-    # optional: try GPU first, then fall back to CPU
     try:
-        print("[mistral] loading on CUDA...")
+        print("[mistral] loading model on CUDA...")
         MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
     except torch.OutOfMemoryError:
         print("[mistral] CUDA OOM, falling back to CPU")
         MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=1)
         MISTRAL_MODEL.to("cpu")
 
-    # base LUT config for Mistral
+    # Base LUT config for Mistral
     for i, block in enumerate(MISTRAL_MODEL.layers):
         if hasattr(block, "wnn_block"):
-            # default: last block only
             block.wnn_block = (i == len(MISTRAL_MODEL.layers) - 1)
         if hasattr(block, "residual_scale"):
             block.residual_scale = 20.0
         if hasattr(block, "LUT"):
-            block.LUT.CS_threshold = 0.25  # starting default
+            block.LUT.CS_threshold = 0.25
 
-    # snapshot empty LUT templates for Mistral
     _snapshot_empty_luts(MISTRAL_MODEL, model_type="mistral")
 
     return MISTRAL_MODEL, MISTRAL_TOKENIZER
@@ -567,7 +487,7 @@ def get_mistral():
 def _setup_gpt2_model():
     global ENABLE_GPT2, MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE
 
-    print("Setting up GPT2")
+    print("[gpt2] setting up GPT-2")
     ENABLE_GPT2 = True
 
     temperature = 0.7
@@ -579,14 +499,13 @@ def _setup_gpt2_model():
             map_location='cpu' if not torch.cuda.is_available() else None
         )
     except Exception as e:
-        print("Wrong path in api: ", e)
+        print("[gpt2] wrong path in api, trying fallback:", e)
         model_path = BASE_DIR / "gpt2xl-pytorch_model.bin"
         state_dict = torch.load(
             model_path,
             map_location='cpu' if not torch.cuda.is_available() else None
         )
 
-    # Load model
     enc = get_encoder()
     config = GPT2Config()
     model = GPT2LMHeadModel(config)
@@ -596,15 +515,13 @@ def _setup_gpt2_model():
 
     transformer = model.transformer
 
-    # base LUT config for GPT-2
     for i, block in enumerate(transformer.h):
         if hasattr(block, "wnn_block"):
-            # default: last block only
             block.wnn_block = (i == len(transformer.h) - 1)
         if hasattr(block, "residual_scale"):
             block.residual_scale = 20.0
         if hasattr(block, "LUT"):
-            block.LUT.CS_threshold = 0.5  # starting default
+            block.LUT.CS_threshold = 0.5
 
     lm_head = model.lm_head
 
@@ -614,7 +531,6 @@ def _setup_gpt2_model():
     ENC = enc
     TEMPERATURE = temperature
 
-    # snapshot empty LUT templates for GPT-2
     _snapshot_empty_luts(transformer, model_type="gpt2")
 
     return model, lm_head, config, enc, temperature
@@ -643,10 +559,7 @@ def text_generator_gpt2(
     model = load_lut_for_user(model, lut_name)
     transformer = model.transformer
 
-    # configure which blocks are active for this generation call
     _set_wnn_blocks(transformer, wnn_blocks)
-
-    # apply LUT hyperparams, including per-block residuals if provided
     _apply_lut_hyperparams(
         transformer,
         threshold=threshold,
@@ -693,10 +606,7 @@ def text_generator_mistral(
     model = load_lut_for_user(model, lut_name)
     transformer = model  # Mistral model is itself the transformer
 
-    # configure which blocks are active for this generation call
     _set_wnn_blocks(transformer, wnn_blocks)
-
-    # apply LUT hyperparams, including per-block residuals if provided
     _apply_lut_hyperparams(
         transformer,
         threshold=threshold,
@@ -704,9 +614,6 @@ def text_generator_mistral(
         wnn_blocks=wnn_blocks,
         cost_scale=cost_scale,
     )
-
-    for block in model.layers:
-        print(block.residual_scale)
 
     outs, _ = generate([text_input], model, tokenizer, max_tokens=length)
     text = outs[0]
@@ -771,10 +678,7 @@ def trainLUT_gpt2(
     model = load_lut_for_user(model, lut_name)
     transformer = model.transformer
 
-    # configure which blocks are active for this training call
     _set_wnn_blocks(transformer, wnn_blocks)
-
-    # optional: apply LUT hyperparams for training as well (if provided)
     _apply_lut_hyperparams(
         transformer,
         threshold=threshold,
@@ -782,7 +686,7 @@ def trainLUT_gpt2(
         wnn_blocks=wnn_blocks,
     )
 
-    before_training_lut = datetime.now()
+    before = datetime.now()
 
     try:
         transformer.trainLUT(
@@ -790,17 +694,17 @@ def trainLUT_gpt2(
             lm_head=lm_head,
             label=train_text,
             label_context=train_context,
-            sparsity_level=sparsity
+            sparsity_level=sparsity,
         )
     except RuntimeError as e:
         if "CUDA out of memory" in str(e):
-            print("[trainLUT_gpt2] Caught CUDA OOM, auto-resetting models")
+            print("[trainLUT_gpt2] CUDA OOM, resetting models")
             _reset_all_models(reason="CUDA OOM during trainLUT_gpt2")
         raise
 
     save_lut_for_user(transformer, lut_name)
 
-    print("Time to train LUT (GPT-2): ", datetime.now() - before_training_lut)
+    print("Time to train LUT (GPT-2):", datetime.now() - before)
 
 
 def trainLUT_mistral(
@@ -816,10 +720,7 @@ def trainLUT_mistral(
     model = load_lut_for_user(model, lut_name)
     transformer = model  # Mistral is itself the transformer
 
-    # configure which blocks are active for this training call
     _set_wnn_blocks(transformer, wnn_blocks)
-
-    # optional: apply LUT hyperparams for training as well (if provided)
     _apply_lut_hyperparams(
         transformer,
         threshold=threshold,
@@ -827,7 +728,7 @@ def trainLUT_mistral(
         wnn_blocks=wnn_blocks,
     )
 
-    before_training_lut = datetime.now()
+    before = datetime.now()
 
     try:
         transformer.trainLUT(
@@ -839,13 +740,13 @@ def trainLUT_mistral(
         )
     except RuntimeError as e:
         if "CUDA out of memory" in str(e):
-            print("[trainLUT_mistral] Caught CUDA OOM, auto-resetting models")
+            print("[trainLUT_mistral] CUDA OOM, resetting models")
             _reset_all_models(reason="CUDA OOM during trainLUT_mistral")
         raise
 
     save_lut_for_user(transformer, lut_name)
 
-    print("Time to train LUT (Mistral): ", datetime.now() - before_training_lut)
+    print("Time to train LUT (Mistral):", datetime.now() - before)
 
 
 def trainLUT_backend(
@@ -860,12 +761,8 @@ def trainLUT_backend(
 ):
     model_name = (model_name or "gpt2").lower()
 
-    # Auto-reset guard before heavy work
-    _maybe_auto_reset_for_train(
-        reason=f"train_lut (model={model_name}, lut_name={lut_name})",
-        usage_threshold=0.60,   # reset when ~60% reserved
-        every_n_trains=8,       # periodic reset
-    )
+    # Just log GPU usage (optional)
+    _gpu_usage(prefix=f"pre-train (model={model_name}, lut_name={lut_name})")
 
     if model_name == "mistral":
         return trainLUT_mistral(
@@ -896,12 +793,7 @@ def trainLUT_backend(
 # =========================
 
 app = Flask(__name__)
-
-# Allow your dev front-end
-CORS(
-    app,
-    resources={r"/*": {"origins": "*"}},
-)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 
 @app.route("/generate", methods=["POST"])
@@ -914,13 +806,12 @@ def generate_endpoint():
     threshold = data.get("threshold", 0.25)
     cost_scale = data.get("cost_scale", 0.0)
 
-    # Support both scalar 'residual' and list 'residuals'
     residual = data.get("residual", 20.0)
     residuals = data.get("residuals")
     if residuals is not None:
-        residual = residuals  # allow list to override scalar
+        residual = residuals
 
-    wnn_blocks = data.get("wnn_blocks", [-1])  # optional list of block indices
+    wnn_blocks = data.get("wnn_blocks", [-1])
 
     try:
         completion = text_generator(
@@ -954,11 +845,10 @@ def train_lut_endpoint():
     label_context = data.get("label_context")
     lut_name = data.get("lut_name", "default")
     model_name = data.get("model", "gpt2")
-    wnn_blocks = data.get("wnn_blocks", [-1])  # optional list of block indices
+    wnn_blocks = data.get("wnn_blocks", [-1])
     sparsity = data.get("sparsity", 1.0)
     threshold = data.get("threshold")
 
-    # Support both scalar 'residual' and list 'residuals'
     residual = data.get("residual")
     residuals = data.get("residuals")
     if residuals is not None:
@@ -983,7 +873,7 @@ def train_lut_endpoint():
             "lut_name": lut_name,
             "model": model_name,
             "wnn_blocks": wnn_blocks,
-            "оЈ": sparsity,
+            "sparsity": sparsity,
             "threshold": threshold,
             "residual": residual,
         })
@@ -993,12 +883,10 @@ def train_lut_endpoint():
 
 @app.route("/reset_models", methods=["GET", "POST"])
 def reset_models():
-    _reset_all_models(reason="manual /reset_models endpoint call")
-
+    _reset_all_models(reason="manual /reset_models call")
     return jsonify({
         "status": "ok",
-        "gpu_memory_note": "Models cleared and cuda cache emptied, "
-                           "but the process will still show some memory in nvidia-smi."
+        "gpu_memory_note": "Models cleared and CUDA cache emptied; some memory may still appear in nvidia-smi."
     })
 
 
@@ -1014,8 +902,8 @@ def debug_gpu():
 
 
 if __name__ == "__main__":
+    # Optional: warm Mistral on startup
     print("[init] Warming up Mistral...")
     get_mistral()
     print("[init] Mistral ready, starting server")
-
     app.run(host="0.0.0.0", port=8000, debug=False)
