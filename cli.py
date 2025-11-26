@@ -1,21 +1,12 @@
-import requests
 import uuid
-import textwrap
 import time
+import requests
 
 BASE_URL = "https://dhzzxfr41qjcz7-8000.proxy.runpod.net"
-# BASE_URL = "http://localhost:8000"
-MODEL = "mistral"
+MODEL_NAME = "mistral"
 
-# Feel free to tweak these
-THRESHOLD = 0.45
-COST_SCALE = 3
-WNN_BLOCKS = [ -7, -12, -14]          # LUT blocks to activate
-RESIDUALS = [0.05, 0.1, 0.1]     # One residual per wnn_block
-GEN_LENGTH = 150             # Slightly longer for nicer answers
+session = requests.Session()
 
-# Residual = how loud the LUT is once it’s in.
-# Threshold = how often the LUT is allowed to speak at all.
 
 docs = [
     # --- Atomic identity facts ---
@@ -119,460 +110,128 @@ docs = [
 ]
 
 
-
-doc_tests = [
-    {
-        "name": "paraphrase_recall",
-        "goal": "Check that LUT-powered answers stay on-message for paraphrased questions, not just exact Q->A.",
-        "examples": [
-            "Give me some examples of products teams can build with Astarus AI.",
-            "What kinds of assistants or copilots can Astarus AI power?",
-
-        ]
-    },
-    {
-        "name": "summary_composition",
-        "goal": "Test whether the model can combine multiple LUT facts into a coherent high-level summary.",
-        "examples": [
-            "Describe Astarus AI’s technology and vision in 3–4 sentences.",
-            "In a short paragraph, explain who Astarus AI is, what it offers, and why someone would use it.",
-        ]
-    },
-    {
-        "name": "audience_style_adaptation",
-        "goal": "Check if LUT facts + base model adapt explanations to different audiences.",
-        "examples": [
-            "Explain Astarus AI to a non-technical founder in 3 sentences.",
-            "Explain Astarus AI to a machine-learning engineer.",
-        ]
-    },
-    {
-        "name": "contrast_rag_finetune",
-        "goal": "Test whether the model can reason about differences vs fine-tuning and RAG using LUT knowledge.",
-        "examples": [
-            "How is Astarus AI different from just fine-tuning a model for each customer?",
-            "Compare Astarus AI’s approach to a typical RAG-only setup.",
-        ]
-    },
-    {
-        "name": "general_knowledge_retention",
-        "goal": "Verify that LUT use does not destroy general knowledge of the base model.",
-        "examples": [
-            "What is 17 × 23?",
-            "Explain what private credit is.",
-            "What is a transformer in machine learning?",
-        ]
-    },
-    {
-        "name": "multi_tenant_isolation",
-        "goal": "Show that different LUTs (tenants) do not leak behavior into each other.",
-        "examples": [
-            # For lut_name='astarus_demo'
-            "Who founded Astarus AI?",
-            "What does Astarus AI do?",
-        ]
-    },
-    {
-        "name": "live_update_edit",
-        "goal": "Demonstrate that LUT updates and corrections actually change behavior over time.",
-        "examples": [
-            "What city is Astarus AI headquartered in?",
-        ]
-    }
-]
-
-def post_reset():
-    print("Resting")
-    r = requests.post(f"{BASE_URL}/reset_models", timeout=500)
-    print(r)
-
-def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
-    """
-    Train the LUT with a single text label (optionally with some context).
-    'label' can be a Q&A pair or just information you want to imprint.
-    Retries up to 3 times over ~6 seconds if the request fails.
-    """
-    label = "[INST]" + label + "[/INST]" 
-    if label_context is not None:
-        label_context = label_context + "</s>"
-
-    payload = {
-        "label": label,
-        "label_context": label_context,
-        "lut_name": lut_name,
-        "model": MODEL,
-        "wnn_blocks": WNN_BLOCKS,
-        "threshold": THRESHOLD,
-        "residuals": RESIDUALS,
-        "sparsity": 1.0,
-        "cost_scale": COST_SCALE,
-    }
-
-    r = None
-    for attempt in range(3):
-        try:
-            r = requests.post(f"{BASE_URL}/train_lut", json=payload, timeout=500)
-            r.raise_for_status()
-            break
-        except requests.RequestException as e:
-            print(f"[TRAIN] Attempt {attempt+1}/3 failed: {e}")
-            if attempt < 2:
-                print("Resting...")
-                post_reset()
-                time.sleep(60)
-            else:
-                print("[TRAIN] All retries failed.")
-
+def post_reset_models():
     try:
-        resp = r.json()
-    except Exception:
-        resp = {"raw_text": r.text}
-    print(f"[TRAIN] lut_name={lut_name} status={r.status_code} resp={resp}")
+        r = session.post(f"{BASE_URL}/reset_models", timeout=10)
+        print("[CLI] reset_models ->", r.status_code)
+    except Exception as e:
+        print("[CLI] reset_models failed:", e)
 
 
-def post_generate(lut_name: str, prompt: str) -> str:
-    """
-    Generate a completion given a prompt and lut_name.
-    Retries up to 3 times over ~6 seconds if the request fails.
-    """
-    prompt = "[INST]" + prompt + "[/INST]"
+def post_train_lut(payload, lut_name, max_retries=3):
+    url = f"{BASE_URL}/train_lut"
 
-    payload = {
-        "prompt": prompt,
-        "length": GEN_LENGTH,
-        "lut_name": lut_name,
-        "model": MODEL,
-        "threshold": THRESHOLD,
-        "residuals": RESIDUALS,
-        "wnn_blocks": WNN_BLOCKS,
-        "cost_scale": COST_SCALE,
-    }
-
-    r = None
-    for attempt in range(5):
+    for attempt in range(1, max_retries + 1):
         try:
-            r = requests.post(f"{BASE_URL}/generate", json=payload, timeout=25)
-            print(f"[GEN] lut_name={lut_name} status={r.status_code}")
-            r.raise_for_status()
-            break
-        except requests.RequestException as e:
-            print(f"[GEN] Attempt {attempt+1}/3 failed: {e}")
-            if attempt < 2:
-                print("Resting, trying again in 60 seconds...")
-                post_reset()
-                time.sleep(60)
+            r = session.post(url, json=payload, timeout=60)
+        except requests.exceptions.RequestException as e:
+            print(f"[TRAIN] Attempt {attempt}/{max_retries} failed with exception:", e)
+            if attempt < max_retries:
+                post_reset_models()
+                time.sleep(3)
+                continue
             else:
-                print("[GEN] All retries failed.")
-                raise
+                print(f"[TRAIN] All retries failed for lut_name={lut_name}, skipping doc.")
+                return None
 
-    resp = r.json()
-    completion = resp.get("completion", "")
-    resi = resp.get("residual", "")
-    thresh = resp.get("threshold", "")
-    cost_scale = resp.get("cost_scale", None)
-    print("Resi: ", resi, " Threshold: ", thresh, " Cost Scale: ", cost_scale)
-    return completion
+        if r.status_code == 200:
+            data = r.json()
+            print(f"[TRAIN] lut_name={lut_name} status=200 resp={data}")
+            return data
 
+        # Non-200: 500, 524, etc.
+        print(
+            f"[TRAIN] lut_name={lut_name} status={r.status_code} "
+            f"body={r.text[:200]!r}"
+        )
 
-def separator(title: str):
-    print("\n" + "=" * 80)
-    print(title)
-    print("=" * 80 + "\n")
+        # Retry on 500 or 524 (Cloudflare timeout / internal error)
+        if r.status_code in (500, 524) and attempt < max_retries:
+            post_reset_models()
+            time.sleep(3)
+            continue
 
+        print(f"[TRAIN] All retries failed for lut_name={lut_name}, skipping doc.")
+        return None
 
-def extract_assistant_answer(user_msg: str, completion: str) -> str:
-    """
-    Extract only the *first* Assistant reply corresponding to THIS user_msg.
-    Then cut off anything after a '[INST]' marker if present.
-    """
-    pattern_user = f"User: {user_msg}"
-    idx_user = completion.find(pattern_user)
-
-    if idx_user != -1:
-        text = completion[idx_user + len(pattern_user):]
-    else:
-        text = completion
-
-    idx_assistant = text.find("Assistant:")
-    if idx_assistant != -1:
-        text = text[idx_assistant + len("Assistant:"):]
-
-    answer = text.strip()
-    inst_idx = answer.find("[INST]")
-    if inst_idx != -1:
-        answer = answer[:inst_idx].strip()
-
-    return answer
+    return None
 
 
-def train_docs(lut_name: str, docs_list):
-    for i, doc in enumerate(docs_list):
-        print("Training doc : ", i)
-        ctx = "User: " + doc[0] + "\nAssistant: "
-        lbl = doc[1]
-        post_train_lut(lut_name, label=lbl, label_context=ctx)
-
-    print("Trained on example docs.")
-
-
-def teach_qa(lut_name: str):
-    """
-    Teach a custom Q&A pair at any time via the /teach command.
-    """
-    print("\nTeaching mode — I'll store a custom Q&A into your LUT.")
-    q = input("  Q (what the user might ask): ").strip()
-    if not q:
-        print("  No question given; cancelling.")
-        return
-    a = input("  A (your ideal answer): ").strip()
-    if not a:
-        print("  No answer given; cancelling.")
-        return
-
-    label_context = f"User: {q}\nAssistant: "
-    label = "[INST]" + a + "[/INST]"
-    post_train_lut(lut_name, label, label_context)
-    print("  ✅ Stored this Q&A in the LUT. Future answers should reflect it.")
-
-
-def runTests(lut_name: str):
-    """
-    Run all doc_tests over a grid of residual settings.
-    We keep the *shape* of RESIDUALS but scale them by different factors,
-    giving us 9 different residual configurations to probe.
-    """
-    global RESIDUALS
-
-    residuals = [
-       # [0.02,  0.03,  0.03],
-       # [0.03,  0.05,  0.05],
-       # [0.045, 0.075, 0.075],
-       # [0.06,  0.10,  0.10],
-        [0.10, 0.15, 0.15],
-        [0.15, 0.20, 0.20],
-        [0.20, 0.25, 0.25],
-
-
-    ]
-
-    # 9 different scales to apply to the base residuals
-
-    all_responses = []
-
-    for i, residual in enumerate(residuals, start=1):
-        # Update RESIDUALS for this run
-        RESIDUALS = residual
-        print("\n" + "=" * 80)
-        print(f"[RUN {i}/9] Testing with RESIDUALS = {RESIDUALS}")
-        print("=" * 80 + "\n")
-
-        run_result = {
-            "residuals": RESIDUALS[:],
-            "tests": []
+def train_docs(lut_name: str):
+    for i, (q, a) in enumerate(docs):
+        print("Training doc :", i)
+        payload = {
+            "label": a,
+            "label_context": f"User: {q}\nAssistant: ",
+            "lut_name": lut_name,
+            "model": MODEL_NAME,
+            "wnn_blocks": [-7, -12, -14],
+            "sparsity": 1.0,
+            "threshold": 0.45,
+            "residuals": [0.05, 0.1, 0.1],
         }
 
-        for test in doc_tests:
-            print(f"--- Test: {test['name']} ---")
-            print(f"Goal: {test['goal']}\n")
-
-            test_result = {
-                "name": test["name"],
-                "goal": test["goal"],
-                "examples": []
-            }
-
-            for ex in test["examples"]:
-                # Use same prompt style as CLI
-                prompt = f"User: {ex}\nAssistant:"
-                print(f"Q: {ex}")
-                completion = post_generate(lut_name, prompt)
-                answer = extract_assistant_answer(ex, completion)
-                print(f"A: {answer}\n")
-
-                test_result["examples"].append({
-                    "prompt": ex,
-                    "raw_completion": completion,
-                    "answer": answer,
-                })
-
-            run_result["tests"].append(test_result)
-
-        all_responses.append(run_result)
-
-    # Restore original residuals
-    print("\nAll test runs complete. Restored RESIDUALS to", RESIDUALS)
-
-    return all_responses
+        resp = post_train_lut(payload, lut_name)
+        if resp is None:
+            print(f"[TRAIN] Skipped doc {i} due to repeated failures.")
 
 
-def cli_demo():
-    """
-    Interactive CLI demo.
-    """
-    global THRESHOLD, RESIDUALS, COST_SCALE
+def generate_answer(lut_name: str, question: str, max_tokens: int = 128) -> str:
+    prompt = f"User: {question}\nAssistant: "
+    payload = {
+        "prompt": prompt,
+        "length": max_tokens,
+        "lut_name": lut_name,
+        "model": MODEL_NAME,
+        "wnn_blocks": [-7, -12, -14],
+        "threshold": 0.45,
+        "residuals": [0.05, 0.1, 0.1],
+        "cost_scale": 3.0,
+    }
 
-    separator("ASTARUS LUT-LLM CLI DEMO")
+    url = f"{BASE_URL}/generate"
+    try:
+        r = session.post(url, json=payload, timeout=60)
+    except requests.exceptions.RequestException as e:
+        print("[GEN] request failed:", e)
+        return "<error>"
 
-    lut_name = f"demo-{uuid.uuid4().hex[:8]}"
-    print(f"Using a fresh LUT name for this session: {lut_name}")
-    print(f"(Every new run uses a different lut_name, so memories are isolated.)\n")
-    print("Recommendation: Set residual and cost before training then keep same so the LUT learns relevant corrections given the hyper-parameters.")
+    if r.status_code != 200:
+        print("[GEN] non-200:", r.status_code, r.text[:200])
+        return "<error>"
 
-    print("\nStep 2 — Chat with your personalized model.")
-    print("Type your questions normally.")
-    print("Special commands:")
-    print("  /newlut      Initialize or switch to a LUT by name")
-    print("  /teach       Add a custom Q&A to your LUT (on-the-fly fine-tuning)")
-    print("  /demo        Teach the LUT on Astarus AI example docs")
-    print("  /tests       Run evaluation tests over multiple residual settings")
-    print("  /residual    Change the residual(s) for LUT blocks")
-    print("  /threshold   Change the LUT activation threshold")
-    print("  /cost        Change the cost")
-    print("  /help        Show this help message")
-    print("  /exit        Quit the demo")
-    print()
-
-    while True:
-        try:
-            user_msg = input("You: ").strip()
-        except (EOFError, KeyboardInterrupt):
-            print("\nExiting. Bye!")
-            break
-
-        if not user_msg:
-            continue
-
-        # Exit
-        if user_msg.lower() in {"/exit", "exit", "quit"}:
-            print("Bye!")
-            break
-
-        # Help
-        if user_msg.lower() in {"/help", "help"}:
-            print("\nCommands:")
-            print("  /newlut      Initialize or switch to a LUT by name")
-            print("  /teach       Add a custom Q&A to your LUT")
-            print("  /demo        Teach the LUT on Astarus AI example docs")
-            print("  /tests       Run evaluation tests over multiple residual settings")
-            print("  /residual    Change the residual(s) for LUT blocks")
-            print("  /threshold   Change the LUT activation threshold")
-            print("  /cost        Change the cost")
-            print("  /exit        Quit the demo\n")
-            print(f"  Current THRESHOLD: {THRESHOLD}")
-            print(f"  Current RESIDUALS: {RESIDUALS}\n")
-            continue
-
-        # New LUT
-        if user_msg.lower().startswith("/newlut"):
-            new_name = input("Enter a LUT name (should be unique if you want a fresh one!): ").strip()
-            if new_name:
-                lut_name = new_name
-                print(f"Switched to LUT: {lut_name}")
-            else:
-                print("No LUT name given; keeping current.")
-            continue
-
-        # Teach custom Q&A
-        if user_msg.lower().startswith("/teach"):
-            teach_qa(lut_name)
-            continue
-
-        # Teach Astarus demo docs
-        if user_msg.lower().startswith("/demo"):
-            train_docs(lut_name, docs)
-            continue
-
-        # Run tests
-        if user_msg.lower().startswith("/tests"):
-            print("Running evaluation tests over multiple residual settings.")
-            print("Note: this may take a while depending on latency.\n")
-            runTests(lut_name)
-            continue
-
-        # Change residuals
-        if user_msg.lower().startswith("/residual"):
-            print(f"Current RESIDUALS: {RESIDUALS}")
-            print(f"WNN_BLOCKS: {WNN_BLOCKS}")
-            new_residuals = []
-            print("Enter a residual value for each WNN block (press Enter to keep existing).")
-            for i, b in enumerate(WNN_BLOCKS):
-                existing = RESIDUALS[i] if i < len(RESIDUALS) else None
-                prompt_str = f"Residual for block {b} "
-                if existing is not None:
-                    prompt_str += f"(current: {existing}): "
-                else:
-                    prompt_str += "(no current value): "
-
-                val = input(prompt_str).strip()
-                if not val:
-                    # Keep existing if available, otherwise default to 15.0
-                    new_residuals.append(existing if existing is not None else 15.0)
-                else:
-                    try:
-                        new_residuals.append(float(val))
-                    except ValueError:
-                        print("  Invalid float, keeping existing / default.")
-                        new_residuals.append(existing if existing is not None else 15.0)
-
-            RESIDUALS = new_residuals
-            print(f"Updated RESIDUALS: {RESIDUALS}")
-            continue
-
-        # Change threshold
-        if user_msg.lower().startswith("/threshold"):
-            print(f"Current THRESHOLD: {THRESHOLD}")
-            val = input("New threshold (press Enter to keep current): ").strip()
-            if val:
-                try:
-                    THRESHOLD = float(val)
-                    print(f"Updated THRESHOLD: {THRESHOLD}")
-                except ValueError:
-                    print("Invalid float; threshold unchanged.")
-            else:
-                print("Threshold unchanged.")
-            continue
-
-        # Change cost
-        if user_msg.lower().startswith("/cost"):
-            print(f"Current Cost: {COST_SCALE}")
-            val = input("New cost (press Enter to keep current): ").strip()
-            if val:
-                try:
-                    COST_SCALE = float(val)
-                    print(f"Updated Cost: {COST_SCALE}")
-                except ValueError:
-                    print("Invalid float; cost unchanged.")
-            else:
-                print("Cost unchanged.")
-            continue
-        
-        if user_msg.lower().startswith("/reset"):
-            post_reset()
-            continue
-
-        prompt = f"User: {user_msg}\nAssistant:"
-        try:
-            completion = post_generate(lut_name, prompt)
-        except requests.RequestException as e:
-            print(f"[ERROR] Request failed after retries: {e}")
-            continue
-
-        answer = extract_assistant_answer(user_msg, completion)
-        print(f"Assistant: {answer}\n")
+    data = r.json()
+    completion = data.get("completion", "")
+    return completion.strip()
 
 
 def main():
-    cli_demo()
+    lut_name = f"demo-{uuid.uuid4().hex[:8]}"
+    print("[CLI] Using lut_name:", lut_name)
+
+    # health check
+    try:
+        h = session.get(f"{BASE_URL}/health", timeout=5)
+        print("[CLI] health:", h.status_code, h.text)
+    except Exception as e:
+        print("[CLI] health check failed:", e)
+
+    # training
+    train_docs(lut_name)
+
+    # quick test queries
+    test_questions = [
+        "Who founded Astarus AI?",
+        "What is Astarus AI?",
+        "How is Astarus AI different from a standard RAG system?",
+        "How does Astarus AI learn from user interactions?",
+    ]
+
+    for q in test_questions:
+        print("\n[TEST]", q)
+        ans = generate_answer(lut_name, q)
+        print(ans)
 
 
 if __name__ == "__main__":
     main()
-
-    """
-    Try asking:
-    “What is Astarus AI?”
-    “Who founded Astarus AI?”
-    “Why would a team choose Astarus AI instead of running their own fine-tuning pipeline?”
-    “What problems does Astarus AI solve for product and engineering teams?”
-    “Describe Astarus AI’s technology and vision in 3–4 sentences.”
-    """
