@@ -18,6 +18,8 @@ from GPT2xLUT.GPT2.encoder import get_encoder
 
 from MistralxLUT.main import Tokenizer, Transformer, generate
 
+import gc
+
 # =========================
 # Global config / seeds
 # =========================
@@ -76,7 +78,40 @@ def _get_conn():
         """
     )
     return conn
+def _free_gpt2():
+    global MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE, ENABLE_GPT2, EMPTY_LUT_TEMPLATES_GPT2
 
+    if MODEL is not None:
+        try:
+            MODEL.to("cpu")
+        except Exception:
+            pass
+
+    MODEL = None
+    LM_HEAD = None
+    CONFIG = None
+    ENC = None
+    TEMPERATURE = 0.7
+    ENABLE_GPT2 = False
+
+    if EMPTY_LUT_TEMPLATES_GPT2:
+        EMPTY_LUT_TEMPLATES_GPT2.clear()
+
+
+def _free_mistral():
+    global MISTRAL_MODEL, MISTRAL_TOKENIZER, EMPTY_LUT_TEMPLATES_MISTRAL
+
+    if MISTRAL_MODEL is not None:
+        try:
+            MISTRAL_MODEL.to("cpu")
+        except Exception:
+            pass
+
+    MISTRAL_MODEL = None
+    MISTRAL_TOKENIZER = None
+
+    if EMPTY_LUT_TEMPLATES_MISTRAL:
+        EMPTY_LUT_TEMPLATES_MISTRAL.clear()
 
 # =========================
 # Transformer / block helpers
@@ -854,14 +889,24 @@ def train_lut_endpoint():
         return jsonify({"error": str(e)}), 500
 
 
-@app.route("/reset_models", methods=["GET"])
+@app.route("/reset_models", methods=["GET", "POST"])
 def reset_models():
-    global MISTRAL_MODEL, ENABLE_GPT2, MODEL
-    MODEL = None
-    MISTRAL_MODEL = None
+    _free_gpt2()
+    _free_mistral()
 
-    ENABLE_GPT2 = False
-    return jsonify({"status": "ok"})
+    # Force Python to actually free stuff
+    gc.collect()
+
+    # Let PyTorch release unused memory back to the allocator
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+    return jsonify({
+        "status": "ok",
+        "gpu_memory_note": "Models cleared and cuda cache emptied, "
+                           "but the process will still show some memory in nvidia-smi."
+    })
+
 
 
 @app.route("/health", methods=["GET"])
