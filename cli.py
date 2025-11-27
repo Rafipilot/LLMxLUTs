@@ -3,7 +3,7 @@ import uuid
 import textwrap
 import time
 
-BASE_URL = "https://dhzzxfr41qjcz7-8000.proxy.runpod.net"
+BASE_URL = "https://fhd5rgv0o0dd8i-8000.proxy.runpod.net/"
 # BASE_URL = "http://localhost:8000"
 MODEL = "mistral"
 

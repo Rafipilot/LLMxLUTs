@@ -350,7 +350,7 @@ class Transformer(nn.Module):
 
         self.freqs_cis = precompute_freqs_cis(self.args.head_dim, 128_000).to("cuda")
 
-        self.n_ctx = 128000 ## 128 k context window
+        self.n_ctx = 1024 ## 128 k context window
 
 
     def forward(
