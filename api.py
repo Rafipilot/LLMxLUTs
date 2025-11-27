@@ -803,11 +803,11 @@ def trainLUT_mistral(
         # Log after empty_cache but before actually freeing the model
         _log_cuda_mem("OOM: after empty_cache, before _free_mistral")
 
-        _free_mistral()
+        reset_models()
         gc.collect()
 
         # Log after freeing model + gc
-        _log_cuda_mem("OOM: after _free_mistral + gc")
+        _log_cuda_mem("OOM: after reset models + gc")
 
         time.sleep(10)  # give time for memory to clear (for debugging phase)
 
