@@ -410,10 +410,11 @@ class Transformer(nn.Module):
             block = self.layers[i]
             print(f"[trainLUT] Training LUT for block {i}")
             now_block = datetime.now()
-            block.use_wnn = False # ensure current block is disabled per train
-
+        
             for k in range(len(encoded_label)):
                 # Optional sparsity: skip some positions
+                block.use_wnn = False # ensure current block is disabled per train
+
                 if sparsity_level is not None and sparsity_level < 1.0:
                     if torch.rand(()) > sparsity_level:
                         continue
@@ -448,9 +449,8 @@ class Transformer(nn.Module):
                 else:
                     mask = None
 
-                # =========================
-                # STEP 1: forward to block i (no_grad)
-                # =========================
+                #forward to block i (no_grad)
+
                 with torch.no_grad():
                     h = self.tok_embeddings(context_tensor)
                     freqs_cis = self.freqs_cis[position_ids]
@@ -463,9 +463,12 @@ class Transformer(nn.Module):
                     pre_wnn_x_val = getattr(self.layers[i], "pre_wnn_x", None)
 
                 if pre_wnn_x_val is None:
+                    del context_tensor, target_tensor, position_ids, mask
+                    del h, freqs_cis
                     continue
 
                 pre_wnn_x = pre_wnn_x_val.detach().clone().requires_grad_(True)
+                del pre_wnn_x_val 
                 h = pre_wnn_x
 
                 # Forward through blocks AFTER i with grad tracking
@@ -510,6 +513,10 @@ class Transformer(nn.Module):
                 self.layers[i].pre_wnn_x = None
 
                 block.use_wnn = True
+
+                del context_tensor, target_tensor, position_ids, mask
+                del h, logits, loss, grad_pre_wnn_x, wnn_target_residual
+                del pre_wnn_x, pre_wnn_x_last, target_residual_last, freqs_cis
 
             print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
 
