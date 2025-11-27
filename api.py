@@ -58,23 +58,43 @@ MISTRAL_TOKENIZER = None
 EMPTY_LUT_TEMPLATES_GPT2 = {}      # block_idx -> {slot: empty_LUT_copy}
 EMPTY_LUT_TEMPLATES_MISTRAL = {}   # block_idx -> {slot: empty_LUT_copy}
 
-def _log_cuda_mem(tag: str):
-    """Log basic CUDA memory stats for debugging."""
+
+# =========================
+# GPU memory logging helper
+# =========================
+def _log_cuda_mem(tag: str, reset_peak: bool = False):
+    """
+    Log CUDA memory stats in GiB.
+
+    allocated: tensors currently alive
+    reserved:  memory held by the caching allocator
+    max_allocated: peak allocated since last reset_peak
+
+    If reset_peak=True, reset the peak counter after logging.
+    """
     if not torch.cuda.is_available():
         print(f"[mem] {tag}: CUDA not available")
         return
 
-    device = torch.cuda.current_device()
-    allocated = torch.cuda.memory_allocated(device) / 1e9
-    reserved = torch.cuda.memory_reserved(device) / 1e9
-    max_allocated = torch.cuda.max_memory_allocated(device) / 1e9
+    dev = torch.cuda.current_device()
+
+    def to_gib(x: int) -> float:
+        return x / (1024 ** 3)
+
+    allocated = to_gib(torch.cuda.memory_allocated(dev))
+    reserved = to_gib(torch.cuda.memory_reserved(dev))
+    max_allocated = to_gib(torch.cuda.max_memory_allocated(dev))
 
     print(
         f"[mem] {tag}: "
-        f"allocated={allocated:.2f} GB, "
-        f"reserved={reserved:.2f} GB, "
-        f"max_allocated={max_allocated:.2f} GB"
+        f"allocated={allocated:.2f} GiB, "
+        f"reserved={reserved:.2f} GiB, "
+        f"max_allocated={max_allocated:.2f} GiB"
     )
+
+    if reset_peak:
+        torch.cuda.reset_peak_memory_stats()
+
 
 # =========================
 # SQLite helpers
@@ -721,6 +741,9 @@ def trainLUT_gpt2(
         wnn_blocks=wnn_blocks,
     )
 
+    print("[trainLUT_gpt2] starting training")
+    _log_cuda_mem("trainLUT_gpt2: before", reset_peak=True)
+
     before_training_lut = datetime.now()
 
     transformer.trainLUT(
@@ -734,6 +757,37 @@ def trainLUT_gpt2(
     save_lut_for_user(transformer, lut_name)
 
     print("Time to train LUT (GPT-2): ", datetime.now() - before_training_lut)
+    _log_cuda_mem("trainLUT_gpt2: after")
+
+
+
+def _estimate_lut_bytes(transformer):
+    """
+    Rough estimate of how much GPU memory LUTs are using, in bytes.
+    This lets you see if LUT growth explains the allocated growth.
+    """
+    total = 0
+    blocks = _get_blocks(transformer)
+    for blk in blocks:
+        lut_obj = None
+        if hasattr(blk, "LUT") and blk.LUT is not None:
+            lut_obj = blk.LUT
+        elif hasattr(blk, "LUTs") and blk.LUTs:
+            # if you ever use multi-LUTs per block
+            for l in (blk.LUTs if isinstance(blk.LUTs, list) else blk.LUTs.values()):
+                if l is not None and hasattr(l, "lookupTable"):
+                    for row in l.lookupTable:
+                        if isinstance(row, torch.Tensor):
+                            total += row.numel() * row.element_size()
+                    # skip to next block, we just want order-of-magnitude
+            continue
+
+        if lut_obj is not None and hasattr(lut_obj, "lookupTable"):
+            for row in lut_obj.lookupTable:
+                if isinstance(row, torch.Tensor):
+                    total += row.numel() * row.element_size()
+
+    return total
 
 
 def trainLUT_mistral(
@@ -744,6 +798,7 @@ def trainLUT_mistral(
     sparsity=1.0,
     threshold=None,
     residual=None,
+    reset_after_train: bool = True,   # <-- key switch
 ):
     """
     Train LUT for Mistral using a persistent model.
@@ -751,6 +806,12 @@ def trainLUT_mistral(
     - Model is loaded once via get_mistral() and kept in GPU/CPU memory.
     - Per-user LUT state is loaded from SQLite before training
       and saved back after training.
+
+    reset_after_train:
+        If True, we free the Mistral model and empty the CUDA cache
+        at the end of this function. This stops GPU memory from
+        creeping up across train calls at the cost of reloading
+        weights on the next request.
     """
     global MISTRAL_MODEL, MISTRAL_TOKENIZER
 
@@ -769,6 +830,9 @@ def trainLUT_mistral(
         wnn_blocks=wnn_blocks,
     )
 
+    print("[trainLUT_mistral] starting training")
+    _log_cuda_mem("trainLUT_mistral: before", reset_peak=True)
+
     before_training_lut = datetime.now()
 
     try:
@@ -780,19 +844,27 @@ def trainLUT_mistral(
             sparsity_level=sparsity,
         )
 
+        # Save per-user LUT state
         save_lut_for_user(transformer, lut_name)
 
         print("Time to train LUT (Mistral): ", datetime.now() - before_training_lut)
+
+        # --- Debug: how big are the LUTs themselves? ---
+        lut_bytes = _estimate_lut_bytes(transformer)
+        print(
+            f"[trainLUT_mistral] LUT approx size: "
+            f"{lut_bytes / (1024 ** 2):.2f} MiB"
+        )
+
+        _log_cuda_mem("trainLUT_mistral: after train")
 
     except torch.cuda.OutOfMemoryError as e:
         # Failsafe: if we still hit OOM, clear the model so the process can recover
         print("[OOM] trainLUT_mistral hit CUDA OOM, resetting Mistral model:", e)
 
-        # Log memory before doing anything
         _log_cuda_mem("OOM: before clear/free")
 
         if torch.cuda.is_available():
-            # Make sure all pending work is done before clearing
             try:
                 torch.cuda.synchronize()
             except Exception as sync_e:
@@ -800,28 +872,40 @@ def trainLUT_mistral(
 
             torch.cuda.empty_cache()
 
-        # Log after empty_cache but before actually freeing the model
-        _log_cuda_mem("OOM: after empty_cache, before _free_mistral")
+        _log_cuda_mem("OOM: after empty_cache, before free")
 
-        reset_models()
+        # Free models
+        _free_mistral()
+        _free_gpt2()
         gc.collect()
 
-        # Log after freeing model + gc
-        _log_cuda_mem("OOM: after reset models + gc")
+        _log_cuda_mem("OOM: after free + gc")
 
-        time.sleep(10)  # give time for memory to clear (for debugging phase)
+        time.sleep(5)
 
         try:
             print("[OOM] Reloading Mistral after OOM so next request starts clean...")
-            get_mistral()   # this just loads weights; DO NOT re-run train here
+            get_mistral()
             _log_cuda_mem("OOM: after get_mistral reload")
         except Exception as e2:
-            # If reload fails, log it but still raise the original OOM
             print("[OOM] Failed to reload Mistral after OOM:", repr(e2))
             _log_cuda_mem("OOM: after failed reload")
 
-        # Still propagate the OOM for this request
         raise
+
+    finally:
+        _log_cuda_mem("trainLUT_mistral: finally (before optional reset)")
+
+        if reset_after_train:
+            print("[trainLUT_mistral] reset_after_train=True, freeing Mistral + cache")
+            _free_mistral()     # just the Mistral model; keep GPT-2 if you want
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            _log_cuda_mem("trainLUT_mistral: after reset", reset_peak=True)
+        else:
+            print("[trainLUT_mistral] reset_after_train=False, keeping model in memory")
 
 
 
@@ -995,6 +1079,8 @@ def reset_models():
     gc.collect()
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
+
+    _log_cuda_mem("reset_models: after reset", reset_peak=True)
 
     return jsonify({
         "status": "ok",

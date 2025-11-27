@@ -189,7 +189,6 @@ class LUT():
 
     def train(self, xs, ys):
         for x, y in zip(xs, ys):
-            print("adding rows...")
             row = torch.stack([x, y])
             self.lookupTable.append(row)
             self.lookupTableMetaData.append([1000, 0])
@@ -223,12 +222,12 @@ class LUT():
         
         max_sim_idx = torch.argmax(sims)
         highest_sim = sims[max_sim_idx].item()
-        print("highest sim: ", highest_sim)
+        #print("highest sim: ", highest_sim)
 
 
         closest_row_output = outputs[max_sim_idx]
         if highest_sim < self.CS_threshold:  # arbitrary threshold- This must be fixed as it is a very temp workaround. The best fix would be to somehow have an active threshold based 
-            print("Low similarity, cs threshold: ", self.CS_threshold)
+            #print("Low similarity, cs threshold: ", self.CS_threshold)
             return torch.zeros_like(closest_row_output), 0.0
         row_meta_data = self.lookupTableMetaData[max_sim_idx]
         self.lookupTableMetaData[max_sim_idx]= [0, row_meta_data[1]+1]
@@ -408,7 +407,6 @@ class Transformer(nn.Module):
 
         for i in wnn_block_indices:
             block = self.layers[i]
-            print(f"[trainLUT] Training LUT for block {i}")
             now_block = datetime.now()
         
             for k in range(len(encoded_label)):
@@ -478,7 +476,6 @@ class Transformer(nn.Module):
                 logits = self.output(self.norm(h)).float()  # [1, T, vocab]
                 loss = F.cross_entropy(logits[:, -1, :], target_tensor)
 
-                print(f"[trainLUT] Block {i}, position {k}: computing grad")
                 now_back = datetime.now()
 
                 grad_pre_wnn_x, = torch.autograd.grad(
@@ -489,9 +486,9 @@ class Transformer(nn.Module):
                     allow_unused=False,
                 )
 
-                print(
-                    f"[trainLUT] Block {i}, position {k}: grad computed in {datetime.now() - now_back}"
-                )
+                # print(
+                #     f"[trainLUT] Block {i}, position {k}: grad computed in {datetime.now() - now_back}"
+                # )
 
                 # Grad to residual
                 wnn_target_residual = self.residual_scale * (-grad_pre_wnn_x)  # [1, T, d]
@@ -500,13 +497,13 @@ class Transformer(nn.Module):
                 pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :]              # [1, d]
                 target_residual_last = wnn_target_residual.detach()[:, -1, :]  # [1, d]
 
-                print(f"[trainLUT] Training LUT on block {i}")
+                #print(f"[trainLUT] Training LUT on block {i}")
                 now_lut = datetime.now()
                 with torch.no_grad():
                     block.LUT.train(pre_wnn_x_last, target_residual_last)
-                print(
-                    f"[trainLUT] Block {i}, position {k}: LUT updated in {datetime.now() - now_lut}"
-                )
+                # print(
+                #     f"[trainLUT] Block {i}, position {k}: LUT updated in {datetime.now() - now_lut}"
+                # )
 
                 # clean any accidental grad references
                 pre_wnn_x.grad = None
@@ -518,7 +515,7 @@ class Transformer(nn.Module):
                 del h, logits, loss, grad_pre_wnn_x, wnn_target_residual
                 del pre_wnn_x, pre_wnn_x_last, target_residual_last, freqs_cis
 
-            print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
+            #print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
 
         # Re-enable LUT for inference
         for blk in self.layers:
