@@ -189,24 +189,44 @@ def _normalize_block_indices(blocks, indices):
 
 def _set_wnn_blocks(transformer, active_indices=None):
     """
-    Toggle which blocks have `wnn_block` turned on.
+    Configure which blocks use WNN *for this call*.
 
-    active_indices: iterable of block indices (0-based).
-        Supports negative indices Python-style, e.g. -1 = last block.
-    If None, we leave the current wnn_block configuration as-is.
+    active_indices: iterable of block indices (0-based, can be negative)
+      - If None: do nothing (keep whatever the model currently has).
+      - If not None: we treat this as the exact set of WNN blocks for this call:
+          - block.wnn_block = idx in active_set
+          - block.use_wnn  = idx in active_set
     """
     if active_indices is None:
+        print("[wnn] _set_wnn_blocks called with None -> leaving config as-is")
         return
 
     blocks = _get_blocks(transformer)
     norm_indices = _normalize_block_indices(blocks, active_indices)
-    if norm_indices is None:
+    if not norm_indices:
+        print(f"[wnn] _set_wnn_blocks got empty/invalid indices: {active_indices}")
         return
 
     active_set = set(norm_indices)
+    print(f"[wnn] Activating WNN blocks (normalized): {sorted(active_set)}")
+
     for idx, block in enumerate(blocks):
         if hasattr(block, "wnn_block"):
-            block.wnn_block = idx in active_set
+            is_active = idx in active_set
+            block.wnn_block = is_active
+            if hasattr(block, "use_wnn"):
+                block.use_wnn = is_active
+
+            # Debug: how many LUT rows on active blocks (single LUT case)
+            if is_active and hasattr(block, "LUT") and hasattr(block.LUT, "lookupTable"):
+                try:
+                    lut_len = len(block.LUT.lookupTable)
+                except Exception:
+                    lut_len = -1
+                print(
+                    f"[wnn] block {idx}: use_wnn={getattr(block, 'use_wnn', None)}, "
+                    f"LUT_rows={lut_len}"
+                )
 
 
 def _apply_lut_hyperparams(
@@ -243,12 +263,6 @@ def _apply_lut_hyperparams(
     if not target_indices:
         return
 
-    # 1.5) Update wnn_block flags (so forward uses correct layers)
-    target_set = set(target_indices)
-    for idx, blk in enumerate(blocks):
-        if hasattr(blk, "wnn_block"):
-            blk.wnn_block = idx in target_set
-
     # 2) Handle scalar vs per-block residuals
     residual_list = None
     if isinstance(residual, (list, tuple)):
@@ -259,7 +273,7 @@ def _apply_lut_hyperparams(
                 f"does not match number of selected blocks ({len(target_indices)})"
             )
 
-    # 3) Apply params
+    # 3) Apply params (no toggling of wnn_block here)
     for pos, block_idx in enumerate(target_indices):
         block = blocks[block_idx]
 
@@ -507,10 +521,14 @@ def get_mistral():
         raise
 
     # base LUT config for Mistral
+    last_idx = len(MISTRAL_MODEL.layers) - 1
     for i, block in enumerate(MISTRAL_MODEL.layers):
         if hasattr(block, "wnn_block"):
             # default: last block only
-            block.wnn_block = (i == len(MISTRAL_MODEL.layers) - 1)
+            is_last = (i == last_idx)
+            block.wnn_block = is_last
+            if hasattr(block, "use_wnn"):
+                block.use_wnn = is_last
         if hasattr(block, "residual_scale"):
             block.residual_scale = 0.5
         if hasattr(block, "LUT"):
@@ -559,10 +577,13 @@ def _setup_gpt2_model():
     transformer = model.transformer
 
     # base LUT config for GPT-2
+    last_idx = len(transformer.h) - 1
     for i, block in enumerate(transformer.h):
         if hasattr(block, "wnn_block"):
-            # default: last block only
-            block.wnn_block = (i == len(transformer.h) - 1)
+            is_last = (i == last_idx)
+            block.wnn_block = is_last
+            if hasattr(block, "use_wnn"):
+                block.use_wnn = is_last
         if hasattr(block, "residual_scale"):
             block.residual_scale = 20.0
         if hasattr(block, "LUT"):
@@ -642,6 +663,34 @@ def text_generator_gpt2(
     return text
 
 
+def _estimate_lut_bytes(transformer):
+    """
+    Rough estimate of how much GPU memory LUTs are using, in bytes.
+    This lets you see if LUT growth explains the allocated growth.
+    """
+    total = 0
+    blocks = _get_blocks(transformer)
+    for blk in blocks:
+        lut_obj = None
+        if hasattr(blk, "LUT") and blk.LUT is not None:
+            lut_obj = blk.LUT
+        elif hasattr(blk, "LUTs") and blk.LUTs:
+            # if you ever use multi-LUTs per block
+            for l in (blk.LUTs if isinstance(blk.LUTs, list) else blk.LUTs.values()):
+                if l is not None and hasattr(l, "lookupTable"):
+                    for row in l.lookupTable:
+                        if isinstance(row, torch.Tensor):
+                            total += row.numel() * row.element_size()
+            continue
+
+        if lut_obj is not None and hasattr(lut_obj, "lookupTable"):
+            for row in lut_obj.lookupTable:
+                if isinstance(row, torch.Tensor):
+                    total += row.numel() * row.element_size()
+
+    return total
+
+
 def text_generator_mistral(
     text_input,
     length,
@@ -654,6 +703,13 @@ def text_generator_mistral(
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
     transformer = model  # Mistral model is itself the transformer
+
+    # --- Debug: LUT size after load ---
+    lut_bytes = _estimate_lut_bytes(transformer)
+    print(
+        f"[gen_mistral] lut_name={lut_name} "
+        f"LUT approx size after load: {lut_bytes / (1024 ** 2):.2f} MiB"
+    )
 
     # configure which blocks are active for this generation call
     _set_wnn_blocks(transformer, wnn_blocks)
@@ -760,36 +816,6 @@ def trainLUT_gpt2(
     _log_cuda_mem("trainLUT_gpt2: after")
 
 
-
-def _estimate_lut_bytes(transformer):
-    """
-    Rough estimate of how much GPU memory LUTs are using, in bytes.
-    This lets you see if LUT growth explains the allocated growth.
-    """
-    total = 0
-    blocks = _get_blocks(transformer)
-    for blk in blocks:
-        lut_obj = None
-        if hasattr(blk, "LUT") and blk.LUT is not None:
-            lut_obj = blk.LUT
-        elif hasattr(blk, "LUTs") and blk.LUTs:
-            # if you ever use multi-LUTs per block
-            for l in (blk.LUTs if isinstance(blk.LUTs, list) else blk.LUTs.values()):
-                if l is not None and hasattr(l, "lookupTable"):
-                    for row in l.lookupTable:
-                        if isinstance(row, torch.Tensor):
-                            total += row.numel() * row.element_size()
-                    # skip to next block, we just want order-of-magnitude
-            continue
-
-        if lut_obj is not None and hasattr(lut_obj, "lookupTable"):
-            for row in lut_obj.lookupTable:
-                if isinstance(row, torch.Tensor):
-                    total += row.numel() * row.element_size()
-
-    return total
-
-
 def trainLUT_mistral(
     train_text,
     train_context=None,
@@ -798,7 +824,7 @@ def trainLUT_mistral(
     sparsity=1.0,
     threshold=None,
     residual=None,
-    reset_after_train: bool = True,   # <-- key switch
+    reset_after_train: bool = True,
 ):
     """
     Train LUT for Mistral using a persistent model.
@@ -908,7 +934,6 @@ def trainLUT_mistral(
             print("[trainLUT_mistral] reset_after_train=False, keeping model in memory")
 
 
-
 def trainLUT_backend(
     train_text,
     train_context=None,
@@ -953,7 +978,7 @@ app = Flask(__name__)
 # Allow your dev front-end
 CORS(
     app,
-    resources={r"/*": {"origins": "*"}},
+    resources={r"/*": {"origins": "*"}}
 )
 
 

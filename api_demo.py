@@ -1,6 +1,6 @@
 import requests
 
-BASE_URL = "https://dhzzxfr41qjcz7-8000.proxy.runpod.net"
+BASE_URL = "http://127.0.0.1:8000"
 #BASE_URL = "http://127.0.0.1:8000"
 
 def generate(prompt, length=20, lut_name=None, model="mistral"):

@@ -13,7 +13,7 @@ transformer.layers[-1].wnn_block = True
 for block in transformer.layers:
     block.residual_scale = 0.5
 
-transformer.trainLUT(tokenizer, lm_head=None, label="Astarus AI is building continuously trainable LLMs!", label_context="User: What is Astarus?\nAssistant: ")
+transformer.trainLUT(tokenizer=tokenizer, label="Astarus is building continuously trainable LLMs.",lm_head=None, label_context="User: What is Astarus\nAssistant: ")
 
 res, _logits = generate(["User: What is Astarus AI?\nAssistant: "], transformer, tokenizer, max_tokens=max_tokens)
 print(res)
