@@ -771,10 +771,22 @@ def trainLUT_mistral(
     except torch.cuda.OutOfMemoryError as e:
         # Failsafe: if we still hit OOM, clear the model so the process can recover
         print("[OOM] trainLUT_mistral hit CUDA OOM, resetting Mistral model:", e)
+
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+
         _free_mistral()
         gc.collect()
+
+        # Optionally warm-reload Mistral so the *next* request is not cold
+        try:
+            print("[OOM] Reloading Mistral after OOM so next request starts clean...")
+            get_mistral()   # this just loads weights; DO NOT re-run train here
+        except Exception as e2:
+            # If reload fails, log it but still raise the original OOM
+            print("[OOM] Failed to reload Mistral after OOM:", repr(e2))
+
+        # Still propagate the OOM for this request
         raise
 
 
@@ -943,20 +955,48 @@ def train_lut_endpoint():
 
 @app.route("/reset_models", methods=["GET", "POST"])
 def reset_models():
+    """
+    Hard reset of all models:
+      - Free GPT-2 + Mistral from memory
+      - GC + empty CUDA cache
+      - Reload Mistral (and GPT-2 if enabled) so the next request is warm.
+    """
+
+    # 1) Free everything
     _free_gpt2()
     _free_mistral()
 
-    # Force Python to actually free stuff
     gc.collect()
-
-    # Let PyTorch release unused memory back to the allocator
     if torch.cuda.is_available():
         torch.cuda.empty_cache()
 
+    # 2) Reload models so the next request isn't a cold start
+
+    # Reload Mistral
+    mistral_status = "not_loaded"
+    try:
+        model, tokenizer = get_mistral()
+        mistral_status = "reloaded"
+    except Exception as e:
+        mistral_status = f"reload_failed: {repr(e)}"
+
+    # Reload GPT-2 only if you're actually using it
+    gpt2_status = "disabled"
+    if ENABLE_GPT2:
+        try:
+            _setup_gpt2_model()
+            gpt2_status = "reloaded"
+        except Exception as e:
+            gpt2_status = f"reload_failed: {repr(e)}"
+
     return jsonify({
         "status": "ok",
-        "gpu_memory_note": "Models cleared and cuda cache emptied, "
-                           "but the process will still show some memory in nvidia-smi."
+        "gpu_memory_note": (
+            "Models reset, CUDA cache emptied, and Mistral "
+            "reloaded so the next request is warm."
+        ),
+        "mistral_status": mistral_status,
+        "gpt2_status": gpt2_status,
     })
 
 
