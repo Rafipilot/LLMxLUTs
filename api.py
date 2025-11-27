@@ -672,7 +672,6 @@ def trainLUT_gpt2(
     save_lut_for_user(transformer, lut_name)
     print("Time to train LUT (GPT-2):", datetime.now() - before)
 
-
 def trainLUT_mistral(
     train_text,
     train_context=None,
@@ -682,10 +681,24 @@ def trainLUT_mistral(
     threshold=None,
     residual=None,
 ):
-    model, tokenizer = get_mistral()
-    model = load_lut_for_user(model, lut_name)
-    transformer = model
+    """
+    Train LUT for Mistral.
 
+    IMPORTANT:
+      - We now treat the Mistral model as *ephemeral* for training.
+      - After each train call we free the model from GPU to avoid
+        CUDA memory stacking across docs.
+      - LUT state is persisted in SQLite and reloaded for inference.
+    """
+    global MISTRAL_MODEL, MISTRAL_TOKENIZER
+
+    # Load (or create) model + tokenizer
+    model, tokenizer = get_mistral()
+    # Load this user's LUT into the model
+    model = load_lut_for_user(model, lut_name)
+    transformer = model  # Mistral model is itself the transformer
+
+    # Configure blocks / hyperparams
     _set_wnn_blocks(transformer, wnn_blocks)
     _apply_lut_hyperparams(
         transformer,
@@ -697,6 +710,7 @@ def trainLUT_mistral(
     before = datetime.now()
 
     try:
+        # Train LUT in-place
         transformer.trainLUT(
             tokenizer=tokenizer,
             lm_head=None,
@@ -704,12 +718,30 @@ def trainLUT_mistral(
             label_context=train_context,
             sparsity_level=sparsity,
         )
+
+        # Persist updated LUT to SQLite so we can reload later
+        save_lut_for_user(transformer, lut_name)
+
+        print("Time to train LUT (Mistral):", datetime.now() - before)
+
+    except torch.cuda.OutOfMemoryError as e:
+        # If we OOM mid-train, drop the model from GPU so the process recovers.
+        print("[OOM] trainLUT_mistral hit CUDA OOM, resetting Mistral model:", e)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        _free_mistral()
+        gc.collect()
+        # Surface the error so /train_lut returns 500 with a sensible message
+        raise
+
     finally:
+        # Even on success, *always* free the Mistral model after training.
+        # Next train/generate will call get_mistral() and reload a fresh model.
+        _free_mistral()
+        gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
-    save_lut_for_user(transformer, lut_name)
-    print("Time to train LUT (Mistral):", datetime.now() - before)
 
 
 def trainLUT_backend(
@@ -856,8 +888,5 @@ def health():
 
 
 if __name__ == "__main__":
-    print("[init] Warming up Mistral...")
-    get_mistral()
-    print("[init] Mistral ready, starting server")
-    # Single-threaded: avoids SQLite 'database is locked' in this one-pod setup.
+    print("[init] Starting server (Mistral will load lazily on first use)")
     app.run(host="0.0.0.0", port=8000, debug=False, threaded=False)

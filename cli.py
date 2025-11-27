@@ -1,16 +1,28 @@
 import uuid
 import time
+import textwrap
 import requests
+
+# =========================
+# Config
+# =========================
 
 BASE_URL = "https://dhzzxfr41qjcz7-8000.proxy.runpod.net"
 MODEL_NAME = "mistral"
 
-session = requests.Session()
+WNN_BLOCKS = [-7, -12, -14]
+RESIDUALS = [0.05, 0.1, 0.1]
+THRESHOLD = 0.45
+SPARSITY = 1.0
+MAX_GEN_TOKENS = 256
 
+
+# =========================
+# Demo docs (Astarus)
+# =========================
 
 docs = [
     # --- Atomic identity facts ---
-
     (
         "Who founded Astarus AI?",
         "Astarus AI was founded by Rafayel Latif, a London-based founder focused on building continuously learning language-model infrastructure for products and engineering teams."
@@ -21,7 +33,6 @@ docs = [
     ),
 
     # --- High-level identity / mission ---
-
     (
         "What is Astarus AI?",
         "Astarus AI is an AI infrastructure startup that wraps strong base language models with lightweight lookup-table (LUT) layers inside the transformer. These LUT-LLMs adapt in place to each tenant and user, so you get continuously learning copilots and assistants while keeping the base weights frozen and stable."
@@ -32,7 +43,6 @@ docs = [
     ),
 
     # --- Tech differentiation vs fine-tuning & RAG ---
-
     (
         "How is Astarus AI different from a normally fine-tuned LLM?",
         "A typical fine-tuned LLM bakes all behavior into new weights for the entire model, which is expensive to train, hard to roll back, and difficult to isolate per customer. Astarus AI keeps the base weights frozen and instead inserts LUT layers inside transformer blocks that store tenant-specific patterns. When behavior changes, only the lightweight LUT entries are updated, so you can adapt quickly, keep general capabilities intact, and avoid retraining the full model."
@@ -43,7 +53,6 @@ docs = [
     ),
 
     # --- Core product & architecture ---
-
     (
         "What is the main product Astarus AI offers?",
         "Astarus AI provides an API and infrastructure layer that exposes LUT-based LLMs for personalization, copilots, and domain-specific assistants. You send prompts to our API, and under the hood we route them through a strong base model plus your tenant’s LUTs, so every answer is shaped by your data and prior interactions rather than a generic one-size-fits-all model."
@@ -54,7 +63,6 @@ docs = [
     ),
 
     # --- Use cases & examples ---
-
     (
         "What use cases does Astarus AI have?",
         "Astarus AI can power internal knowledge assistants that remember a company’s policies and runbooks, customer support and sales copilots that learn from prior tickets and calls, domain-specific research assistants that internalize a firm’s memos and reports, and in-product copilots that adapt to how users actually use a SaaS product over time. All of these share the same base model but have different LUTs, so behavior is isolated per tenant or even per user."
@@ -65,7 +73,6 @@ docs = [
     ),
 
     # --- Teaching / continuous learning ---
-
     (
         "How does Astarus AI learn from user interactions?",
         "Teams teach Astarus AI with Q&A pairs, examples, and corrections via a simple teaching endpoint or in-product feedback controls. Each accepted correction or labeled example writes a small update into a tenant-specific LUT slot. Over time, similar prompts route through those updated entries, so the system gradually shifts toward the corrected answers and preferred style without needing a full fine-tune."
@@ -76,7 +83,6 @@ docs = [
     ),
 
     # --- Personalization & multi-tenant isolation ---
-
     (
         "How does Astarus AI handle personalization for different customers and users?",
         "Astarus AI keeps separate LUTs per tenant and can optionally allocate additional LUTs per user or per workspace. Each LUT only stores updates for that scope, while all of them share the same underlying base model. That means one customer’s corrections never leak into another customer’s behavior, and heavy users can have their own local adaptation layer on top of their organization’s defaults."
@@ -85,153 +91,305 @@ docs = [
         "How does Astarus AI protect customer data and keep behavior isolated?",
         "Customer-specific behavior is stored in LUTs that are scoped by tenant ID (and optionally by user or environment, like staging vs production). The base model weights are never updated with tenant data, so there is no cross-tenant contamination of core weights. This design makes it easier to reason about what data influences behavior, to reset or clone environments, and to comply with privacy and isolation requirements."
     ),
-
-    # --- Latency, cost & ops ---
-
-    (
-        "What are the latency and cost advantages of Astarus AI’s approach?",
-        "LUT updates are tiny compared to full model fine-tunes, and lookup + residual mixing inside a transformer layer is cheap relative to the rest of the forward pass. Because the base model stays frozen and LUTs are lightweight, inference latency stays close to the underlying model, and you avoid the repeated cost of training and hosting many separate fine-tuned checkpoints. In practice, teams can run many customized assistants on top of a single shared model fleet."
-    ),
-    (
-        "How does Astarus AI make it easier to operate AI in production?",
-        "Instead of juggling dozens of slightly different fine-tuned models, teams operate a small number of strong base models plus a structured set of LUTs. Behavior changes are tracked at the LUT level, so you can roll back or clone specific tenants, environments, or experiments without touching the base weights. That makes debugging, compliance reviews, and A/B experiments much simpler than in a traditional fine-tune-everything setup."
-    ),
-
-    # --- Developer integration & workflow ---
-
-    (
-        "How do developers integrate Astarus AI into their products?",
-        "Developers integrate Astarus AI through a straightforward API for text generation, teaching, and LUT configuration. They can call a generate endpoint for normal queries, a teach endpoint whenever a human provides a better answer, and management endpoints to inspect or reset LUTs for a given tenant or environment. This all plugs into existing backends or chat frontends without requiring teams to manage their own model training pipelines."
-    ),
-    (
-        "How does Astarus AI support experimentation and safe rollout?",
-        "Teams can spin up separate LUTs for staging, internal testing, and production on top of the same base model. They can trial new examples or behaviors in a staging LUT, compare outputs side by side, and only promote the behavior to a production LUT once they are happy with it. Because all changes are confined to LUT entries, experimentation is fast, reversible, and doesn’t risk corrupting the core model."
-    ),
 ]
 
 
-def post_reset_models():
+# =========================
+# Helpers
+# =========================
+
+def health_check():
+    url = f"{BASE_URL}/health"
     try:
-        r = session.post(f"{BASE_URL}/reset_models", timeout=10)
-        print("[CLI] reset_models ->", r.status_code)
-    except Exception as e:
-        print("[CLI] reset_models failed:", e)
+        r = requests.get(url, timeout=10)
+        print(f"[CLI] health: {r.status_code} {r.text}")
+    except requests.RequestException as e:
+        print(f"[CLI] health check failed: {e}")
 
 
-def post_train_lut(payload, lut_name, max_retries=3):
+def post_train_lut(payload, lut_name: str, max_attempts: int = 3) -> bool:
+    """
+    Very close to your original pattern:
+    - up to 3 attempts
+    - logs 'Attempt X/3 failed'
+    - 'Resting...' between retries
+    No /reset_models. Long timeout so Cloudflare doesn't kill it.
+    """
     url = f"{BASE_URL}/train_lut"
 
-    for attempt in range(1, max_retries + 1):
+    for attempt in range(1, max_attempts + 1):
         try:
-            r = session.post(url, json=payload, timeout=60)
-        except requests.exceptions.RequestException as e:
-            print(f"[TRAIN] Attempt {attempt}/{max_retries} failed with exception:", e)
-            if attempt < max_retries:
-                post_reset_models()
-                time.sleep(3)
-                continue
+            r = requests.post(url, json=payload, timeout=150)
+            if r.status_code == 200:
+                try:
+                    resp_json = r.json()
+                except ValueError:
+                    resp_json = r.text
+                print(f"[TRAIN] lut_name={lut_name} status={r.status_code} resp={resp_json}")
+                return True
             else:
-                print(f"[TRAIN] All retries failed for lut_name={lut_name}, skipping doc.")
-                return None
+                print(f"[TRAIN] lut_name={lut_name} status={r.status_code} body={r.text}")
+                return False
 
-        if r.status_code == 200:
-            data = r.json()
-            print(f"[TRAIN] lut_name={lut_name} status=200 resp={data}")
-            return data
+        except requests.Timeout as e:
+            print(f"[TRAIN] Attempt {attempt}/{max_attempts} failed: {e}")
+        except requests.RequestException as e:
+            print(f"[TRAIN] Attempt {attempt}/{max_attempts} failed: {e}")
 
-        # Non-200: 500, 524, etc.
-        print(
-            f"[TRAIN] lut_name={lut_name} status={r.status_code} "
-            f"body={r.text[:200]!r}"
-        )
+        if attempt < max_attempts:
+            print("Resting...")
+            time.sleep(2)
 
-        # Retry on 500 or 524 (Cloudflare timeout / internal error)
-        if r.status_code in (500, 524) and attempt < max_retries:
-            post_reset_models()
-            time.sleep(3)
-            continue
-
-        print(f"[TRAIN] All retries failed for lut_name={lut_name}, skipping doc.")
-        return None
-
-    return None
+    print(f"[TRAIN] All retries failed for lut_name={lut_name}, skipping doc.")
+    return False
 
 
 def train_docs(lut_name: str):
-    for i, (q, a) in enumerate(docs):
+    if not docs:
+        print("[CLI] No docs configured.")
+        return
+
+    for i, (question, answer) in enumerate(docs):
         print("Training doc :", i)
+
+        label_context = f"User: {question}\nAssistant: "
+        label = answer
+
         payload = {
-            "label": a,
-            "label_context": f"User: {q}\nAssistant: ",
+            "label": label,
+            "label_context": label_context,
             "lut_name": lut_name,
             "model": MODEL_NAME,
-            "wnn_blocks": [-7, -12, -14],
-            "sparsity": 1.0,
-            "threshold": 0.45,
-            "residuals": [0.05, 0.1, 0.1],
+            "wnn_blocks": WNN_BLOCKS,
+            "sparsity": SPARSITY,
+            "threshold": THRESHOLD,
+            "residuals": RESIDUALS,
         }
 
-        resp = post_train_lut(payload, lut_name)
-        if resp is None:
-            print(f"[TRAIN] Skipped doc {i} due to repeated failures.")
+        post_train_lut(payload, lut_name)
 
 
-def generate_answer(lut_name: str, question: str, max_tokens: int = 128) -> str:
-    prompt = f"User: {question}\nAssistant: "
-    payload = {
-        "prompt": prompt,
-        "length": max_tokens,
-        "lut_name": lut_name,
-        "model": MODEL_NAME,
-        "wnn_blocks": [-7, -12, -14],
-        "threshold": 0.45,
-        "residuals": [0.05, 0.1, 0.1],
-        "cost_scale": 3.0,
-    }
+def cli_demo(lut_name: str):
+    print(f"[CLI] Running demo training for lut_name={lut_name} using model={MODEL_NAME}")
+    train_docs(lut_name)
+    print("[CLI] Demo training finished.")
+
+
+def post_generate(prompt: str, lut_name: str, length: int = None):
+    if length is None:
+        length = MAX_GEN_TOKENS
 
     url = f"{BASE_URL}/generate"
+
+    payload = {
+        "prompt": prompt,
+        "length": length,
+        "lut_name": lut_name,
+        "model": MODEL_NAME,
+        "wnn_blocks": WNN_BLOCKS,
+        "threshold": THRESHOLD,
+        "residuals": RESIDUALS,
+    }
+
     try:
-        r = session.post(url, json=payload, timeout=60)
-    except requests.exceptions.RequestException as e:
-        print("[GEN] request failed:", e)
-        return "<error>"
+        r = requests.post(url, json=payload, timeout=60)
+        try:
+            data = r.json()
+        except ValueError:
+            print(f"[GEN] Non-JSON response: {r.text}")
+            return None
 
-    if r.status_code != 200:
-        print("[GEN] non-200:", r.status_code, r.text[:200])
-        return "<error>"
+        if r.status_code == 200:
+            return data.get("completion", "")
+        else:
+            print(f"[GEN] status={r.status_code} body={data}")
+            return None
 
-    data = r.json()
-    completion = data.get("completion", "")
-    return completion.strip()
+    except requests.Timeout as e:
+        print(f"[GEN] timeout: {e}")
+        return None
+    except requests.RequestException as e:
+        print(f"[GEN] request error: {e}")
+        return None
 
 
-def main():
-    lut_name = f"demo-{uuid.uuid4().hex[:8]}"
-    print("[CLI] Using lut_name:", lut_name)
+# =========================
+# Command handlers
+# =========================
 
-    # health check
+def handle_newlut(current_lut: str) -> str:
+    new_name = f"demo-{uuid.uuid4().hex[:8]}"
+    print(f"[CLI] Switched LUT from {current_lut} -> {new_name}")
+    return new_name
+
+
+def handle_teach(lut_name: str):
     try:
-        h = session.get(f"{BASE_URL}/health", timeout=5)
-        print("[CLI] health:", h.status_code, h.text)
-    except Exception as e:
-        print("[CLI] health check failed:", e)
+        q = input("Teach question: ").strip()
+        if not q:
+            print("[CLI] Empty question, cancelled.")
+            return
+        a = input("Teach answer: ").strip()
+        if not a:
+            print("[CLI] Empty answer, cancelled.")
+            return
+    except (EOFError, KeyboardInterrupt):
+        print("\n[CLI] Teach cancelled.")
+        return
 
-    # training
-    train_docs(lut_name)
+    label_context = f"User: {q}\nAssistant: "
+    label = a
 
-    # quick test queries
-    test_questions = [
-        "Who founded Astarus AI?",
-        "What is Astarus AI?",
-        "How is Astarus AI different from a standard RAG system?",
-        "How does Astarus AI learn from user interactions?",
-    ]
+    payload = {
+        "label": label,
+        "label_context": label_context,
+        "lut_name": lut_name,
+        "model": MODEL_NAME,
+        "wnn_blocks": WNN_BLOCKS,
+        "sparsity": SPARSITY,
+        "threshold": THRESHOLD,
+        "residuals": RESIDUALS,
+    }
 
-    for q in test_questions:
-        print("\n[TEST]", q)
-        ans = generate_answer(lut_name, q)
-        print(ans)
+    print(f"[CLI] Teaching single Q&A into LUT {lut_name}...")
+    post_train_lut(payload, lut_name)
 
+
+def handle_threshold(cmd: str):
+    global THRESHOLD
+    parts = cmd.split()
+    if len(parts) == 1:
+        print(f"[CLI] Current threshold: {THRESHOLD}")
+        return
+    try:
+        value = float(parts[1])
+        THRESHOLD = value
+        print(f"[CLI] threshold set to {THRESHOLD}")
+    except ValueError:
+        print("[CLI] Usage: /threshold 0.45")
+
+
+def handle_residual(cmd: str):
+    """
+    /residual            -> show
+    /residual 0.1        -> set same scalar for all blocks
+    /residual 0.05,0.1,0.1 -> per-block
+    """
+    global RESIDUALS
+    parts = cmd.split(maxsplit=1)
+    if len(parts) == 1:
+        print(f"[CLI] Current residuals: {RESIDUALS} (blocks {WNN_BLOCKS})")
+        return
+
+    arg = parts[1].strip()
+
+    if "," in arg:
+        try:
+            vals = [float(x.strip()) for x in arg.split(",") if x.strip()]
+        except ValueError:
+            print("[CLI] Could not parse residuals. Example: /residual 0.05,0.1,0.1")
+            return
+
+        if len(vals) != len(WNN_BLOCKS):
+            print(f"[CLI] residual list length ({len(vals)}) must match number of WNN blocks ({len(WNN_BLOCKS)}).")
+            return
+
+        RESIDUALS = vals
+        print(f"[CLI] residuals set to {RESIDUALS} for blocks {WNN_BLOCKS}")
+        return
+
+    try:
+        val = float(arg)
+    except ValueError:
+        print("[CLI] Usage: /residual 0.1  OR  /residual 0.05,0.1,0.1")
+        return
+
+    RESIDUALS = [val for _ in WNN_BLOCKS]
+    print(f"[CLI] residuals set to {RESIDUALS} for blocks {WNN_BLOCKS}")
+
+
+def print_help():
+    print("Commands:")
+    print("  /demo              - train the built-in Astarus docs into the current LUT")
+    print("  /newlut            - switch to a new random lut_name (demo-xxxxxxx)")
+    print("  /teach             - interactively teach one Q&A pair into the current LUT")
+    print("  /threshold [x]     - show or set LUT threshold (e.g. /threshold 0.45)")
+    print("  /residual [vals]   - show or set residuals (e.g. /residual 0.05,0.1,0.1)")
+    print("  /help              - show this help")
+    print("  /quit /exit /q     - exit the CLI")
+    print()
+
+
+# =========================
+# Chat loop
+# =========================
+
+def chat_loop(lut_name: str):
+    print()
+    print("=== Astarus LUT-LLM CLI ===")
+    print(f"Current LUT: {lut_name}")
+    print("Type /help for commands.")
+    print()
+
+    while True:
+        try:
+            user_msg = input("You: ").strip()
+        except (EOFError, KeyboardInterrupt):
+            print("\n[CLI] Exiting.")
+            break
+
+        if not user_msg:
+            continue
+
+        lower = user_msg.lower()
+
+        if lower in {"/quit", "/exit", "/q"}:
+            print("[CLI] Goodbye.")
+            break
+
+        if lower == "/help":
+            print_help()
+            continue
+
+        if lower == "/demo":
+            cli_demo(lut_name)
+            continue
+
+        if lower == "/newlut":
+            lut_name = handle_newlut(lut_name)
+            continue
+
+        if lower == "/teach":
+            handle_teach(lut_name)
+            continue
+
+        if lower.startswith("/threshold"):
+            handle_threshold(user_msg)
+            continue
+
+        if lower.startswith("/residual"):
+            handle_residual(user_msg)
+            continue
+
+        # Normal chat
+        prompt = f"User: {user_msg}\nAssistant:"
+        completion = post_generate(prompt, lut_name)
+
+        if completion is None:
+            print("Assistant: [error or timeout]")
+            continue
+
+        print("Assistant:")
+        print(textwrap.fill(completion.strip(), width=100))
+        print()
+
+
+# =========================
+# Entry point
+# =========================
 
 if __name__ == "__main__":
-    main()
+    lut_name = f"demo-{uuid.uuid4().hex[:8]}"
+    print(f"[CLI] Using lut_name: {lut_name}")
+    health_check()
+    chat_loop(lut_name)
