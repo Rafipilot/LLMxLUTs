@@ -19,6 +19,7 @@ from GPT2xLUT.GPT2.encoder import get_encoder
 from MistralxLUT.main import Tokenizer, Transformer, generate
 
 import gc
+import time
 
 # =========================
 # Global config / seeds
@@ -777,8 +778,7 @@ def trainLUT_mistral(
 
         _free_mistral()
         gc.collect()
-
-        # Optionally warm-reload Mistral so the *next* request is not cold
+        time.sleep(40) #give time for memory to clear.
         try:
             print("[OOM] Reloading Mistral after OOM so next request starts clean...")
             get_mistral()   # this just loads weights; DO NOT re-run train here
