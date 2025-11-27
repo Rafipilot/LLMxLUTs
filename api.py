@@ -58,6 +58,23 @@ MISTRAL_TOKENIZER = None
 EMPTY_LUT_TEMPLATES_GPT2 = {}      # block_idx -> {slot: empty_LUT_copy}
 EMPTY_LUT_TEMPLATES_MISTRAL = {}   # block_idx -> {slot: empty_LUT_copy}
 
+def _log_cuda_mem(tag: str):
+    """Log basic CUDA memory stats for debugging."""
+    if not torch.cuda.is_available():
+        print(f"[mem] {tag}: CUDA not available")
+        return
+
+    device = torch.cuda.current_device()
+    allocated = torch.cuda.memory_allocated(device) / 1e9
+    reserved = torch.cuda.memory_reserved(device) / 1e9
+    max_allocated = torch.cuda.max_memory_allocated(device) / 1e9
+
+    print(
+        f"[mem] {tag}: "
+        f"allocated={allocated:.2f} GB, "
+        f"reserved={reserved:.2f} GB, "
+        f"max_allocated={max_allocated:.2f} GB"
+    )
 
 # =========================
 # SQLite helpers
@@ -467,9 +484,7 @@ def get_mistral():
         print("[mistral] loading on CUDA...")
         MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
     except torch.OutOfMemoryError:
-        print("[mistral] CUDA OOM, falling back to CPU")
-        MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=1)
-        MISTRAL_MODEL.to("cpu")
+        raise
 
     # base LUT config for Mistral
     for i, block in enumerate(MISTRAL_MODEL.layers):
@@ -477,7 +492,7 @@ def get_mistral():
             # default: last block only
             block.wnn_block = (i == len(MISTRAL_MODEL.layers) - 1)
         if hasattr(block, "residual_scale"):
-            block.residual_scale = 20.0
+            block.residual_scale = 0.5
         if hasattr(block, "LUT"):
             block.LUT.CS_threshold = 0.25  # starting default
 
@@ -773,21 +788,41 @@ def trainLUT_mistral(
         # Failsafe: if we still hit OOM, clear the model so the process can recover
         print("[OOM] trainLUT_mistral hit CUDA OOM, resetting Mistral model:", e)
 
+        # Log memory before doing anything
+        _log_cuda_mem("OOM: before clear/free")
+
         if torch.cuda.is_available():
+            # Make sure all pending work is done before clearing
+            try:
+                torch.cuda.synchronize()
+            except Exception as sync_e:
+                print("[OOM] cuda.synchronize failed:", repr(sync_e))
+
             torch.cuda.empty_cache()
+
+        # Log after empty_cache but before actually freeing the model
+        _log_cuda_mem("OOM: after empty_cache, before _free_mistral")
 
         _free_mistral()
         gc.collect()
-        time.sleep(40) #give time for memory to clear.
+
+        # Log after freeing model + gc
+        _log_cuda_mem("OOM: after _free_mistral + gc")
+
+        time.sleep(10)  # give time for memory to clear (for debugging phase)
+
         try:
             print("[OOM] Reloading Mistral after OOM so next request starts clean...")
             get_mistral()   # this just loads weights; DO NOT re-run train here
+            _log_cuda_mem("OOM: after get_mistral reload")
         except Exception as e2:
             # If reload fails, log it but still raise the original OOM
             print("[OOM] Failed to reload Mistral after OOM:", repr(e2))
+            _log_cuda_mem("OOM: after failed reload")
 
         # Still propagate the OOM for this request
         raise
+
 
 
 def trainLUT_backend(

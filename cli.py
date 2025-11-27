@@ -218,7 +218,7 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
             print(f"[TRAIN] Attempt {attempt+1}/3 failed: {e}")
             if attempt < 2:
                 print("Retrying after 500s")
-                time.sleep(500)
+                time.sleep(100)
             else:
                 print("[TRAIN] All retries failed.")
 
