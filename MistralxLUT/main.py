@@ -573,39 +573,90 @@ def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_t
     min_prompt_len = min(prompt_lens)
     max_prompt_len = max(prompt_lens)
 
-    input_tokens = torch.full((len(prompts), max_prompt_len), tokenizer.pad_id, dtype=torch.long, device="cuda")
-    for i, encoded in enumerate(encoded_prompts):
-        input_tokens[i, :len(encoded)] = torch.tensor(encoded).to(input_tokens)
-    input_mask = input_tokens != tokenizer.pad_id
+    device = "cuda"
 
-    # pre-fill
-    positions = torch.arange(0, min_prompt_len).to("cuda")
+    # [B, max_prompt_len] padded inputs
+    input_tokens = torch.full(
+        (len(prompts), max_prompt_len),
+        tokenizer.pad_id,
+        dtype=torch.long,
+        device=device,
+    )
+    for i, encoded in enumerate(encoded_prompts):
+        input_tokens[i, :len(encoded)] = torch.tensor(encoded, device=device)
+    input_mask = input_tokens != tokenizer.pad_id  # True where prompt token, False where pad
+
+    # ---------- prefill over shared prefix ----------
+    positions = torch.arange(0, min_prompt_len, device=device)
     logits = model.forward(input_tokens[:, :min_prompt_len], positions)
     logprobs = nn.functional.log_softmax(logits, dim=-1)
 
-    # decode
-    generated = []
+    # NLL for prompt tokens (teacher forcing)
     all_logprobs = [
-        logprobs[:,:-1,:].gather(2, input_tokens[:,1:min_prompt_len,None]).squeeze(-1),
+        logprobs[:, :-1, :].gather(2, input_tokens[:, 1:min_prompt_len, None]).squeeze(-1),
     ]
+
+    # ---------- decode ----------
+    generated = []
     cur_pos = min_prompt_len
+
+    eos_id = tokenizer.eos_id  # <--- your property
+    finished = torch.zeros(len(prompts), dtype=torch.bool, device=device)
+
     for _ in range(max_tokens):
-        next_token = torch.argmax(logprobs[:, -1,:], dim=-1)
+        # greedy next-token from last position
+        sampled = torch.argmax(logprobs[:, -1, :], dim=-1)  # (B,)
+
+        # Are we still inside the original prompt at this position?
         if cur_pos < input_mask.shape[1]:
-            next_token = torch.where(input_mask[:, cur_pos], input_tokens[:, cur_pos], next_token)
+            is_prompt_pos = input_mask[:, cur_pos]  # True = still prompt token for that example
+        else:
+            is_prompt_pos = torch.zeros_like(sampled, dtype=torch.bool, device=device)
+
+        next_token = torch.where(is_prompt_pos, input_tokens[:, cur_pos], sampled)
+
+        # Logprob of chosen token (prompt or generated)
         all_logprobs.append(
-            logprobs[:,-1,:].gather(1, next_token[:, None]),
+            logprobs[:, -1, :].gather(1, next_token[:, None])
         )
-        generated.append(next_token[:, None])
-        logits = model.forward(next_token[:, None], torch.LongTensor([cur_pos]).to(next_token))
+
+        # Mark EOS hits, but ONLY on genuinely generated tokens
+        # (i.e. not on teacher-forced prompt positions).
+        if eos_id is not None:
+            eos_hit = (~is_prompt_pos) & (~finished) & (sampled == eos_id)
+            finished = finished | eos_hit
+
+        generated.append(next_token[:, None])  # (B, 1)
+
+        # One-step forward for next position
+        logits = model.forward(
+            next_token[:, None],
+            torch.LongTensor([cur_pos]).to(next_token),
+        )
         logprobs = nn.functional.log_softmax(logits, dim=-1)
         cur_pos += 1
 
-    all_logprobs = torch.cat(all_logprobs, 1)
+        # If every sequence has produced EOS somewhere in its generated region, stop early
+        if finished.all():
+            break
+
+    all_logprobs = torch.cat(all_logprobs, dim=1)
     res = []
-    if max_tokens > 0:
-        generated = torch.cat(generated, 1)
+
+    if max_tokens > 0 and generated:
+        generated = torch.cat(generated, dim=1)  # (B, T_gen)
 
         for i, x in enumerate(encoded_prompts):
-            res.append(tokenizer.decode(x[:min_prompt_len] + generated[i].tolist()))
+            gen_tokens = generated[i].tolist()
+
+            # Trim at first EOS in generated region (if any)
+            if eos_id is not None and eos_id in gen_tokens:
+                eos_index = gen_tokens.index(eos_id)
+                gen_tokens = gen_tokens[:eos_index]
+
+            # Reconstruct output: shared prefix (up to min_prompt_len) + generated tail
+            full_ids = x[:min_prompt_len] + gen_tokens
+            text = tokenizer.decode(full_ids)
+            res.append(text)
+
     return res, all_logprobs

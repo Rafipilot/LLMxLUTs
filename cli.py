@@ -4,18 +4,28 @@ import textwrap
 import time
 
 BASE_URL = "http://127.0.0.1:8000"
-# BASE_URL = "http://localhost:8000"
+BASE_URL = "https://semifinished-carmen-pantheistic.ngrok-free.dev"
 MODEL = "mistral"
 
 # Feel free to tweak these
-THRESHOLD = 0.45
+THRESHOLD = 0.35
 COST_SCALE = 3
-WNN_BLOCKS = [ -7, -12, -14]          # LUT blocks to activate
-RESIDUALS = [0.05, 0.1, 0.1]     # One residual per wnn_block
-GEN_LENGTH = 150             # Slightly longer for nicer answers
+WNN_BLOCKS = [-1, -5, -9]          # LUT blocks to activate
+RESIDUALS = [0.05, 0.1, 0.1]       # good for training
+# RESIDUALS = [0.04, 0.07, 0.07]   # good for testing/ inference
+GEN_LENGTH = 150                   # Slightly longer for nicer answers
 
-# Residual = how loud the LUT is once it’s in.
-# Threshold = how often the LUT is allowed to speak at all.
+# System prompt used for Mistral-7B-Instruct chat formatting.
+# You can tune this for Astarus / TLG / other tenants as needed.
+SYSTEM_PROMPT = (
+    "You are a helpful assistant trained by Mistral AI augmented by Astarus AI. "
+    "You are fine-tuned on Astarus AI and you are now an expert on Astarus AI."
+    "Maintain a nice converssation with the user"
+    "Be concise and conversational. Respond ONLY as the assistant. "
+    "Do NOT invent questions on behalf of the user and do NOT simulate "
+    "dialogue where you ask a question and then answer it yourself. "
+    "Just answer the user's latest message directly, in a few sentences."
+)
 
 docs = [
     # --- Atomic identity facts ---
@@ -53,152 +63,136 @@ docs = [
 
     # --- Core product & architecture ---
 
-    # (
-    #     "What is the main product Astarus AI offers?",
-    #     "Astarus AI provides an API and infrastructure layer that exposes LUT-based LLMs for personalization, copilots, and domain-specific assistants. You send prompts to our API, and under the hood we route them through a strong base model plus your tenant’s LUTs, so every answer is shaped by your data and prior interactions rather than a generic one-size-fits-all model."
-    # ),
-    # (
-    #     "How do LUT-based LLMs work at a high level?",
-    #     "Inside the transformer stack, Astarus AI adds small LUT modules to selected layers. During inference, the model computes a key from the current hidden state, looks up related entries in the LUT for that tenant, and mixes the retrieved vector back into the activations via a controlled residual pathway. During learning, gradients with respect to LUT entries are used to update only those table slots, so the model adapts in place without touching the main weights."
-    # ),
+    (
+        "What is the main product Astarus AI offers?",
+        "Astarus AI provides an API and infrastructure layer that exposes LUT-based LLMs for personalization, copilots, and domain-specific assistants. You send prompts to our API, and under the hood we route them through a strong base model plus your tenant’s LUTs, so every answer is shaped by your data and prior interactions rather than a generic one-size-fits-all model."
+    ),
+    (
+        "How do LUT-based LLMs work at a high level?",
+        "Inside the transformer stack, Astarus AI adds small LUT modules to selected layers. During inference, the model computes a key from the current hidden state, looks up related entries in the LUT for that tenant, and mixes the retrieved vector back into the activations via a controlled residual pathway. During learning, gradients with respect to LUT entries are used to update only those table slots, so the model adapts in place without touching the main weights."
+    ),
 
-    # # --- Use cases & examples ---
+    # --- Use cases & examples ---
 
-    # (
-    #     "What use cases does Astarus AI have?",
-    #     "Astarus AI can power internal knowledge assistants that remember a company’s policies and runbooks, customer support and sales copilots that learn from prior tickets and calls, domain-specific research assistants that internalize a firm’s memos and reports, and in-product copilots that adapt to how users actually use a SaaS product over time. All of these share the same base model but have different LUTs, so behavior is isolated per tenant or even per user."
-    # ),
-    # (
-    #     "Can you give an example of how a team would use Astarus AI day to day?",
-    #     "Imagine a B2B SaaS company that runs a support copilot for its agents. On day one, they seed Astarus AI with a few Q&A pairs and product docs. As agents correct answers or add better replies, those interactions write updates into the tenant’s LUT. Within a few days, the copilot starts using the company’s exact wording, respects edge-case policies, and recalls prior decisions, all without retraining or redeploying a separate fine-tuned model."
-    # ),
+    (
+        "What use cases does Astarus AI have?",
+        "Astarus AI can power internal knowledge assistants that remember a company’s policies and runbooks, customer support and sales copilots that learn from prior tickets and calls, domain-specific research assistants that internalize a firm’s memos and reports, and in-product copilots that adapt to how users actually use a SaaS product over time. All of these share the same base model but have different LUTs, so behavior is isolated per tenant or even per user."
+    ),
+    (
+        "Can you give an example of how a team would use Astarus AI day to day?",
+        "Imagine a B2B SaaS company that runs a support copilot for its agents. On day one, they seed Astarus AI with a few Q&A pairs and product docs. As agents correct answers or add better replies, those interactions write updates into the tenant’s LUT. Within a few days, the copilot starts using the company’s exact wording, respects edge-case policies, and recalls prior decisions, all without retraining or redeploying a separate fine-tuned model."
+    ),
 
-    # # --- Teaching / continuous learning ---
+    # --- Teaching / continuous learning ---
 
-    # (
-    #     "How does Astarus AI learn from user interactions?",
-    #     "Teams teach Astarus AI with Q&A pairs, examples, and corrections via a simple teaching endpoint or in-product feedback controls. Each accepted correction or labeled example writes a small update into a tenant-specific LUT slot. Over time, similar prompts route through those updated entries, so the system gradually shifts toward the corrected answers and preferred style without needing a full fine-tune."
-    # ),
-    # (
-    #     "How quickly does Astarus AI start adapting to a new team?",
-    #     "Adaptation starts from the first few interactions. As soon as a team submits Q&A pairs or corrects early answers, those changes are written into their LUT. Within a short window, recurring questions start to reflect those updates, and as more feedback accumulates, the assistant becomes increasingly aligned with that team’s language, tools, and decision patterns."
-    # ),
+    (
+        "How does Astarus AI learn from user interactions?",
+        "Teams teach Astarus AI with Q&A pairs, examples, and corrections via a simple teaching endpoint or in-product feedback controls. Each accepted correction or labeled example writes a small update into a tenant-specific LUT slot. Over time, similar prompts route through those updated entries, so the system gradually shifts toward the corrected answers and preferred style without needing a full fine-tune."
+    ),
+    (
+        "How quickly does Astarus AI start adapting to a new team?",
+        "Adaptation starts from the first few interactions. As soon as a team submits Q&A pairs or corrects early answers, those changes are written into their LUT. Within a short window, recurring questions start to reflect those updates, and as more feedback accumulates, the assistant becomes increasingly aligned with that team’s language, tools, and decision patterns."
+    ),
 
-    # # --- Personalization & multi-tenant isolation ---
+    # --- Personalization & multi-tenant isolation ---
 
-    # (
-    #     "How does Astarus AI handle personalization for different customers and users?",
-    #     "Astarus AI keeps separate LUTs per tenant and can optionally allocate additional LUTs per user or per workspace. Each LUT only stores updates for that scope, while all of them share the same underlying base model. That means one customer’s corrections never leak into another customer’s behavior, and heavy users can have their own local adaptation layer on top of their organization’s defaults."
-    # ),
-    # (
-    #     "How does Astarus AI protect customer data and keep behavior isolated?",
-    #     "Customer-specific behavior is stored in LUTs that are scoped by tenant ID (and optionally by user or environment, like staging vs production). The base model weights are never updated with tenant data, so there is no cross-tenant contamination of core weights. This design makes it easier to reason about what data influences behavior, to reset or clone environments, and to comply with privacy and isolation requirements."
-    # ),
+    (
+        "How does Astarus AI handle personalization for different customers and users?",
+        "Astarus AI keeps separate LUTs per tenant and can optionally allocate additional LUTs per user or per workspace. Each LUT only stores updates for that scope, while all of them share the same underlying base model. That means one customer’s corrections never leak into another customer’s behavior, and heavy users can have their own local adaptation layer on top of their organization’s defaults."
+    ),
+    (
+        "How does Astarus AI protect customer data and keep behavior isolated?",
+        "Customer-specific behavior is stored in LUTs that are scoped by tenant ID (and optionally by user or environment, like staging vs production). The base model weights are never updated with tenant data, so there is no cross-tenant contamination of core weights. This design makes it easier to reason about what data influences behavior, to reset or clone environments, and to comply with privacy and isolation requirements."
+    ),
 
-    # # --- Latency, cost & ops ---
+    # --- Latency, cost & ops ---
 
-    # (
-    #     "What are the latency and cost advantages of Astarus AI’s approach?",
-    #     "LUT updates are tiny compared to full model fine-tunes, and lookup + residual mixing inside a transformer layer is cheap relative to the rest of the forward pass. Because the base model stays frozen and LUTs are lightweight, inference latency stays close to the underlying model, and you avoid the repeated cost of training and hosting many separate fine-tuned checkpoints. In practice, teams can run many customized assistants on top of a single shared model fleet."
-    # ),
-    # (
-    #     "How does Astarus AI make it easier to operate AI in production?",
-    #     "Instead of juggling dozens of slightly different fine-tuned models, teams operate a small number of strong base models plus a structured set of LUTs. Behavior changes are tracked at the LUT level, so you can roll back or clone specific tenants, environments, or experiments without touching the base weights. That makes debugging, compliance reviews, and A/B experiments much simpler than in a traditional fine-tune-everything setup."
-    # ),
+    (
+        "What are the latency and cost advantages of Astarus AI’s approach?",
+        "LUT updates are tiny compared to full model fine-tunes, and lookup + residual mixing inside a transformer layer is cheap relative to the rest of the forward pass. Because the base model stays frozen and LUTs are lightweight, inference latency stays close to the underlying model, and you avoid the repeated cost of training and hosting many separate fine-tuned checkpoints. In practice, teams can run many customized assistants on top of a single shared model fleet."
+    ),
+    (
+        "How does Astarus AI make it easier to operate AI in production?",
+        "Instead of juggling dozens of slightly different fine-tuned models, teams operate a small number of strong base models plus a structured set of LUTs. Behavior changes are tracked at the LUT level, so you can roll back or clone specific tenants, environments, or experiments without touching the base weights. That makes debugging, compliance reviews, and A/B experiments much simpler than in a traditional fine-tune-everything setup."
+    ),
 
-    # # --- Developer integration & workflow ---
+    # --- Developer integration & workflow ---
 
-    # (
-    #     "How do developers integrate Astarus AI into their products?",
-    #     "Developers integrate Astarus AI through a straightforward API for text generation, teaching, and LUT configuration. They can call a generate endpoint for normal queries, a teach endpoint whenever a human provides a better answer, and management endpoints to inspect or reset LUTs for a given tenant or environment. This all plugs into existing backends or chat frontends without requiring teams to manage their own model training pipelines."
-    # ),
-    # (
-    #     "How does Astarus AI support experimentation and safe rollout?",
-    #     "Teams can spin up separate LUTs for staging, internal testing, and production on top of the same base model. They can trial new examples or behaviors in a staging LUT, compare outputs side by side, and only promote the behavior to a production LUT once they are happy with it. Because all changes are confined to LUT entries, experimentation is fast, reversible, and doesn’t risk corrupting the core model."
-    # ),
+    (
+        "How do developers integrate Astarus AI into their products?",
+        "Developers integrate Astarus AI through a straightforward API for text generation, teaching, and LUT configuration. They can call a generate endpoint for normal queries, a teach endpoint whenever a human provides a better answer, and management endpoints to inspect or reset LUTs for a given tenant or environment. This all plugs into existing backends or chat frontends without requiring teams to manage their own model training pipelines."
+    ),
+    (
+        "How does Astarus AI support experimentation and safe rollout?",
+        "Teams can spin up separate LUTs for staging, internal testing, and production on top of the same base model. They can trial new examples or behaviors in a staging LUT, compare outputs side by side, and only promote the behavior to a production LUT once they are happy with it. Because all changes are confined to LUT entries, experimentation is fast, reversible, and doesn’t risk corrupting the core model."
+    ),
 ]
-
-
 
 doc_tests = [
-    {
-        "name": "paraphrase_recall",
-        "goal": "Check that LUT-powered answers stay on-message for paraphrased questions, not just exact Q->A.",
-        "examples": [
-            "Give me some examples of products teams can build with Astarus AI.",
-            "What kinds of assistants or copilots can Astarus AI power?",
-
-        ]
-    },
-    {
-        "name": "summary_composition",
-        "goal": "Test whether the model can combine multiple LUT facts into a coherent high-level summary.",
-        "examples": [
-            "Describe Astarus AI’s technology and vision in 3–4 sentences.",
-            "In a short paragraph, explain who Astarus AI is, what it offers, and why someone would use it.",
-        ]
-    },
-    {
-        "name": "audience_style_adaptation",
-        "goal": "Check if LUT facts + base model adapt explanations to different audiences.",
-        "examples": [
-            "Explain Astarus AI to a non-technical founder in 3 sentences.",
-            "Explain Astarus AI to a machine-learning engineer.",
-        ]
-    },
-    {
-        "name": "contrast_rag_finetune",
-        "goal": "Test whether the model can reason about differences vs fine-tuning and RAG using LUT knowledge.",
-        "examples": [
-            "How is Astarus AI different from just fine-tuning a model for each customer?",
-            "Compare Astarus AI’s approach to a typical RAG-only setup.",
-        ]
-    },
-    {
-        "name": "general_knowledge_retention",
-        "goal": "Verify that LUT use does not destroy general knowledge of the base model.",
-        "examples": [
-            "What is 17 × 23?",
-            "Explain what private credit is.",
-            "What is a transformer in machine learning?",
-        ]
-    },
-    {
-        "name": "multi_tenant_isolation",
-        "goal": "Show that different LUTs (tenants) do not leak behavior into each other.",
-        "examples": [
-            # For lut_name='astarus_demo'
-            "Who founded Astarus AI?",
-            "What does Astarus AI do?",
-        ]
-    },
-    {
-        "name": "live_update_edit",
-        "goal": "Demonstrate that LUT updates and corrections actually change behavior over time.",
-        "examples": [
-            "What city is Astarus AI headquartered in?",
-        ]
-    }
+    "Who is TLG Capital and what is its core focus?",
+    "Who founded TLG Capital?",
+    "What is the investment strategy of TLG Africa Growth Impact Fund II (AGIF II)?",
+    "How does AGIF II use Standby Letters of Credit (SBLCs) to protect investor capital?",
+    "What sectors and countries does TLG primarily invest in across Sub-Saharan Africa?",
+    "What is TLG’s historical track record in terms of returns and capital preservation?",
+    "What is Blackstone?",
+    "What is 14*12?",
 ]
+
+
+def build_mistral_chat_prefix(
+    user_message: str,
+    system_prompt: str | None = SYSTEM_PROMPT,
+) -> str:
+    """
+    Build the prefix up to [/INST] for a single user turn using the Mistral
+    chat template: <s>[INST] system + user [/INST] assistant...</s>
+
+    We only return the part up to [/INST]; the model generates the answer.
+    """
+    user_message = user_message.strip()
+    if system_prompt:
+        content = system_prompt.strip() + "\n\n" + user_message
+    else:
+        content = user_message
+    return f"<s>[INST] {content}[/INST]"
+
 
 def post_reset():
     print("Resting")
     r = requests.post(f"{BASE_URL}/reset_models", timeout=500)
     print(r.text)
 
+
 def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
     """
-    Train the LUT with a single text label (optionally with some context).
-    'label' can be a Q&A pair or just information you want to imprint.
-    Retries up to 3 times over ~6 seconds if the request fails.
+    Train the LUT with a single Q&A-style update.
+
+    - label_context: the user question / prompt (plain text, no template).
+    - label:         the ideal assistant answer (plain text).
+
+    We wrap these into the Mistral-7B-Instruct chat template before sending:
+        label_context -> <s>[INST] system + question [/INST]
+        label         -> answer</s>
     """
-    label =  label 
+    label = label.strip()
+
+    chat_label_context = None
+    chat_label = label
+
     if label_context is not None:
-        label_context = label_context + "</s>"
+        question = label_context.strip()
+        chat_label_context = build_mistral_chat_prefix(question)
+        # For training, add </s> so the model learns EOS after the answer.
+        if not chat_label.endswith("</s>"):
+            chat_label = chat_label + "</s>"
+    else:
+        chat_label_context = None
+        chat_label = label
 
     payload = {
-        "label": label,
-        "label_context": label_context,
+        "label": chat_label,
+        "label_context": chat_label_context,
         "lut_name": lut_name,
         "model": MODEL,
         "wnn_blocks": WNN_BLOCKS,
@@ -217,10 +211,14 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
         except requests.RequestException as e:
             print(f"[TRAIN] Attempt {attempt+1}/3 failed: {e}")
             if attempt < 2:
-                print("Retrying after 500s")
+                print("Retrying after 100s")
                 time.sleep(100)
             else:
                 print("[TRAIN] All retries failed.")
+
+    if r is None:
+        print("[TRAIN] No response object; giving up.")
+        return
 
     try:
         resp = r.json()
@@ -229,12 +227,14 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
     print(f"[TRAIN] lut_name={lut_name} status={r.status_code} resp={resp}")
 
 
-def post_generate(lut_name: str, prompt: str) -> str:
+def post_generate(lut_name: str, user_message: str) -> str:
     """
-    Generate a completion given a prompt and lut_name.
+    Generate a completion given a user_message and lut_name, using the
+    Mistral-7B-Instruct chat template.
     Retries up to 3 times over ~6 seconds if the request fails.
     """
-    prompt = prompt 
+    user_message = user_message.strip()
+    prompt = build_mistral_chat_prefix(user_message)
 
     payload = {
         "prompt": prompt,
@@ -264,6 +264,9 @@ def post_generate(lut_name: str, prompt: str) -> str:
                 print("[GEN] All retries failed.")
                 raise
 
+    if r is None:
+        raise RuntimeError("[GEN] No response from server")
+
     resp = r.json()
     completion = resp.get("completion", "")
     resi = resp.get("residual", "")
@@ -271,6 +274,7 @@ def post_generate(lut_name: str, prompt: str) -> str:
     cost_scale = resp.get("cost_scale", None)
     print("Resi: ", resi, " Threshold: ", thresh, " Cost Scale: ", cost_scale)
     return completion
+
 
 def list_luts_from_api():
     r = requests.get(f"{BASE_URL}/lut_info", timeout=10)
@@ -296,9 +300,25 @@ def separator(title: str):
 
 def extract_assistant_answer(user_msg: str, completion: str) -> str:
     """
-    Extract only the *first* Assistant reply corresponding to THIS user_msg.
-    Then cut off anything after a '[INST]' marker if present.
+    Try to recover just the assistant's answer from the raw completion.
+
+    Handles:
+    1. Mistral chat template:
+         <s>[INST] ... [/INST] assistant answer</s>...
+       -> take everything after the last [/INST], strip </s>.
+    2. Legacy "User: ...\\nAssistant:" style prompts as a fallback.
     """
+    # --- Preferred: Mistral chat-style outputs ---
+    if "[/INST]" in completion:
+        # Grab text after the last [/INST]
+        after = completion.rsplit("[/INST]", 1)[-1]
+        # Strip any trailing </s> marker
+        eos_idx = after.find("</s>")
+        if eos_idx != -1:
+            after = after[:eos_idx]
+        return after.strip()
+
+    # --- Legacy fallback: "User: ...\\nAssistant:" pattern ---
     pattern_user = f"User: {user_msg}"
     idx_user = completion.find(pattern_user)
 
@@ -320,11 +340,12 @@ def extract_assistant_answer(user_msg: str, completion: str) -> str:
 
 
 def train_docs(lut_name: str, docs_list):
-    for i, doc in enumerate(docs_list):
+    """
+    Train the LUT on a list of (question, answer) pairs.
+    """
+    for i, (question, answer) in enumerate(docs_list):
         print("Training doc : ", i)
-        ctx = "User: " + doc[0] + "\nAssistant: "
-        lbl = doc[1]
-        post_train_lut(lut_name, label=lbl, label_context=ctx)
+        post_train_lut(lut_name, label=answer, label_context=question)
 
     print("Trained on example docs.")
 
@@ -343,41 +364,34 @@ def teach_qa(lut_name: str):
         print("  No answer given; cancelling.")
         return
 
-    label_context = f"User: {q}\nAssistant: "
-    label = a 
-    post_train_lut(lut_name, label, label_context)
+    # label_context is just the question; the chat template is built in post_train_lut
+    post_train_lut(lut_name, label=a, label_context=q)
     print("  ✅ Stored this Q&A in the LUT. Future answers should reflect it.")
 
 
 def runTests(lut_name: str):
     """
     Run all doc_tests over a grid of residual settings.
-    We keep the *shape* of RESIDUALS but scale them by different factors,
-    giving us 9 different residual configurations to probe.
+    We vary RESIDUALS by hand to see which setting behaves best.
     """
     global RESIDUALS
 
     residuals = [
-       # [0.02,  0.03,  0.03],
-       # [0.03,  0.05,  0.05],
-       # [0.045, 0.075, 0.075],
-       # [0.06,  0.10,  0.10],
-        [0.10, 0.15, 0.15],
-        [0.15, 0.20, 0.20],
-        [0.20, 0.25, 0.25],
-
-
+        [0.02, 0.03, 0.03],
+        [0.03, 0.05, 0.05],
+        [0.045, 0.075, 0.075],
+        [0.06, 0.10, 0.10],
+        # [0.10, 0.15, 0.15],
+        # [0.15, 0.20, 0.20],
+        # [0.20, 0.25, 0.25],
     ]
-
-    # 9 different scales to apply to the base residuals
 
     all_responses = []
 
     for i, residual in enumerate(residuals, start=1):
-        # Update RESIDUALS for this run
         RESIDUALS = residual
         print("\n" + "=" * 80)
-        print(f"[RUN {i}/9] Testing with RESIDUALS = {RESIDUALS}")
+        print(f"[RUN {i}/({len(residuals)})] Testing with RESIDUALS = {RESIDUALS}")
         print("=" * 80 + "\n")
 
         run_result = {
@@ -386,36 +400,15 @@ def runTests(lut_name: str):
         }
 
         for test in doc_tests:
-            print(f"--- Test: {test['name']} ---")
-            print(f"Goal: {test['goal']}\n")
-
-            test_result = {
-                "name": test["name"],
-                "goal": test["goal"],
-                "examples": []
-            }
-
-            for ex in test["examples"]:
-                # Use same prompt style as CLI
-                prompt = f"User: {ex}\nAssistant:"
-                print(f"Q: {ex}")
-                completion = post_generate(lut_name, prompt)
-                answer = extract_assistant_answer(ex, completion)
-                print(f"A: {answer}\n")
-
-                test_result["examples"].append({
-                    "prompt": ex,
-                    "raw_completion": completion,
-                    "answer": answer,
-                })
-
-            run_result["tests"].append(test_result)
+            print(f"Q: {test}")
+            completion = post_generate(lut_name, test)
+            answer = extract_assistant_answer(test, completion)
+            print(f"A: {answer}\n")
+            run_result["tests"].append(answer)
 
         all_responses.append(run_result)
 
-    # Restore original residuals
     print("\nAll test runs complete. Restored RESIDUALS to", RESIDUALS)
-
     return all_responses
 
 
@@ -442,6 +435,8 @@ def cli_demo():
     print("  /residual    Change the residual(s) for LUT blocks")
     print("  /threshold   Change the LUT activation threshold")
     print("  /cost        Change the cost")
+    print("  /luts        List available LUTs from the API")
+    print("  /reset       Reset models on the server")
     print("  /help        Show this help message")
     print("  /exit        Quit the demo")
     print()
@@ -471,6 +466,8 @@ def cli_demo():
             print("  /residual    Change the residual(s) for LUT blocks")
             print("  /threshold   Change the LUT activation threshold")
             print("  /cost        Change the cost")
+            print("  /luts        List available LUTs from the API")
+            print("  /reset       Reset models on the server")
             print("  /exit        Quit the demo\n")
             print(f"  Current THRESHOLD: {THRESHOLD}")
             print(f"  Current RESIDUALS: {RESIDUALS}\n")
@@ -519,7 +516,6 @@ def cli_demo():
 
                 val = input(prompt_str).strip()
                 if not val:
-                    # Keep existing if available, otherwise default to 15.0
                     new_residuals.append(existing if existing is not None else 15.0)
                 else:
                     try:
@@ -559,7 +555,7 @@ def cli_demo():
             else:
                 print("Cost unchanged.")
             continue
-        
+
         if user_msg.lower().startswith("/reset"):
             post_reset()
             continue
@@ -568,10 +564,9 @@ def cli_demo():
             list_luts_from_api()
             continue
 
-
-        prompt = f"User: {user_msg}\nAssistant:"
+        # Normal chat turn
         try:
-            completion = post_generate(lut_name, prompt)
+            completion = post_generate(lut_name, user_msg)
         except requests.RequestException as e:
             print(f"[ERROR] Request failed after retries: {e}")
             continue
@@ -587,11 +582,11 @@ def main():
 if __name__ == "__main__":
     main()
 
-    """
-    Try asking:
+"""
+Try asking:
     “What is Astarus AI?”
     “Who founded Astarus AI?”
     “Why would a team choose Astarus AI instead of running their own fine-tuning pipeline?”
     “What problems does Astarus AI solve for product and engineering teams?”
     “Describe Astarus AI’s technology and vision in 3–4 sentences.”
-    """
+"""
