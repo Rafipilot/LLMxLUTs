@@ -272,6 +272,21 @@ def post_generate(lut_name: str, prompt: str) -> str:
     print("Resi: ", resi, " Threshold: ", thresh, " Cost Scale: ", cost_scale)
     return completion
 
+def list_luts_from_api():
+    r = requests.get(f"{BASE_URL}/lut_info", timeout=10)
+    r.raise_for_status()
+    data = r.json()
+    print("\nAvailable LUTs:")
+    for lut in data.get("luts", []):
+        print(
+            f"  - {lut['lut_name']}: "
+            f"{lut['num_rows']} rows, "
+            f"{lut['num_blocks']} blocks, "
+            f"{lut['num_slots']} slots, "
+            f"{lut['approx_mb']} MB"
+        )
+    print()
+
 
 def separator(title: str):
     print("\n" + "=" * 80)
@@ -548,6 +563,11 @@ def cli_demo():
         if user_msg.lower().startswith("/reset"):
             post_reset()
             continue
+
+        if user_msg.lower().startswith("/luts"):
+            list_luts_from_api()
+            continue
+
 
         prompt = f"User: {user_msg}\nAssistant:"
         try:

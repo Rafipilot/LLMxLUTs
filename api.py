@@ -94,6 +94,61 @@ def _log_cuda_mem(tag: str, reset_peak: bool = False):
 
     if reset_peak:
         torch.cuda.reset_peak_memory_stats()
+def list_lut_metadata(lut_name: str | None = None):
+    """
+    Return basic metadata about stored LUTs from the SQLite DB.
+
+    If lut_name is given, only that LUT is summarized.
+    Otherwise, all LUTs are listed.
+    """
+    conn = _get_conn()
+    cur = conn.cursor()
+
+    if lut_name:
+        cur.execute(
+            """
+            SELECT
+                lut_name,
+                COUNT(*)                       AS num_rows,
+                COUNT(DISTINCT block_idx)      AS num_blocks,
+                COUNT(DISTINCT lut_slot)       AS num_slots,
+                SUM(LENGTH(lut_blob))          AS total_bytes
+            FROM lut_blocks
+            WHERE lut_name = ?
+            GROUP BY lut_name
+            """,
+            (lut_name,),
+        )
+    else:
+        cur.execute(
+            """
+            SELECT
+                lut_name,
+                COUNT(*)                       AS num_rows,
+                COUNT(DISTINCT block_idx)      AS num_blocks,
+                COUNT(DISTINCT lut_slot)       AS num_slots,
+                SUM(LENGTH(lut_blob))          AS total_bytes
+            FROM lut_blocks
+            GROUP BY lut_name
+            """
+        )
+
+    rows = cur.fetchall()
+    conn.close()
+
+    results = []
+    for row in rows:
+        name, num_rows, num_blocks, num_slots, total_bytes = row
+        total_bytes = total_bytes or 0
+        results.append({
+            "lut_name": name,
+            "num_rows": int(num_rows),
+            "num_blocks": int(num_blocks),
+            "num_slots": int(num_slots),
+            "total_bytes": int(total_bytes),
+            "approx_mb": round(total_bytes / (1024 * 1024), 4),
+        })
+    return results
 
 
 # =========================
@@ -1111,6 +1166,19 @@ def reset_models():
         "status": "ok",
         "gpu_memory_note": "Models cleared and CUDA cache emptied."
     })
+
+@app.route("/lut_info", methods=["GET"])
+def lut_info():
+    """
+    List LUTs stored in SQLite, with basic metadata.
+
+    Optional query param:
+      - ?lut_name=foo  → only return info for that LUT
+    """
+    lut_name = request.args.get("lut_name")
+    info = list_lut_metadata(lut_name=lut_name)
+    return jsonify({"luts": info})
+
 
 
 @app.route("/health", methods=["GET"])
