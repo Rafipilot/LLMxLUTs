@@ -600,20 +600,22 @@ def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_t
     generated = []
     cur_pos = min_prompt_len
 
-    eos_id = tokenizer.eos_id  # <--- your property
+    eos_id = tokenizer.eos_id  
     finished = torch.zeros(len(prompts), dtype=torch.bool, device=device)
 
     for _ in range(max_tokens):
-        # greedy next-token from last position
+        # should implement temperature!!
         sampled = torch.argmax(logprobs[:, -1, :], dim=-1)  # (B,)
 
         # Are we still inside the original prompt at this position?
         if cur_pos < input_mask.shape[1]:
             is_prompt_pos = input_mask[:, cur_pos]  # True = still prompt token for that example
+            next_token = torch.where(is_prompt_pos, input_tokens[:, cur_pos], sampled)
         else:
             is_prompt_pos = torch.zeros_like(sampled, dtype=torch.bool, device=device)
+            next_token = sampled
 
-        next_token = torch.where(is_prompt_pos, input_tokens[:, cur_pos], sampled)
+        
 
         # Logprob of chosen token (prompt or generated)
         all_logprobs.append(
