@@ -625,7 +625,7 @@ def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_t
         # Mark EOS hits, but ONLY on genuinely generated tokens
         # (i.e. not on teacher-forced prompt positions).
         if eos_id is not None:
-            eos_hit = (~is_prompt_pos) & (~finished) & (sampled == eos_id)
+            eos_hit = (~is_prompt_pos) & (~finished) & (next_token == eos_id)
             finished = finished | eos_hit
 
         generated.append(next_token[:, None])  # (B, 1)
@@ -657,8 +657,11 @@ def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_t
                 gen_tokens = gen_tokens[:eos_index]
 
             # Reconstruct output: shared prefix (up to min_prompt_len) + generated tail
-            full_ids = x[:min_prompt_len] + gen_tokens
-            text = tokenizer.decode(full_ids)
-            res.append(text)
+            prompt_ids = x[:min_prompt_len] + gen_tokens
+            gen_ids = gen_tokens
 
+            prompt_text = tokenizer.decode(prompt_ids)
+            answer_text = tokenizer.decode(gen_ids)
+
+            res.append(answer_text)
     return res, all_logprobs
