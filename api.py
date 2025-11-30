@@ -1192,4 +1192,4 @@ if __name__ == "__main__":
     get_mistral()
     print("[init] Mistral ready, starting server")
 
-    app.run(host="0.0.0.0", port=8000, debug=False, threaded=False)
+    app.run(host="0.0.0.0", port=8000, debug=False, use_reloader=False, threaded=False, )
