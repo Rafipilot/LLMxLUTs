@@ -389,7 +389,7 @@ class Transformer(nn.Module):
             if hasattr(blk, "pre_wnn_x"):
                 blk.pre_wnn_x = None
 
-        encoded_label = tokenizer.encode(label)
+        encoded_label = tokenizer.encode(label).append(tokenizer.eos_id) # train with a eos token at the end
         if len(encoded_label) == 0:
             return
         

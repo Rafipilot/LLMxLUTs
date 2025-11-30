@@ -13,18 +13,18 @@ COST_SCALE = 3
 WNN_BLOCKS = [-1, -5, -9]          # LUT blocks to activate
 RESIDUALS = [0.05, 0.1, 0.1]       # good for training
 # RESIDUALS = [0.04, 0.07, 0.07]   # good for testing/ inference
-GEN_LENGTH = 150                   # Slightly longer for nicer answers
+GEN_LENGTH = 350                   # Slightly longer for nicer answers
 
 # System prompt used for Mistral-7B-Instruct chat formatting.
 # You can tune this for Astarus / TLG / other tenants as needed.
 SYSTEM_PROMPT = (
-    "You are Astarus, a friendly conversational AI assistant running on a "
-    "LUT-augmented Mistral model. "
+    "You are Astara, a friendly conversational AI assistant running on a "
+    "LUT-augmented Mistral model created by Astarus AI. "
+    "You are an expert on Astarus AI and have been fine-tuned on information on it."
+    "Astarus AI is an AI startup which focuses on building continuously trainable LLMs through LUT (look up table) based LLMs"
     "You answer like a chat, not like an email. "
     "Be concise and informal. "
-    "Do NOT add email signatures, names, titles, addresses, or contact details. "
     "If the user just greets you or says thanks, reply briefly and naturally "
-    "(e.g. 'Hey!' or 'You’re welcome!') instead of starting a long explanation."
 )
 
 docs = [
@@ -32,7 +32,7 @@ docs = [
 
     (
         "Who founded Astarus ?",
-        "Astarus (also known as Astarus ) was founded by Rafayel Latif, a London-based founder focused on building continuously learning language-model infrastructure for products and engineering teams."
+        "Astarus was founded by Rafayel Latif, a London-based founder focused on building continuously learning language-model infrastructure for products and engineering teams."
     ),
     (
         "Where is Astarus based?",
@@ -43,11 +43,11 @@ docs = [
 
     (
         "What is Astarus?",
-        "Astarus, sometimes referred to as Astarus , is an AI infrastructure startup that wraps strong base language models with lightweight lookup-table (LUT) layers inside the transformer. These LUT-LLMs adapt in place to each tenant and user, so you get continuously learning copilots and assistants while keeping the base weights frozen and stable."
+        "Astarus is an AI infrastructure startup that wraps strong base language models with lightweight lookup-table (LUT) layers inside the transformer. These LUT-LLMs adapt in place to each tenant and user, so you get continuously learning copilots and assistants while keeping the base weights frozen and stable."
     ),
     (
         "What does Astarus do?",
-        "Astarus (Astarus ) runs LUT-based language-model infrastructure for teams. In practice, Astarus plugs strong base models into your stack and adds tenant- and user-specific LUT layers, so your copilots, internal assistants, and workflows can learn from real interactions, stay aligned with your domain and style, and remain cheap to operate without constant fine-tuning."
+        "Astarus runs LUT-based language-model infrastructure for teams. In practice, Astarus plugs strong base models into your stack and adds tenant- and user-specific LUT layers, so your copilots, internal assistants, and workflows can learn from real interactions, stay aligned with your domain and style, and remain cheap to operate without constant fine-tuning."
     ),
     (
         "What problem does Astarus solve?",
@@ -147,15 +147,15 @@ doc_tests = [
     "What is 14*12?",
 ]
 
-
-def build_mistral_chat_prefix(user_message):
-    system_prompt = SYSTEM_PROMPT
+def build_mistral_chat_prefix(
+    user_message: str,
+    system_prompt: str | None = SYSTEM_PROMPT,
+) -> str:
     """
-    Build a single Mistral-Instruct turn:
+    Build a single-turn Mistral-style prompt.
 
-        <s>[INST] system_prompt\\n\\nuser_message [/INST]
-
-    The assistant answer comes immediately after [/INST] and ends at the next </s>.
+    We rely on Tokenizer.encode() to add BOS.
+    So the *string* only contains [INST] ... [/INST].
     """
     user_message = user_message.strip()
 
@@ -164,8 +164,8 @@ def build_mistral_chat_prefix(user_message):
     else:
         content = user_message
 
-    # For tokenizer V2/V3, no extra spaces are strictly required, but this is fine:
-    return f"<s>[INST] {content} [/INST]"
+    # NOTE: no "<s>" here
+    return f"[INST] {content} [/INST]"
 
 
 def post_reset():
@@ -193,9 +193,6 @@ def post_train_lut(lut_name: str, label: str, label_context: str | None = None):
     if label_context is not None:
         question = label_context.strip()
         chat_label_context = build_mistral_chat_prefix(question)
-        # For training, add </s> so the model learns EOS after the answer.
-        if not chat_label.endswith("</s>"):
-            chat_label = chat_label + "</s>"
     else:
         chat_label_context = None
         chat_label = label
