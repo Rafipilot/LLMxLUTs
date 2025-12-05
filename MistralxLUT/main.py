@@ -448,9 +448,7 @@ class Transformer(nn.Module):
                 else:
                     mask = None
 
-                # =========================
-                # STEP 1: forward to block i (no_grad)
-                # =========================
+                # forward to block i (no_grad)
                 with torch.no_grad():
                     h = self.tok_embeddings(context_tensor)
                     freqs_cis = self.freqs_cis[position_ids]
@@ -458,7 +456,7 @@ class Transformer(nn.Module):
                     for block_idx in range(i):
                         h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
 
-                    # Run block i once to populate pre_wnn_x (detached)
+                    # Run block i once to populate pre_wnn_x (detached)- no need to do backwards 
                     _ = self.layers[i](h, freqs_cis, position_ids, mask)
                     pre_wnn_x_val = getattr(self.layers[i], "pre_wnn_x", None)
 
@@ -468,7 +466,7 @@ class Transformer(nn.Module):
                 pre_wnn_x = pre_wnn_x_val.detach().clone().requires_grad_(True)
                 h = pre_wnn_x
 
-                # Forward through blocks AFTER i with grad tracking
+                # Forward through blocks AFTER i with grad tracking- we need to be able to backwards up to this point...
                 for block_idx in range(i + 1, len(self.layers)):
                     h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
 
