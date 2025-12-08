@@ -21,3 +21,5 @@ MistralxLUT/mistral-7B-Instruct-v0.3/consolidated.safetensors
 MistralxLUT/mistral-7B-Instruct-v0.3/tokenizer.model.v3
 MistralxLUT/mistral-7B-Instruct-v0.3/params.json
 lut.db
+LUT.db-shm
+LUT.db-wal

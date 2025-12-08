@@ -313,9 +313,9 @@ class TransformerBlock(nn.Module):
                 wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
                 res_tensor = torch.zeros_like(out)
                 res_tensor[:, -1, :] = wnn_residual
-            sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
-            sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
-            out = out + (sim_scale * self.residual_scale)* res_tensor # this should be out of no grad
+            #sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
+            #sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
+            out = out + (highest_sim * self.residual_scale)* res_tensor # this should be out of no grad
 
         return out
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
@@ -385,7 +385,7 @@ class Transformer(nn.Module):
 
         # Disable LUT use during training + clear stale caches
         for blk in self.layers:
-            #blk.use_wnn = False  # enabling lut
+            blk.use_wnn = False  # disable lut blocks at the start then re enable at each point 
             if hasattr(blk, "pre_wnn_x"):
                 blk.pre_wnn_x = None
 
@@ -508,7 +508,7 @@ class Transformer(nn.Module):
                 pre_wnn_x.grad = None
                 self.layers[i].pre_wnn_x = None
 
-                block.use_wnn = True
+            block.use_wnn = True 
 
             print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
 
