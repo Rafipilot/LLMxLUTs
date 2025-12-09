@@ -313,9 +313,9 @@ class TransformerBlock(nn.Module):
                 wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
                 res_tensor = torch.zeros_like(out)
                 res_tensor[:, -1, :] = wnn_residual
-            sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
-            sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
-            out = out + (sim_scale * self.residual_scale)* res_tensor # this should be out of no grad
+            #sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
+            #sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
+            out = out + (highest_sim * self.residual_scale)* res_tensor # this should be out of no grad
 
         return out
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
@@ -331,7 +331,6 @@ class Transformer(nn.Module):
         self.args = args
         self.vocab_size = args.vocab_size
         self.n_layers = args.n_layers
-        self.residual_scale = 15
         assert self.vocab_size > 0
 
         self.tok_embeddings = nn.Embedding(args.vocab_size, args.dim)
@@ -385,7 +384,7 @@ class Transformer(nn.Module):
 
         # Disable LUT use during training + clear stale caches
         for blk in self.layers:
-            #blk.use_wnn = False  # enabling lut
+            blk.use_wnn = False  # disable lut blocks at the start then re enable at each point 
             if hasattr(blk, "pre_wnn_x"):
                 blk.pre_wnn_x = None
 
@@ -485,12 +484,15 @@ class Transformer(nn.Module):
                     allow_unused=False,
                 )
 
+                grad_norm = grad_pre_wnn_x.norm().item()
+                print(f"[trainLUT] Block {i}, position {k}: grad_norm={grad_norm:.4e}")
+
                 print(
                     f"[trainLUT] Block {i}, position {k}: grad computed in {datetime.now() - now_back}"
                 )
 
                 # Grad to residual
-                wnn_target_residual = self.residual_scale * (-grad_pre_wnn_x)  # [1, T, d]
+                wnn_target_residual = (-grad_pre_wnn_x)  # [1, T, d]
 
                 # Last time step
                 pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :]              # [1, d]
@@ -508,13 +510,13 @@ class Transformer(nn.Module):
                 pre_wnn_x.grad = None
                 self.layers[i].pre_wnn_x = None
 
-                block.use_wnn = True
+            # block.use_wnn = True # re enable this lut block
 
             print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
 
         # Re-enable LUT for inference
         for blk in self.layers:
-            blk.use_wnn = True
+            blk.use_wnn = True  # this should be redundant
 
 
     def saveLUTs(self, save_name):

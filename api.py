@@ -778,6 +778,9 @@ def text_generator_mistral(
         cost_scale=cost_scale,
     )
 
+    for block in model.layers:
+        block.LUT.resetCosts()
+
     outs, _ = generate([text_input], model, tokenizer, max_tokens=length)
     text = outs[0]
     return text
