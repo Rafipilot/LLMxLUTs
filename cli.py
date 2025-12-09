@@ -17,7 +17,7 @@ MODEL = "mistral"
 # If you want a more conservative LUT, bump this up slightly (e.g. 0.5).
 THRESHOLD = 0.65
 
-COST_SCALE = 0
+COST_SCALE = 8
 
 # 3-block LUT setup
 WNN_BLOCKS = [-1, -6, -11]        # LUT blocks to activate
@@ -43,104 +43,175 @@ Rules:
 """.strip()
 
 docs = [
+    # --- Identity & mandate ---
+
     (
-        "What is Astarus AI and what does it do?",
-        "Astarus AI is an AI infrastructure company that builds continuously learning language-model systems using lookup-table (LUT) layers inside transformer blocks. The platform lets companies give each user or tenant a personalised model without retraining the whole network."
+        "What is TLG Capital?",
+        "TLG Capital is a specialist investment firm focused on small and medium-sized enterprises (SMEs) in Africa, particularly Sub-Saharan Africa, providing flexible private-credit solutions to growth-stage businesses that are underserved by traditional banks."
     ),
     (
-        "Who founded Astarus AI and when was it started?",
-        "Astarus AI was founded by Rafayel Latif in 2025 in London."
+        "When was TLG Capital founded?",
+        "TLG Capital was founded in 2010."
     ),
     (
-        "Where is Astarus AI based?",
-        "Astarus AI is based in London, with most development currently happening in the UK."
+        "Who founded TLG Capital?",
+        "TLG Capital was founded by Zain Latif."
     ),
     (
-        "What core problem is Astarus AI trying to solve?",
-        "Astarus AI is trying to solve the problem of making large language models continuously learn from new data and user interactions without expensive re-training and without catastrophic forgetting."
+        "Who are the main leaders at TLG Capital?",
+        "The main leaders at TLG Capital include founder Zain Latif, co-founder and CFO Isha Doshi, and senior investment professionals such as Isaac Marshal and Aum Thacker."
     ),
     (
-        "How is Astarus AI different from a typical LLM API provider?",
-        "Unlike typical LLM APIs that serve a static model plus retrieval, Astarus AI embeds LUT layers directly inside the transformer so the model can update its internal behaviour per-tenant or per-user in real time, with very low compute and no full fine-tuning."
+        "Where is TLG Capital based?",
+        "TLG Capital is based in London in the United Kingdom."
     ),
     (
-        "What is a LUT-based LLM in the context of Astarus AI?",
-        "A LUT-based LLM at Astarus AI is a transformer model where some blocks contain embedded lookup tables that store gradient-based updates for internal embeddings. During inference, those LUT outputs are mixed back into the residual stream so the model behaves as if it had been fine-tuned, without changing the base weights."
+        "Which regions does TLG Capital mainly invest in?",
+        "TLG Capital mainly invests across Sub-Saharan Africa, focusing on markets such as Nigeria, Ghana, Uganda, Rwanda, Tanzania and other countries where SMEs and mid-market companies are often underserved by local banks and international capital."
     ),
     (
-        "Which base models does Astarus AI currently use?",
-        "Astarus AI has integrated LUT layers into several open models, including GPT-2 XL–class architectures and Mistral-7B, and is gradually extending the approach to other modern open-source LLMs."
+        "What type of investment firm is TLG Capital?",
+        "TLG Capital is primarily a private-credit investor, focusing on lending and structured credit rather than traditional control private equity."
+    ),
+
+    # --- Problem, strategy & sectors ---
+
+    (
+        "What problem is TLG Capital trying to solve for African SMEs and mid-market companies?",
+        "TLG Capital is trying to solve the problem of limited access to flexible growth capital and essential services for African SMEs and mid-market companies, helping them fund expansion, working capital and capex when local banks cannot provide sufficient finance."
     ),
     (
-        "Who are the primary target users or customers of Astarus AI?",
-        "Astarus AI mainly targets funds, research teams and early-stage companies that need domain-specific assistants, research copilots or internal knowledge agents that actually remember and adapt over time."
+        "Which sectors does TLG Capital mainly focus on?",
+        "TLG Capital mainly focuses on resilient, essential sectors such as healthcare, financial services and fintech, agriculture and food processing, telecom and fibre infrastructure, logistics, selected manufacturing and education."
     ),
     (
-        "How does Astarus AI’s approach compare to RAG-based systems?",
-        "RAG systems bolt retrieval onto a static model, while Astarus AI inserts LUTs inside the model so it can internalise new facts and patterns. RAG is great for documents; LUT-based updates are better when you need the model’s actual behaviour and style to shift based on experience."
+        "How would you describe TLG Capital’s investment strategy?",
+        "TLG Capital’s strategy is to provide flexible private-credit to growth-stage African companies in essential sectors, using tailored structures that balance attractive risk-adjusted returns for investors with measurable real-economy development."
     ),
     (
-        "How does Astarus AI’s approach compare to LoRA fine-tuning?",
-        "LoRA still requires a separate fine-tuning step and extra weights per task. Astarus AI’s LUT approach updates only table entries at inference time, so adaptation is cheaper, faster and can be done per user or tenant without spinning up a full fine-tune."
+        "What kinds of instruments does TLG Capital typically use?",
+        "TLG Capital typically uses senior secured loans, mezzanine and structured credit facilities, risk-sharing arrangements with local banks, and other bespoke private-credit structures rather than plain-vanilla unsecured lending."
     ),
     (
-        "What kind of use cases is Astarus AI focusing on first?",
-        "Initial use cases include domain assistants for investment firms, continuously learning research agents, and internal copilots that can remember firm-specific facts, style preferences and decision history over time."
+        "How does TLG Capital usually work with local African banks to support SME lending?",
+        "TLG Capital often partners with local African banks through co-lending, risk-sharing and structured credit facilities that allow banks to extend more credit to SMEs while relying on TLG’s structuring expertise, sector knowledge and additional capital."
+    ),
+
+    # --- Scale, AUM & track record ---
+
+    (
+        "What is TLG Capital’s approximate assets under management?",
+        "TLG manages around two hundred million US dollars across its funds and mandates."
     ),
     (
-        "How does Astarus AI personalise a model for a specific client or tenant?",
-        "Astarus AI loads a tenant-specific LUT alongside a shared base model. As that tenant interacts, the LUT stores gradient-derived updates for their domain, which are applied on the fly at inference, effectively giving them a “personal model” without duplicating the core weights."
+        "How much capital has TLG Capital deployed in SMEs?",
+        "TLG has deployed roughly one hundred million US dollars into SME-focused deals across Africa."
     ),
     (
-        "Why is continuous learning important for Astarus AI’s vision?",
-        "Continuous learning is important because most real-world environments change quickly. Astarus AI wants models that can absorb new information, adapt to user behaviour and refine their answers over time without a full retraining cycle."
+        "What is the total value of transactions TLG Capital has been involved in?",
+        "Since inception, TLG has been involved in transactions with a total value of around one and a half billion US dollars."
     ),
     (
-        "What stage is Astarus AI currently at in terms of product maturity?",
-        "Astarus AI is in an early product stage with working LUT-augmented models, an API layer and initial demo spaces for specific partners, and is now moving towards more polished ‘Spaces’ that clients can use directly."
+        "Who are TLG Capital’s typical counterparties or borrowers?",
+        "TLG usually works with African SMEs and mid-market companies in essential sectors, and with local banks or specialised lenders that finance these businesses."
+    ),
+
+    # --- Funds: AGIF II & platform ---
+
+    (
+        "What is AGIF II within TLG Capital’s platform?",
+        "AGIF II, or TLG Africa Growth Impact Fund II, is TLG Capital’s flagship private-credit fund that provides flexible financing to African SMEs and mid-market companies while targeting both commercial returns and measurable development impact."
     ),
     (
-        "What does the Astarus AI API provide to developers?",
-        "The Astarus AI API exposes endpoints for text generation with LUT-augmented models, training LUTs on new data or interactions, inspecting LUT stats, and configuring hyperparameters like residual strength, thresholds and block selection."
+        "What does AGIF II mainly invest in?",
+        "AGIF II mainly invests in resilient African SMEs and mid-market companies in sectors such as healthcare, financial services and fintech, agriculture and food processing, telecom and fibre infrastructure, logistics, selected manufacturing and education."
     ),
     (
-        "How does Astarus AI think about safety and hallucinations?",
-        "By storing LUT updates in specific blocks and mixing them carefully into the residual stream, Astarus AI can reduce certain hallucinations on narrow domains, because the model has explicit internal corrections instead of guessing from generic pre-training only."
+        "What financial returns does AGIF II aim to deliver for investors?",
+        "AGIF II targets net USD returns in roughly the low-to-mid teens per annum over the life of the fund, primarily through current income and capital preservation rather than high-risk equity-style upside."
     ),
     (
-        "What makes Astarus AI’s technology hard to replicate?",
-        "Astarus AI’s advantage comes from the detailed engineering of LUT layers inside transformer blocks, the training and retrieval logic around them, and the practical experience of making them behave well at scale on real partner use cases."
+        "What development impact does AGIF II aim to achieve?",
+        "AGIF II aims to expand access to essential services such as healthcare, education, financial inclusion and food security in African markets, while supporting job creation, local value-add and more resilient economic growth."
     ),
     (
-        "How does Astarus AI plan to make money?",
-        "Astarus AI plans to charge for hosted LUT-augmented models on a usage basis, with higher tiers for dedicated infrastructure, per-tenant LUT storage, and custom integrations for specific partners such as funds or research firms."
+        "Who are the typical investors in TLG Capital’s funds?",
+        "Typical investors in TLG Capital’s funds include development finance institutions, impact investors, family offices and other institutional investors focused on African private-credit and impact."
+    ),
+
+    # --- Risk, structure & governance ---
+
+    (
+        "How does TLG Capital manage risk in its transactions?",
+        "TLG Capital manages risk through rigorous credit analysis, strong collateral and security packages, covenants, risk-sharing structures with local banks and active portfolio monitoring over the life of each transaction."
     ),
     (
-        "What is Astarus AI’s long-term vision for these LUT-based systems?",
-        "Long term, Astarus AI wants to build model systems that accumulate ‘experience’ over time, not just retrieve documents, so that each model instance becomes a continuously learning digital collaborator embedded in a client’s workflow."
+        "How do TLG Capital’s flexible credit structures help businesses compared with plain-vanilla bank loans?",
+        "TLG Capital’s flexible credit structures are tailored to a company’s cash flows and collateral, offer more flexible repayment profiles and can be structured around local constraints, helping businesses fund growth and working capital when plain-vanilla bank loans are unavailable or too rigid."
     ),
     (
-        "How would you explain Astarus AI’s edge in one or two sentences?",
-        "Astarus AI gives organisations models that can actually learn from their own usage in a controlled way. Instead of serving a frozen LLM plus a database, it serves a continuously updating model with an internal memory layer tuned to their domain."
-    )
+        "How does TLG Capital integrate ESG and impact into its investment process?",
+        "TLG Capital integrates ESG and impact by screening opportunities for environmental and social risks, assessing expected development outcomes, including impact metrics in its investment decision-making, and monitoring these outcomes throughout the life of each investment."
+    ),
+    (
+        "What kind of impact does TLG Capital aim to have on jobs and local economies?",
+        "TLG Capital aims to support companies that create and sustain local jobs, strengthen value chains in essential sectors and improve access to services such as healthcare, financial products and basic consumer goods in African markets."
+    ),
+    (
+        "What is the role of the investment committee at TLG Capital?",
+        "TLG Capital’s investment committee reviews and approves all material transactions, ensuring that each investment fits the firm’s risk, return and impact criteria and that key risks are properly identified and mitigated."
+    ),
+
+    # --- Sourcing, portfolio support & differentiation ---
+
+    (
+        "How does TLG Capital source investment opportunities?",
+        "TLG Capital sources opportunities through long-term relationships with local banks, entrepreneurs and advisers across Africa, as well as through repeat counterparties and referrals within its existing portfolio."
+    ),
+    (
+        "How does TLG Capital support its portfolio companies beyond providing capital?",
+        "Beyond providing capital, TLG Capital supports portfolio companies with structuring advice, governance and reporting support, introductions to local and international partners, and ongoing engagement on strategy, risk and impact."
+    ),
+    (
+        "What differentiates TLG Capital from other Africa-focused investment firms?",
+        "TLG Capital is differentiated by its focus on flexible private-credit, its willingness to structure bespoke transactions in complex African markets, its emphasis on essential sectors and its combination of commercial discipline with clear, measurable development impact goals."
+    ),
+    (
+        "Why does TLG Capital focus on essential sectors rather than discretionary consumption?",
+        "TLG Capital focuses on essential sectors because demand for healthcare, food, basic financial services, education and core infrastructure tends to be more resilient through economic cycles and has clearer, more measurable development impact."
+    ),
+    (
+        "Why does TLG Capital emphasise working with local banks and on-the-ground partners?",
+        "TLG Capital emphasises working with local banks and on-the-ground partners because they understand local borrowers, regulations and market dynamics, allowing TLG to structure more appropriate, scalable and risk-aware financing solutions."
+    ),
 ]
 
 doc_tests = [
-    "In simple terms, what is Astarus AI and what does it do?",
-    "Who founded Astarus AI, and when and where was it started?",
-    "What core problem is Astarus AI trying to solve with its models?",
-    "How is Astarus AI different from a typical LLM API provider?",
-    "What does it mean that Astarus models are LUT-based?",
-    "How does Astarus AI’s LUT approach differ from normal RAG systems?",
-    "How does Astarus AI’s LUT approach differ from LoRA-style fine-tuning?",
-    "Who are the main types of customers Astarus AI is built for?",
-    "What are the first use cases Astarus AI is focusing on?",
-    "How does Astarus AI personalise a model for a specific client or tenant?",
-    "Why is continuous learning important to Astarus AI’s vision?",
-    "What does the Astarus AI API let developers do with LUT-augmented models?",
-    "How can LUT-based models help reduce hallucinations on a narrow domain?",
-    "What makes Astarus AI’s technology hard to copy?",
-    "In one or two sentences, what is Astarus AI’s long-term vision?"
+    # Identity & mandate
+    "In simple terms, what does TLG Capital do?",
+    "When was TLG Capital founded, and who founded it?",
+    "Where is TLG Capital based, and which African regions does it mainly focus on?",
+
+    # Problem, sectors & strategy
+    "What key problem is TLG Capital trying to solve for African SMEs and mid-market companies?",
+    "Which core sectors does TLG Capital mainly focus on when investing?",
+    "How would you briefly describe TLG Capital's investment strategy as a private-credit investor?",
+
+    # Scale, AUM & track record
+    "Roughly how much assets under management does TLG Capital have?",
+    "Give a ballpark figure for how much capital TLG Capital has deployed into SME-focused deals across Africa.",
+
+    # AGIF II & platform
+    "What is AGIF II and how does it fit within TLG Capital's overall platform?",
+    "What kinds of companies and sectors does AGIF II mainly invest in?",
+    "What net return range does AGIF II aim to deliver to its investors, and what type of impact does it target?",
+
+    # Risk, structure & differentiation
+    "How does TLG Capital manage and mitigate risk in its transactions?",
+    "In what ways do TLG Capital's flexible credit structures help businesses compared with plain-vanilla bank loans?",
+    "What differentiates TLG Capital from other Africa-focused investment firms?",
+    "Why does TLG Capital emphasise working with local banks and on-the-ground partners?",
+    "What is Blackstone?"
 ]
 
 # ---------------------------------------------------------------------
@@ -274,7 +345,7 @@ def post_generate(lut_name: str, user_message: str) -> str:
 
 
 def list_luts_from_api():
-    r = requests.get(f"{BASE_URL}/lut_info", timeout=10)
+    r = requests.get(f"{BASE_URL}/lut_info", timeout=20)
     r.raise_for_status()
     data = r.json()
     print("\nAvailable LUTs:")
@@ -340,7 +411,9 @@ def build_residual_grid():
     Tuned around the region that gave clean, numerically accurate answers.
     """
     residuals = [
-        [0.05, 0.04, 0.03]
+
+    # --- all three active, light to medium ---
+    [0.5, 0.5, 0.5]
     ]
     return residuals
 

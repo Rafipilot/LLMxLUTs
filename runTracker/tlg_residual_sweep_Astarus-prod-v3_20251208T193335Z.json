@@ -1,0 +1,109 @@
+{
+  "lut_name": "Astarus-prod-v3",
+  "timestamp_utc": "20251208T193335Z",
+  "threshold": 0.7,
+  "cost_scale": 8,
+  "wnn_blocks": [
+    -1,
+    -6,
+    -11
+  ],
+  "original_residuals": [
+    1,
+    1,
+    1
+  ],
+  "doc_tests": [
+    "In simple terms, what is Astarus AI and what does it do?",
+    "Who founded Astarus AI, and when and where was it started?",
+    "What core problem is Astarus AI trying to solve with its models?",
+    "How is Astarus AI different from a typical LLM API provider?",
+    "What does it mean that Astarus models are LUT-based?",
+    "How does Astarus AI’s LUT approach differ from normal RAG systems?",
+    "How does Astarus AI’s LUT approach differ from LoRA-style fine-tuning?",
+    "Who are the main types of customers Astarus AI is built for?",
+    "What are the first use cases Astarus AI is focusing on?",
+    "How does Astarus AI personalise a model for a specific client or tenant?",
+    "Why is continuous learning important to Astarus AI’s vision?",
+    "What does the Astarus AI API let developers do with LUT-augmented models?",
+    "How can LUT-based models help reduce hallucinations on a narrow domain?",
+    "How does Astarus AI’s approach compare to RAG based systems?",
+    "How is Astarus AI different from a typical LLM API provider?",
+    "What is AI"
+  ],
+  "runs": [
+    {
+      "residuals": [
+        0.2,
+        0.5,
+        0.75
+      ],
+      "tests": [
+        {
+          "question": "In simple terms, what is Astarus AI and what does it do?",
+          "answer": "Astarus AI is an AI infrastructure company that builds continuously learning language-model systems using lookup-table (LUT) layers. The platform lets companies give each user or tenant a personalised model without retraining the whole network."
+        },
+        {
+          "question": "Who founded Astarus AI, and when and where was it started?",
+          "answer": "Astarus AI was founded by Rafayel Latif in 2025 in London."
+        },
+        {
+          "question": "What core problem is Astarus AI trying to solve with its models?",
+          "answer": "Astarus AI is trying to solve the problem of making large language models continuously learn from new data and user interactions without expensive re-training and without catastrophic forgetting."
+        },
+        {
+          "question": "How is Astarus AI different from a typical LLM API provider?",
+          "answer": "Astarus AI embeds LUT layers directly inside the transformer so the model can update its internal behaviour per-tenant or per-user in real time, without spinning up a full fine-tune."
+        },
+        {
+          "question": "What does it mean that Astarus models are LUT-based?",
+          "answer": "LUT-based models in Astarus AI are Lookup Table models. During inference, those models use pre-computed tables to quickly map input values to output values. This approach allows for faster inference times compared to traditional neural network models."
+        },
+        {
+          "question": "How does Astarus AI’s LUT approach differ from normal RAG systems?",
+          "answer": "Astarus AI’s LUT (Look-Up Table) approach differs from normal RAG (Red, Amber, Green) systems in several ways:\n\n1. Granularity: LUT provides a more granular and precise classification of data points compared to RAG systems.\n\n2. Continuous scale: LUT uses a continuous scale for classification, whereas RAG systems typically use a discrete three-level scale (Red, Amber, Green).\n\n3. Customizable thresholds: LUT allows for customizable thresholds for each data point, whereas RAG systems typically use predefined thresholds for each level (Red, Amber, Green).\n\n4. Flexible data types: LUT can handle a wide variety of data types, including numerical, categorical, and time-series data, whereas RAG systems are typically limited to numerical data.\n\n5. Real-time updates: LUT can provide real-time updates as new data points are added or existing data points are updated, whereas RAG systems may require periodic updates to reflect changes in the data.\n\nIn summary, Astarus AI’s LUT approach provides a more granular, continuous, customizable, flexible, and real-time classification of data points compared to normal RAG systems."
+        },
+        {
+          "question": "How does Astarus AI’s LUT approach differ from LoRA-style fine-tuning?",
+          "answer": "Astarus AI’s LUT (Look-Up Table) approach differs from LoRA-style fine-tuning in several ways:\n\n1. LUT approach updates only table entries at inference time, while LoRA fine-tunes the weights of the layers during inference.\n\n2. LUT approach is more memory-efficient, as it requires less memory to store the LUT compared to the weights of the layers in LoRA.\n\n3. LUT approach is more flexible, as it can be applied to any model, while LoRA fine-tuning is typically applied to transformer blocks.\n\nIn summary, Astarus AI’s LUT approach differs from LoRA-style fine-tuning in terms of memory efficiency, flexibility, and the way it updates the model during inference."
+        },
+        {
+          "question": "Who are the main types of customers Astarus AI is built for?",
+          "answer": "Astarus AI mainly caters to three types of customers:\n\n1. Businesses: These can range from small startups to large corporations. They use Astarus AI for various purposes such as customer service, data analysis, and internal copilots.\n\n2. Developers and Engineers: These individuals use Astarus AI as a tool to help them with their work. This can include tasks such as code review, debugging, and testing.\n\n3. Researchers and Scientists: These professionals use Astarus AI for various research purposes. This can include tasks such as data analysis, machine learning, and natural language processing.\n\nIn summary, Astarus AI mainly caters to businesses, developers, engineers, researchers, and scientists."
+        },
+        {
+          "question": "What are the first use cases Astarus AI is focusing on?",
+          "answer": "Initially, Astarus AI is focusing on domain assistants for investment firms, continuously learning research agents, and internal copilots that can remember firm-specific facts, styles, and procedures."
+        },
+        {
+          "question": "How does Astarus AI personalise a model for a specific client or tenant?",
+          "answer": "Astarus AI loads a tenant-specific LUT alongside a shared base model. As that tenant interacts, the LUT stores gradient-derived updates for their domain, which are applied on the fly at inference, effectively giving them a \"personal model\" without duplicating the core weights."
+        },
+        {
+          "question": "Why is continuous learning important to Astarus AI’s vision?",
+          "answer": "\n\nContinuous learning is important because most real-world environments change quickly. Astarus AI wants models that can absorb new information, adapt to user behaviour and refine their answers over time without a full retraining cycle."
+        },
+        {
+          "question": "What does the Astarus AI API let developers do with LUT-augmented models?",
+          "answer": "The Astarus AI API exposes endpoints for text generation with LUT-augmented models. This means that developers can use the API to create text outputs that are visually distinct due to the application of Lookup Tables (LUTs)."
+        },
+        {
+          "question": "How can LUT-based models help reduce hallucinations on a narrow domain?",
+          "answer": "LUT-based models can help reduce hallucinations on a narrow domain by providing pre-computed outputs for specific input patterns. During inference, those LUT outputs are mixed back into the residual stream so the model behaves as if it had been fine-tuned, without changing the base weights. This approach can help reduce certain hallucinations on a narrow domain, because the model has explicit internal corrections instead of guessing from generic pre-training only."
+        },
+        {
+          "question": "How does Astarus AI’s approach compare to RAG based systems?",
+          "answer": "Astarus AI's approach is based on a combination of rule-based and machine learning techniques. This allows for a more flexible and adaptable system compared to rule-based systems alone.\n\nOn the other hand, RAG systems bolt retrieval onto a static model, while Astarus AI's approach updates its internal behavior per-tenant or per-user in real time, making it more adaptable to user behavior and refining its answers over time."
+        },
+        {
+          "question": "How is Astarus AI different from a typical LLM API provider?",
+          "answer": "Astarus AI embeds LUT layers directly inside the transformer so the model can update its internal behaviour per-tenant or per-user in real time, without spinning up a full fine-tune."
+        },
+        {
+          "question": "What is AI",
+          "answer": "AI, or Artificial Intelligence, refers to the simulation of human intelligence in machines that are programmed to think and learn like humans. AI can be used in a variety of applications, including natural language processing, computer vision, and robotics."
+        }
+      ]
+    }
+  ]
+}
