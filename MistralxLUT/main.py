@@ -379,6 +379,10 @@ class Transformer(nn.Module):
 
         return self.output(self.norm(h)).float()
 
+    def _compute_lut_key(self, block, pre_wnn_x, encoded_ctx, k):
+        # --- baseline:(last token) ---
+        key = pre_wnn_x[:, -1, :]  # [1, d]
+        return key
 
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
 
@@ -501,7 +505,9 @@ class Transformer(nn.Module):
                 print(f"[trainLUT] Training LUT on block {i}")
                 now_lut = datetime.now()
                 with torch.no_grad():
-                    block.LUT.train(pre_wnn_x_last, target_residual_last)
+                    key_vec = self._compute_lut_key(block, pre_wnn_x.detach(), encoded_ctx, k)
+                    value_vec = wnn_target_residual.detach()[:, -1, :]
+                    block.LUT.train(key_vec, value_vec)
                 print(
                     f"[trainLUT] Block {i}, position {k}: LUT updated in {datetime.now() - now_lut}"
                 )
