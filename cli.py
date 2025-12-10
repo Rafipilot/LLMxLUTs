@@ -32,9 +32,10 @@ GEN_LENGTH = 350  # Slightly longer for nicer answers
 
 # System prompt used for Mistral-7B-Instruct chat formatting.
 SYSTEM_PROMPT = """
-You are a helpful domain assistant for Astarus AI.
+You are a helpful domain assistant for TLG Capital, it may also be refered to as just TLG.
 
 Rules:
+- DO NOT answer immediately, take a couple of seconds to reason about the question.
 - ALWAYS answer in English only, even if the user writes in another language.
 - Do not repeat the user's question, only answer it.
 - Be factually accurate and concise.

@@ -78,6 +78,8 @@ class Attention(nn.Module):
 
         self.scale = self.args.head_dim**-0.5
 
+        self.attn_scores = None ## for lut
+
         self.wq = nn.Linear(
             args.dim,
             args.n_heads * args.head_dim,
@@ -152,6 +154,7 @@ class Attention(nn.Module):
 
         scores = scores.float()
         scores = nn.functional.softmax(scores, dim=-1).type_as(query)
+        self.attn_scores = scores
         output = torch.matmul(scores, value)  # (bs, n_local_heads, slen, head_dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
         return self.wo(output)
@@ -180,62 +183,86 @@ class FeedForward(nn.Module):
     def forward(self, x) -> torch.Tensor:
         return self.w2(nn.functional.silu(self.w1(x)) * self.w3(x))
 
-class LUT():
+class LUT:
     def __init__(self):
-        self.lookupTable = [] # main lookup table
-        self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
+        self.lookupTable = []          # each row: [2, d] (key, value)
+        self.lookupTableMetaData = []  # you can ignore this for now
         self.CS_threshold = 0.25
         self.cost_scale = 0.0
 
     def train(self, xs, ys):
+        # xs, ys: [B, d] or iterable of [d]
         for x, y in zip(xs, ys):
             print("adding rows...")
-            row = torch.stack([x, y])
+            x = x.detach().clone()
+            y = y.detach().clone()
+            row = torch.stack([x, y])     # [2, d]
             self.lookupTable.append(row)
             self.lookupTableMetaData.append([1000, 0])
 
-    
-    def forward(self, x):
-        x = x[-1, -1, :]
-        x = x.squeeze()
-        closest_row_output = None
-        if len(self.lookupTable) == 0:
+    def forward(self, x: torch.Tensor):
+        """
+        x can be:
+          - [B, T, d]
+          - [B, d]
+          - [d]
+        Returns (residual: [d], highest_sim: float)
+        """
+        if x is None:
             return None, None
-        lookup_vecs = torch.stack([row[0] for row in self.lookupTable])
-        outputs = torch.stack([row[1] for row in self.lookupTable])
 
-        for i in range(len(self.lookupTableMetaData)):
-            meta = self.lookupTableMetaData[i]
-            meta[0] = meta[0] + 1
-            self.lookupTableMetaData[i] = meta
+        # --- 1. normalize input into a single [d] vector q ---
+        if x.dim() == 3:
+            # [B, T, d] -> last batch, last token
+            q = x[-1, -1, :]
+        elif x.dim() == 2:
+            # [B, d] -> last batch
+            q = x[-1, :]
+        elif x.dim() == 1:
+            q = x
+        else:
+            raise ValueError(f"LUT.forward: unsupported x.dim()={x.dim()}, shape={x.shape}")
 
-        ### adding a punishment/ cost for looking up memories which have come up just before
-        costs = []
-        for row in self.lookupTableMetaData:
-            number_of_look_up_since_last_hit = row[0]
+        q = q.squeeze()
+        q = torch.nan_to_num(q, nan=0.0, posinf=0.0, neginf=0.0)
 
-            cost = (1/(number_of_look_up_since_last_hit+1))
-            costs.append(cost)
+        # --- 2. empty table: no effect ---
+        if len(self.lookupTable) == 0:
+            return torch.zeros_like(q), 0.0
 
-        costs = torch.tensor(costs, device=device)
-        sims = F.cosine_similarity(lookup_vecs, x.unsqueeze(0), dim=1)# - (1/10)*torch.norm(lookup_vecs- x.unsqueeze(0), dim=1)  # dim one since N, d
-        sims = sims - self.cost_scale*costs
-        
+        device = q.device
+        dtype_q = q.dtype
+
+        # --- 3. stack keys and values: [N, d] each ---
+        keys = torch.stack(
+            [row[0].to(device=device, dtype=torch.float32) for row in self.lookupTable]
+        )  # [N, d]
+        values = torch.stack(
+            [row[1].to(device=device, dtype=dtype_q) for row in self.lookupTable]
+        )  # [N, d]
+
+        N, d = keys.shape
+
+        keys = torch.nan_to_num(keys, nan=0.0, posinf=0.0, neginf=0.0)
+        q_f32 = q.to(torch.float32)
+        q_f32 = torch.nan_to_num(q_f32, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # --- 4. cosine similarity: sims shape [N] ---
+        sims = F.cosine_similarity(keys, q_f32.unsqueeze(0).expand(N, d), dim=-1)  # [N]
+        sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0)
+        sims = sims.clamp(-1.0, 1.0)
+
+        # --- 5. pick best row ---
         max_sim_idx = torch.argmax(sims)
         highest_sim = sims[max_sim_idx].item()
-        print("highest sim: ", highest_sim)
+        best_residual = values[max_sim_idx]  # [d]
 
+        if highest_sim < self.CS_threshold:
+            print("Low similarity, cs threshold:", self.CS_threshold)
+            return torch.zeros_like(best_residual), 0.0
 
-        closest_row_output = outputs[max_sim_idx]
-        if highest_sim < self.CS_threshold:  # arbitrary threshold- This must be fixed as it is a very temp workaround. The best fix would be to somehow have an active threshold based 
-            print("Low similarity, cs threshold: ", self.CS_threshold)
-            return torch.zeros_like(closest_row_output), 0.0
-        row_meta_data = self.lookupTableMetaData[max_sim_idx]
-        self.lookupTableMetaData[max_sim_idx]= [0, row_meta_data[1]+1]
-        # Note to self
-        # output of forward could take into account more rows by adjusting the outputs in a sort of
-        #  weighted average effected by the relative cosine distance 
-        return closest_row_output, highest_sim
+        return best_residual, highest_sim
+
     
     def resetLUT(self):
         self.lookupTable = [] # main lookup table
@@ -286,6 +313,65 @@ class TransformerBlock(nn.Module):
             self.use_wnn = False
         self.pre_wnn_x = None  
         self.residual_scale = 15
+        
+    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.5):
+        """
+        pre_wnn_x: [1, T, d]  (hidden states at this block)
+        block.attention.attn_scores: [1, H, T_q, T_k] (softmaxed attention)
+        returns: [1, d] key
+        """
+        import torch
+        import torch.nn.functional as F
+
+        B, T, d = pre_wnn_x.shape
+        assert B == 1, f"Expected batch size 1, got {B}"
+        device = pre_wnn_x.device
+
+        # --- 1. baseline key: last-token hidden ---
+        key = pre_wnn_x[:, -1, :]      # [1, d]
+
+        # --- 2. get attention probs for last query ---
+        attn_scores = getattr(self.attention, "attn_scores", None)
+        if attn_scores is None:
+            # no attention cached (shouldn't happen in normal flow)
+            return key
+
+        # attn_scores: [1, H, T_q, T_k]
+        _, H, T_q, T_k = attn_scores.shape
+        last_q = T_q - 1
+
+        # average heads for the last token: [H, T_k] -> [T_k]
+        alpha = attn_scores[0, :, last_q, :].mean(dim=0)  # [T_k]
+
+        # --- 3. align T_k (keys) with T (sequence positions) ---
+        if T_k > T:
+            alpha = alpha[-T:]
+        elif T_k < T:
+            pad = T - T_k
+            alpha = torch.cat(
+                [torch.zeros(pad, device=device, dtype=alpha.dtype), alpha],
+                dim=0,
+            )  # [T]
+
+        # normalise attention so it sums to 1
+        alpha_sum = alpha.sum()
+        if alpha_sum <= 0:
+            # degenerate attention -> just use last-token key
+            return key
+        alpha = alpha / (alpha_sum + 1e-9)  # [T]
+
+        # --- 4. build a context vector using attention over hidden states ---
+        # pre_wnn_x: [1, T, d]
+        # alpha.view(1, T, 1): [1, T, 1]
+        context = (alpha.view(1, T, 1) * pre_wnn_x).sum(dim=1)   # [1, d]
+
+        # --- 5. combine: activation + λ * context ---
+        combined = key + lam * context                           # [1, d]
+
+        # --- 6. (optional but good) normalize the key ---
+        combined = F.normalize(combined.float(), dim=-1).to(pre_wnn_x.dtype)
+
+        return combined  # [1, d]
 
     def forward(
         self,
@@ -309,7 +395,8 @@ class TransformerBlock(nn.Module):
         # LUT only for inference; no grads
         if self.wnn_block and self.use_wnn and len(self.LUT.lookupTable) > 0:
             with torch.no_grad():
-                wnn_residual, highest_sim = self.LUT.forward(self.pre_wnn_x)
+                key = self._compute_lut_key(self.pre_wnn_x)
+                wnn_residual, highest_sim = self.LUT.forward(key)
                 wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
                 res_tensor = torch.zeros_like(out)
                 res_tensor[:, -1, :] = wnn_residual
@@ -379,10 +466,7 @@ class Transformer(nn.Module):
 
         return self.output(self.norm(h)).float()
 
-    def _compute_lut_key(self, block, pre_wnn_x, encoded_ctx, k):
-        # --- baseline:(last token) ---
-        key = pre_wnn_x[:, -1, :]  # [1, d]
-        return key
+
 
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
 
@@ -505,7 +589,7 @@ class Transformer(nn.Module):
                 print(f"[trainLUT] Training LUT on block {i}")
                 now_lut = datetime.now()
                 with torch.no_grad():
-                    key_vec = self._compute_lut_key(block, pre_wnn_x.detach(), encoded_ctx, k)
+                    key_vec = block._compute_lut_key(pre_wnn_x.detach())
                     value_vec = wnn_target_residual.detach()[:, -1, :]
                     block.LUT.train(key_vec, value_vec)
                 print(
