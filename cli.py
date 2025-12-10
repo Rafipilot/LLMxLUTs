@@ -17,7 +17,7 @@ MODEL = "mistral"
 # If you want a more conservative LUT, bump this up slightly (e.g. 0.5).
 THRESHOLD = 0.65
 
-COST_SCALE = 0
+COST_SCALE = 5
 
 # 3-block LUT setup
 WNN_BLOCKS = [-1, -6, -11]        # LUT blocks to activate 
@@ -32,7 +32,8 @@ GEN_LENGTH = 350  # Slightly longer for nicer answers
 
 # System prompt used for Mistral-7B-Instruct chat formatting.
 SYSTEM_PROMPT = """
-You are a helpful domain assistant for Astarus AI.
+You are a helpful domain assistant for TLG Capital, also known as TLG.
+TLG is an London based, Africa focused fund manager.
 
 Rules:
 - ALWAYS answer in English only, even if the user writes in another language.
@@ -417,7 +418,8 @@ def build_residual_grid():
     residuals = [
 
     # --- all three active, light to medium ---
-    [0.5, 0.5, 0.5]
+    [0.5, 0.5, 0.5],
+    [0.65, 0.5, 0.4]
     ]
     return residuals
 
