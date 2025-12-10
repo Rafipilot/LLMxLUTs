@@ -17,16 +17,16 @@ MODEL = "mistral"
 # If you want a more conservative LUT, bump this up slightly (e.g. 0.5).
 THRESHOLD = 0.65
 
-COST_SCALE = 8
+COST_SCALE = 0
 
 # 3-block LUT setup
-WNN_BLOCKS = [-1, -6, -11]        # LUT blocks to activate
+WNN_BLOCKS = [-1, -6, -11]        # LUT blocks to activate 
 
 # Suggested starting residuals for 3 blocks:
 # - Block -1  : strongest LUT influence near the top
 # - Block -6  : moderate mid-block influence
 # - Block -11 : smaller but early "cascade" influence
-RESIDUALS = [1, 1, 1]
+RESIDUALS = [0.65, 0.5, 0.4]
 
 GEN_LENGTH = 350  # Slightly longer for nicer answers
 
@@ -44,146 +44,150 @@ Rules:
 
 docs = [
     # --- Identity & mandate ---
-
-    (
-        "What is TLG Capital?",
-        "TLG Capital is a specialist investment firm focused on small and medium-sized enterprises (SMEs) in Africa, particularly Sub-Saharan Africa, providing flexible private-credit solutions to growth-stage businesses that are underserved by traditional banks."
-    ),
-    (
-        "When was TLG Capital founded?",
-        "TLG Capital was founded in 2010."
-    ),
-    (
-        "Who founded TLG Capital?",
-        "TLG Capital was founded by Zain Latif."
-    ),
-    (
-        "Who are the main leaders at TLG Capital?",
-        "The main leaders at TLG Capital include founder Zain Latif, co-founder and CFO Isha Doshi, and senior investment professionals such as Isaac Marshal and Aum Thacker."
-    ),
-    (
-        "Where is TLG Capital based?",
-        "TLG Capital is based in London in the United Kingdom."
-    ),
-    (
-        "Which regions does TLG Capital mainly invest in?",
-        "TLG Capital mainly invests across Sub-Saharan Africa, focusing on markets such as Nigeria, Ghana, Uganda, Rwanda, Tanzania and other countries where SMEs and mid-market companies are often underserved by local banks and international capital."
-    ),
-    (
-        "What type of investment firm is TLG Capital?",
-        "TLG Capital is primarily a private-credit investor, focusing on lending and structured credit rather than traditional control private equity."
+        (
+        "What is TLG Capital's total AUM?",
+        "TLG Capital manages around USD 200 million."
     ),
 
-    # --- Problem, strategy & sectors ---
+    # (
+    #     "What is TLG Capital?",
+    #     "TLG Capital, often called TLG, is a specialist investment firm focused on small and medium-sized enterprises (SMEs) in Africa, particularly Sub-Saharan Africa. It provides flexible private-credit solutions to growth-stage businesses that are underserved by traditional banks."
+    # ),
+    # (
+    #     "When was TLG Capital founded?",
+    #     "TLG Capital was founded in 2010. It has been investing in African businesses for more than a decade."
+    # ),
+    # (
+    #     "Who founded TLG Capital?",
+    #     "TLG Capital was founded by Zain Latif. He set up TLG to provide flexible capital to businesses across Africa that struggle to access traditional finance."
+    # ),
+    # (
+    #     "Who is in the TLG team?",
+    #     "The TLG team is led by founder Zain Latif and co-founder and CFO Isha Doshi. They are supported by senior investment professionals such as Isaac Marshal and Aum Thacker, along with a wider group of investment, operations and impact specialists."
+    # ),
+    # (
+    #     "Where is TLG based?",
+    #     "TLG Capital is based in London in the United Kingdom. From London, the team invests across multiple African markets."
+    # ),
+    # (
+    #     "Where does TLG mainly invest?",
+    #     "TLG mainly invests across Sub-Saharan Africa, in countries such as Nigeria, Ghana, Uganda, Rwanda and Tanzania. It focuses on markets where SMEs and mid-market companies are often underserved by local banks and international capital."
+    # ),
+    # (
+    #     "What kind of investment firm is TLG?",
+    #     "TLG is primarily a private-credit investment firm. It focuses on lending and structured credit rather than traditional control-oriented private equity buyouts."
+    # ),
 
-    (
-        "What problem is TLG Capital trying to solve for African SMEs and mid-market companies?",
-        "TLG Capital is trying to solve the problem of limited access to flexible growth capital and essential services for African SMEs and mid-market companies, helping them fund expansion, working capital and capex when local banks cannot provide sufficient finance."
-    ),
-    (
-        "Which sectors does TLG Capital mainly focus on?",
-        "TLG Capital mainly focuses on resilient, essential sectors such as healthcare, financial services and fintech, agriculture and food processing, telecom and fibre infrastructure, logistics, selected manufacturing and education."
-    ),
-    (
-        "How would you describe TLG Capital’s investment strategy?",
-        "TLG Capital’s strategy is to provide flexible private-credit to growth-stage African companies in essential sectors, using tailored structures that balance attractive risk-adjusted returns for investors with measurable real-economy development."
-    ),
-    (
-        "What kinds of instruments does TLG Capital typically use?",
-        "TLG Capital typically uses senior secured loans, mezzanine and structured credit facilities, risk-sharing arrangements with local banks, and other bespoke private-credit structures rather than plain-vanilla unsecured lending."
-    ),
-    (
-        "How does TLG Capital usually work with local African banks to support SME lending?",
-        "TLG Capital often partners with local African banks through co-lending, risk-sharing and structured credit facilities that allow banks to extend more credit to SMEs while relying on TLG’s structuring expertise, sector knowledge and additional capital."
-    ),
+    # # --- Problem, strategy & sectors ---
 
-    # --- Scale, AUM & track record ---
+    # (
+    #     "What problem is TLG trying to solve?",
+    #     "TLG is trying to solve the problem of limited access to flexible growth capital for African SMEs and mid-market companies. It helps businesses fund expansion, working capital and capex when local banks cannot provide sufficient finance or suitable structures."
+    # ),
+    # (
+    #     "Which sectors does TLG focus on?",
+    #     "TLG focuses on resilient, essential sectors such as healthcare, financial services and fintech, agriculture and food processing, telecom and fibre infrastructure, logistics, selected manufacturing and education. These sectors tend to be more defensive and have clear development impact."
+    # ),
+    # (
+    #     "How would you describe TLG’s investment strategy?",
+    #     "TLG’s strategy is to provide flexible private-credit to growth-stage African companies in essential sectors. It uses tailored structures that balance attractive risk-adjusted returns for investors with measurable real-economy development."
+    # ),
+    # (
+    #     "What kinds of financing instruments does TLG use?",
+    #     "TLG typically uses senior secured loans, mezzanine and structured credit facilities, and risk-sharing arrangements with local banks. It prefers bespoke private-credit structures rather than plain-vanilla unsecured lending."
+    # ),
+    # (
+    #     "How does TLG work with local banks?",
+    #     "TLG often partners with local African banks through co-lending, risk-sharing and structured credit facilities. These partnerships allow banks to extend more credit to SMEs while relying on TLG’s structuring expertise, sector knowledge and additional capital."
+    # ),
 
-    (
-        "What is TLG Capital’s approximate assets under management?",
-        "TLG manages around two hundred million US dollars across its funds and mandates."
-    ),
-    (
-        "How much capital has TLG Capital deployed in SMEs?",
-        "TLG has deployed roughly one hundred million US dollars into SME-focused deals across Africa."
-    ),
-    (
-        "What is the total value of transactions TLG Capital has been involved in?",
-        "Since inception, TLG has been involved in transactions with a total value of around one and a half billion US dollars."
-    ),
-    (
-        "Who are TLG Capital’s typical counterparties or borrowers?",
-        "TLG usually works with African SMEs and mid-market companies in essential sectors, and with local banks or specialised lenders that finance these businesses."
-    ),
+    # # --- Scale, AUM & track record ---
 
-    # --- Funds: AGIF II & platform ---
+    # (
+    #     "Roughly how much capital does TLG manage?",
+    #     "TLG manages around two hundred million US dollars across its funds and mandates. This reflects the scale of its dedicated Africa-focused private-credit platform."
+    # ),
+    # (
+    #     "How much capital has TLG deployed into SMEs?",
+    #     "TLG has deployed roughly one hundred million US dollars into SME-focused deals across Africa. This capital supports growth, working capital and essential services in its target markets."
+    # ),
+    # (
+    #     "What is the total value of TLG’s transactions?",
+    #     "Since inception, TLG has been involved in transactions with a total value of around half a billion US dollars. This includes both capital it has deployed directly and larger transactions where TLG has played a key structuring or partnering role."
+    # ),
+    # (
+    #     "Who does TLG usually work with?",
+    #     "TLG usually works with African SMEs and mid-market companies in essential sectors, as well as local banks and specialised lenders that finance these businesses. Its counterparties are typically established operators that need flexible growth capital."
+    # ),
 
-    (
-        "What is AGIF II within TLG Capital’s platform?",
-        "AGIF II, or TLG Africa Growth Impact Fund II, is TLG Capital’s flagship private-credit fund that provides flexible financing to African SMEs and mid-market companies while targeting both commercial returns and measurable development impact."
-    ),
-    (
-        "What does AGIF II mainly invest in?",
-        "AGIF II mainly invests in resilient African SMEs and mid-market companies in sectors such as healthcare, financial services and fintech, agriculture and food processing, telecom and fibre infrastructure, logistics, selected manufacturing and education."
-    ),
-    (
-        "What financial returns does AGIF II aim to deliver for investors?",
-        "AGIF II targets net USD returns in roughly the low-to-mid teens per annum over the life of the fund, primarily through current income and capital preservation rather than high-risk equity-style upside."
-    ),
-    (
-        "What development impact does AGIF II aim to achieve?",
-        "AGIF II aims to expand access to essential services such as healthcare, education, financial inclusion and food security in African markets, while supporting job creation, local value-add and more resilient economic growth."
-    ),
-    (
-        "Who are the typical investors in TLG Capital’s funds?",
-        "Typical investors in TLG Capital’s funds include development finance institutions, impact investors, family offices and other institutional investors focused on African private-credit and impact."
-    ),
+    # # --- Funds: AGIF II & platform ---
 
-    # --- Risk, structure & governance ---
+    # (
+    #     "What is AGIF II?",
+    #     "AGIF II, or the TLG Africa Growth Impact Fund II, is TLG’s flagship private-credit fund. It provides flexible financing to African SMEs and mid-market companies while targeting both commercial returns and measurable development impact."
+    # ),
+    # (
+    #     "What does AGIF II mainly invest in?",
+    #     "AGIF II mainly invests in resilient African SMEs and mid-market companies in sectors such as healthcare, financial services and fintech, agriculture and food processing, telecom and fibre infrastructure, logistics, selected manufacturing and education. The fund focuses on businesses that provide essential goods and services."
+    # ),
+    # (
+    #     "What returns does AGIF II aim to deliver?",
+    #     "AGIF II targets net USD returns in roughly the low-to-mid teens per annum over the life of the fund. It aims to generate most of this value through current income and capital preservation rather than high-risk equity-style upside."
+    # ),
+    # (
+    #     "What kind of development impact does AGIF II aim for?",
+    #     "AGIF II aims to expand access to essential services such as healthcare, education, financial inclusion and food security in African markets. It also seeks to support job creation, local value-add and more resilient economic growth."
+    # ),
+    # (
+    #     "Who typically invests in TLG’s funds?",
+    #     "Typical investors in TLG’s funds include development finance institutions, impact investors, family offices and other institutional investors focused on African private-credit and impact. These investors are looking for both financial returns and measurable social and economic outcomes."
+    # ),
 
-    (
-        "How does TLG Capital manage risk in its transactions?",
-        "TLG Capital manages risk through rigorous credit analysis, strong collateral and security packages, covenants, risk-sharing structures with local banks and active portfolio monitoring over the life of each transaction."
-    ),
-    (
-        "How do TLG Capital’s flexible credit structures help businesses compared with plain-vanilla bank loans?",
-        "TLG Capital’s flexible credit structures are tailored to a company’s cash flows and collateral, offer more flexible repayment profiles and can be structured around local constraints, helping businesses fund growth and working capital when plain-vanilla bank loans are unavailable or too rigid."
-    ),
-    (
-        "How does TLG Capital integrate ESG and impact into its investment process?",
-        "TLG Capital integrates ESG and impact by screening opportunities for environmental and social risks, assessing expected development outcomes, including impact metrics in its investment decision-making, and monitoring these outcomes throughout the life of each investment."
-    ),
-    (
-        "What kind of impact does TLG Capital aim to have on jobs and local economies?",
-        "TLG Capital aims to support companies that create and sustain local jobs, strengthen value chains in essential sectors and improve access to services such as healthcare, financial products and basic consumer goods in African markets."
-    ),
-    (
-        "What is the role of the investment committee at TLG Capital?",
-        "TLG Capital’s investment committee reviews and approves all material transactions, ensuring that each investment fits the firm’s risk, return and impact criteria and that key risks are properly identified and mitigated."
-    ),
+    # # --- Risk, structure & governance ---
 
-    # --- Sourcing, portfolio support & differentiation ---
+    # (
+    #     "How does TLG manage risk in its transactions?",
+    #     "TLG manages risk through rigorous credit analysis and strong collateral and security packages. It also uses covenants, risk-sharing structures with local banks and active portfolio monitoring over the life of each transaction."
+    # ),
+    # (
+    #     "How do TLG’s flexible credit structures help businesses compared with standard bank loans?",
+    #     "TLG’s flexible credit structures are tailored to a company’s cash flows and collateral, offering more flexible repayment profiles than standard bank loans. They can be structured around local constraints, helping businesses fund growth and working capital when plain-vanilla bank loans are unavailable or too rigid."
+    # ),
+    # (
+    #     "How does TLG integrate ESG and impact into its investment process?",
+    #     "TLG integrates ESG and impact by screening opportunities for environmental and social risks and assessing expected development outcomes. It includes impact metrics in its investment decision-making and monitors these outcomes throughout the life of each investment."
+    # ),
+    # (
+    #     "What impact does TLG aim to have on jobs and local economies?",
+    #     "TLG aims to support companies that create and sustain local jobs and strengthen value chains in essential sectors. It focuses on improving access to services such as healthcare, financial products and basic consumer goods in African markets."
+    # ),
+    # (
+    #     "What is the role of TLG’s investment committee?",
+    #     "TLG’s investment committee reviews and approves all material transactions. It ensures that each investment fits the firm’s risk, return and impact criteria and that key risks are properly identified and mitigated."
+    # ),
 
-    (
-        "How does TLG Capital source investment opportunities?",
-        "TLG Capital sources opportunities through long-term relationships with local banks, entrepreneurs and advisers across Africa, as well as through repeat counterparties and referrals within its existing portfolio."
-    ),
-    (
-        "How does TLG Capital support its portfolio companies beyond providing capital?",
-        "Beyond providing capital, TLG Capital supports portfolio companies with structuring advice, governance and reporting support, introductions to local and international partners, and ongoing engagement on strategy, risk and impact."
-    ),
-    (
-        "What differentiates TLG Capital from other Africa-focused investment firms?",
-        "TLG Capital is differentiated by its focus on flexible private-credit, its willingness to structure bespoke transactions in complex African markets, its emphasis on essential sectors and its combination of commercial discipline with clear, measurable development impact goals."
-    ),
-    (
-        "Why does TLG Capital focus on essential sectors rather than discretionary consumption?",
-        "TLG Capital focuses on essential sectors because demand for healthcare, food, basic financial services, education and core infrastructure tends to be more resilient through economic cycles and has clearer, more measurable development impact."
-    ),
-    (
-        "Why does TLG Capital emphasise working with local banks and on-the-ground partners?",
-        "TLG Capital emphasises working with local banks and on-the-ground partners because they understand local borrowers, regulations and market dynamics, allowing TLG to structure more appropriate, scalable and risk-aware financing solutions."
-    ),
+    # # --- Sourcing, portfolio support & differentiation ---
+
+    # (
+    #     "How does TLG source investment opportunities?",
+    #     "TLG sources opportunities through long-term relationships with local banks, entrepreneurs and advisers across Africa. It also benefits from repeat counterparties and referrals within its existing portfolio."
+    # ),
+    # (
+    #     "How does TLG support its portfolio companies beyond providing capital?",
+    #     "Beyond providing capital, TLG supports portfolio companies with structuring advice, governance and reporting support, and introductions to local and international partners. The team also engages on strategy, risk and impact throughout the life of the investment."
+    # ),
+    # (
+    #     "What differentiates TLG from other Africa-focused investment firms?",
+    #     "TLG is differentiated by its focus on flexible private-credit and its willingness to structure bespoke transactions in complex African markets. It emphasises essential sectors and combines commercial discipline with clear, measurable development impact goals."
+    # ),
+    # (
+    #     "Why does TLG focus on essential sectors rather than discretionary consumption?",
+    #     "TLG focuses on essential sectors because demand for healthcare, food, basic financial services, education and core infrastructure tends to be more resilient through economic cycles. These sectors also have clearer and more measurable development impact."
+    # ),
+    # (
+    #     "Why does TLG emphasise working with local banks and on-the-ground partners?",
+    #     "TLG emphasises working with local banks and on-the-ground partners because they understand local borrowers, regulations and market dynamics. This allows TLG to structure more appropriate, scalable and risk-aware financing solutions."
+    # ),
 ]
 
 doc_tests = [
