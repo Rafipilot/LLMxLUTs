@@ -20,13 +20,13 @@ THRESHOLD = 0.65
 COST_SCALE = 0
 
 # 3-block LUT setup
-WNN_BLOCKS = [-1, -6, -11]        # LUT blocks to activate
+WNN_BLOCKS = [-1, -6, -11]        # LUT blocks to activate 
 
 # Suggested starting residuals for 3 blocks:
 # - Block -1  : strongest LUT influence near the top
 # - Block -6  : moderate mid-block influence
 # - Block -11 : smaller but early "cascade" influence
-RESIDUALS = [1, 1, 1]
+RESIDUALS = [0.65, 0.5, 0.4]
 
 GEN_LENGTH = 350  # Slightly longer for nicer answers
 
@@ -43,104 +43,179 @@ Rules:
 """.strip()
 
 docs = [
-    (
-        "What is Astarus AI and what does it do?",
-        "Astarus AI is an AI infrastructure company that builds continuously learning language-model systems using lookup-table (LUT) layers inside transformer blocks. The platform lets companies give each user or tenant a personalised model without retraining the whole network."
+    # --- Identity & mandate ---
+        (
+        "What is TLG Capital's total AUM?",
+        "TLG Capital manages around USD 200 million."
     ),
-    (
-        "Who founded Astarus AI and when was it started?",
-        "Astarus AI was founded by Rafayel Latif in 2025 in London."
-    ),
-    (
-        "Where is Astarus AI based?",
-        "Astarus AI is based in London, with most development currently happening in the UK."
-    ),
-    (
-        "What core problem is Astarus AI trying to solve?",
-        "Astarus AI is trying to solve the problem of making large language models continuously learn from new data and user interactions without expensive re-training and without catastrophic forgetting."
-    ),
-    (
-        "How is Astarus AI different from a typical LLM API provider?",
-        "Unlike typical LLM APIs that serve a static model plus retrieval, Astarus AI embeds LUT layers directly inside the transformer so the model can update its internal behaviour per-tenant or per-user in real time, with very low compute and no full fine-tuning."
-    ),
-    (
-        "What is a LUT-based LLM in the context of Astarus AI?",
-        "A LUT-based LLM at Astarus AI is a transformer model where some blocks contain embedded lookup tables that store gradient-based updates for internal embeddings. During inference, those LUT outputs are mixed back into the residual stream so the model behaves as if it had been fine-tuned, without changing the base weights."
-    ),
-    (
-        "Which base models does Astarus AI currently use?",
-        "Astarus AI has integrated LUT layers into several open models, including GPT-2 XL–class architectures and Mistral-7B, and is gradually extending the approach to other modern open-source LLMs."
-    ),
-    (
-        "Who are the primary target users or customers of Astarus AI?",
-        "Astarus AI mainly targets funds, research teams and early-stage companies that need domain-specific assistants, research copilots or internal knowledge agents that actually remember and adapt over time."
-    ),
-    (
-        "How does Astarus AI’s approach compare to RAG-based systems?",
-        "RAG systems bolt retrieval onto a static model, while Astarus AI inserts LUTs inside the model so it can internalise new facts and patterns. RAG is great for documents; LUT-based updates are better when you need the model’s actual behaviour and style to shift based on experience."
-    ),
-    (
-        "How does Astarus AI’s approach compare to LoRA fine-tuning?",
-        "LoRA still requires a separate fine-tuning step and extra weights per task. Astarus AI’s LUT approach updates only table entries at inference time, so adaptation is cheaper, faster and can be done per user or tenant without spinning up a full fine-tune."
-    ),
-    (
-        "What kind of use cases is Astarus AI focusing on first?",
-        "Initial use cases include domain assistants for investment firms, continuously learning research agents, and internal copilots that can remember firm-specific facts, style preferences and decision history over time."
-    ),
-    (
-        "How does Astarus AI personalise a model for a specific client or tenant?",
-        "Astarus AI loads a tenant-specific LUT alongside a shared base model. As that tenant interacts, the LUT stores gradient-derived updates for their domain, which are applied on the fly at inference, effectively giving them a “personal model” without duplicating the core weights."
-    ),
-    (
-        "Why is continuous learning important for Astarus AI’s vision?",
-        "Continuous learning is important because most real-world environments change quickly. Astarus AI wants models that can absorb new information, adapt to user behaviour and refine their answers over time without a full retraining cycle."
-    ),
-    (
-        "What stage is Astarus AI currently at in terms of product maturity?",
-        "Astarus AI is in an early product stage with working LUT-augmented models, an API layer and initial demo spaces for specific partners, and is now moving towards more polished ‘Spaces’ that clients can use directly."
-    ),
-    (
-        "What does the Astarus AI API provide to developers?",
-        "The Astarus AI API exposes endpoints for text generation with LUT-augmented models, training LUTs on new data or interactions, inspecting LUT stats, and configuring hyperparameters like residual strength, thresholds and block selection."
-    ),
-    (
-        "How does Astarus AI think about safety and hallucinations?",
-        "By storing LUT updates in specific blocks and mixing them carefully into the residual stream, Astarus AI can reduce certain hallucinations on narrow domains, because the model has explicit internal corrections instead of guessing from generic pre-training only."
-    ),
-    (
-        "What makes Astarus AI’s technology hard to replicate?",
-        "Astarus AI’s advantage comes from the detailed engineering of LUT layers inside transformer blocks, the training and retrieval logic around them, and the practical experience of making them behave well at scale on real partner use cases."
-    ),
-    (
-        "How does Astarus AI plan to make money?",
-        "Astarus AI plans to charge for hosted LUT-augmented models on a usage basis, with higher tiers for dedicated infrastructure, per-tenant LUT storage, and custom integrations for specific partners such as funds or research firms."
-    ),
-    (
-        "What is Astarus AI’s long-term vision for these LUT-based systems?",
-        "Long term, Astarus AI wants to build model systems that accumulate ‘experience’ over time, not just retrieve documents, so that each model instance becomes a continuously learning digital collaborator embedded in a client’s workflow."
-    ),
-    (
-        "How would you explain Astarus AI’s edge in one or two sentences?",
-        "Astarus AI gives organisations models that can actually learn from their own usage in a controlled way. Instead of serving a frozen LLM plus a database, it serves a continuously updating model with an internal memory layer tuned to their domain."
-    )
+
+    # (
+    #     "What is TLG Capital?",
+    #     "TLG Capital, often called TLG, is a specialist investment firm focused on small and medium-sized enterprises (SMEs) in Africa, particularly Sub-Saharan Africa. It provides flexible private-credit solutions to growth-stage businesses that are underserved by traditional banks."
+    # ),
+    # (
+    #     "When was TLG Capital founded?",
+    #     "TLG Capital was founded in 2010. It has been investing in African businesses for more than a decade."
+    # ),
+    # (
+    #     "Who founded TLG Capital?",
+    #     "TLG Capital was founded by Zain Latif. He set up TLG to provide flexible capital to businesses across Africa that struggle to access traditional finance."
+    # ),
+    # (
+    #     "Who is in the TLG team?",
+    #     "The TLG team is led by founder Zain Latif and co-founder and CFO Isha Doshi. They are supported by senior investment professionals such as Isaac Marshal and Aum Thacker, along with a wider group of investment, operations and impact specialists."
+    # ),
+    # (
+    #     "Where is TLG based?",
+    #     "TLG Capital is based in London in the United Kingdom. From London, the team invests across multiple African markets."
+    # ),
+    # (
+    #     "Where does TLG mainly invest?",
+    #     "TLG mainly invests across Sub-Saharan Africa, in countries such as Nigeria, Ghana, Uganda, Rwanda and Tanzania. It focuses on markets where SMEs and mid-market companies are often underserved by local banks and international capital."
+    # ),
+    # (
+    #     "What kind of investment firm is TLG?",
+    #     "TLG is primarily a private-credit investment firm. It focuses on lending and structured credit rather than traditional control-oriented private equity buyouts."
+    # ),
+
+    # # --- Problem, strategy & sectors ---
+
+    # (
+    #     "What problem is TLG trying to solve?",
+    #     "TLG is trying to solve the problem of limited access to flexible growth capital for African SMEs and mid-market companies. It helps businesses fund expansion, working capital and capex when local banks cannot provide sufficient finance or suitable structures."
+    # ),
+    # (
+    #     "Which sectors does TLG focus on?",
+    #     "TLG focuses on resilient, essential sectors such as healthcare, financial services and fintech, agriculture and food processing, telecom and fibre infrastructure, logistics, selected manufacturing and education. These sectors tend to be more defensive and have clear development impact."
+    # ),
+    # (
+    #     "How would you describe TLG’s investment strategy?",
+    #     "TLG’s strategy is to provide flexible private-credit to growth-stage African companies in essential sectors. It uses tailored structures that balance attractive risk-adjusted returns for investors with measurable real-economy development."
+    # ),
+    # (
+    #     "What kinds of financing instruments does TLG use?",
+    #     "TLG typically uses senior secured loans, mezzanine and structured credit facilities, and risk-sharing arrangements with local banks. It prefers bespoke private-credit structures rather than plain-vanilla unsecured lending."
+    # ),
+    # (
+    #     "How does TLG work with local banks?",
+    #     "TLG often partners with local African banks through co-lending, risk-sharing and structured credit facilities. These partnerships allow banks to extend more credit to SMEs while relying on TLG’s structuring expertise, sector knowledge and additional capital."
+    # ),
+
+    # # --- Scale, AUM & track record ---
+
+    # (
+    #     "Roughly how much capital does TLG manage?",
+    #     "TLG manages around two hundred million US dollars across its funds and mandates. This reflects the scale of its dedicated Africa-focused private-credit platform."
+    # ),
+    # (
+    #     "How much capital has TLG deployed into SMEs?",
+    #     "TLG has deployed roughly one hundred million US dollars into SME-focused deals across Africa. This capital supports growth, working capital and essential services in its target markets."
+    # ),
+    # (
+    #     "What is the total value of TLG’s transactions?",
+    #     "Since inception, TLG has been involved in transactions with a total value of around half a billion US dollars. This includes both capital it has deployed directly and larger transactions where TLG has played a key structuring or partnering role."
+    # ),
+    # (
+    #     "Who does TLG usually work with?",
+    #     "TLG usually works with African SMEs and mid-market companies in essential sectors, as well as local banks and specialised lenders that finance these businesses. Its counterparties are typically established operators that need flexible growth capital."
+    # ),
+
+    # # --- Funds: AGIF II & platform ---
+
+    # (
+    #     "What is AGIF II?",
+    #     "AGIF II, or the TLG Africa Growth Impact Fund II, is TLG’s flagship private-credit fund. It provides flexible financing to African SMEs and mid-market companies while targeting both commercial returns and measurable development impact."
+    # ),
+    # (
+    #     "What does AGIF II mainly invest in?",
+    #     "AGIF II mainly invests in resilient African SMEs and mid-market companies in sectors such as healthcare, financial services and fintech, agriculture and food processing, telecom and fibre infrastructure, logistics, selected manufacturing and education. The fund focuses on businesses that provide essential goods and services."
+    # ),
+    # (
+    #     "What returns does AGIF II aim to deliver?",
+    #     "AGIF II targets net USD returns in roughly the low-to-mid teens per annum over the life of the fund. It aims to generate most of this value through current income and capital preservation rather than high-risk equity-style upside."
+    # ),
+    # (
+    #     "What kind of development impact does AGIF II aim for?",
+    #     "AGIF II aims to expand access to essential services such as healthcare, education, financial inclusion and food security in African markets. It also seeks to support job creation, local value-add and more resilient economic growth."
+    # ),
+    # (
+    #     "Who typically invests in TLG’s funds?",
+    #     "Typical investors in TLG’s funds include development finance institutions, impact investors, family offices and other institutional investors focused on African private-credit and impact. These investors are looking for both financial returns and measurable social and economic outcomes."
+    # ),
+
+    # # --- Risk, structure & governance ---
+
+    # (
+    #     "How does TLG manage risk in its transactions?",
+    #     "TLG manages risk through rigorous credit analysis and strong collateral and security packages. It also uses covenants, risk-sharing structures with local banks and active portfolio monitoring over the life of each transaction."
+    # ),
+    # (
+    #     "How do TLG’s flexible credit structures help businesses compared with standard bank loans?",
+    #     "TLG’s flexible credit structures are tailored to a company’s cash flows and collateral, offering more flexible repayment profiles than standard bank loans. They can be structured around local constraints, helping businesses fund growth and working capital when plain-vanilla bank loans are unavailable or too rigid."
+    # ),
+    # (
+    #     "How does TLG integrate ESG and impact into its investment process?",
+    #     "TLG integrates ESG and impact by screening opportunities for environmental and social risks and assessing expected development outcomes. It includes impact metrics in its investment decision-making and monitors these outcomes throughout the life of each investment."
+    # ),
+    # (
+    #     "What impact does TLG aim to have on jobs and local economies?",
+    #     "TLG aims to support companies that create and sustain local jobs and strengthen value chains in essential sectors. It focuses on improving access to services such as healthcare, financial products and basic consumer goods in African markets."
+    # ),
+    # (
+    #     "What is the role of TLG’s investment committee?",
+    #     "TLG’s investment committee reviews and approves all material transactions. It ensures that each investment fits the firm’s risk, return and impact criteria and that key risks are properly identified and mitigated."
+    # ),
+
+    # # --- Sourcing, portfolio support & differentiation ---
+
+    # (
+    #     "How does TLG source investment opportunities?",
+    #     "TLG sources opportunities through long-term relationships with local banks, entrepreneurs and advisers across Africa. It also benefits from repeat counterparties and referrals within its existing portfolio."
+    # ),
+    # (
+    #     "How does TLG support its portfolio companies beyond providing capital?",
+    #     "Beyond providing capital, TLG supports portfolio companies with structuring advice, governance and reporting support, and introductions to local and international partners. The team also engages on strategy, risk and impact throughout the life of the investment."
+    # ),
+    # (
+    #     "What differentiates TLG from other Africa-focused investment firms?",
+    #     "TLG is differentiated by its focus on flexible private-credit and its willingness to structure bespoke transactions in complex African markets. It emphasises essential sectors and combines commercial discipline with clear, measurable development impact goals."
+    # ),
+    # (
+    #     "Why does TLG focus on essential sectors rather than discretionary consumption?",
+    #     "TLG focuses on essential sectors because demand for healthcare, food, basic financial services, education and core infrastructure tends to be more resilient through economic cycles. These sectors also have clearer and more measurable development impact."
+    # ),
+    # (
+    #     "Why does TLG emphasise working with local banks and on-the-ground partners?",
+    #     "TLG emphasises working with local banks and on-the-ground partners because they understand local borrowers, regulations and market dynamics. This allows TLG to structure more appropriate, scalable and risk-aware financing solutions."
+    # ),
 ]
 
 doc_tests = [
-    "In simple terms, what is Astarus AI and what does it do?",
-    "Who founded Astarus AI, and when and where was it started?",
-    "What core problem is Astarus AI trying to solve with its models?",
-    "How is Astarus AI different from a typical LLM API provider?",
-    "What does it mean that Astarus models are LUT-based?",
-    "How does Astarus AI’s LUT approach differ from normal RAG systems?",
-    "How does Astarus AI’s LUT approach differ from LoRA-style fine-tuning?",
-    "Who are the main types of customers Astarus AI is built for?",
-    "What are the first use cases Astarus AI is focusing on?",
-    "How does Astarus AI personalise a model for a specific client or tenant?",
-    "Why is continuous learning important to Astarus AI’s vision?",
-    "What does the Astarus AI API let developers do with LUT-augmented models?",
-    "How can LUT-based models help reduce hallucinations on a narrow domain?",
-    "What makes Astarus AI’s technology hard to copy?",
-    "In one or two sentences, what is Astarus AI’s long-term vision?"
+    # Identity & mandate
+    "In simple terms, what does TLG Capital do?",
+    "When was TLG Capital founded, and who founded it?",
+    "Where is TLG Capital based, and which African regions does it mainly focus on?",
+
+    # Problem, sectors & strategy
+    "What key problem is TLG Capital trying to solve for African SMEs and mid-market companies?",
+    "Which core sectors does TLG Capital mainly focus on when investing?",
+    "How would you briefly describe TLG Capital's investment strategy as a private-credit investor?",
+
+    # Scale, AUM & track record
+    "Roughly how much assets under management does TLG Capital have?",
+    "Give a ballpark figure for how much capital TLG Capital has deployed into SME-focused deals across Africa.",
+
+    # AGIF II & platform
+    "What is AGIF II and how does it fit within TLG Capital's overall platform?",
+    "What kinds of companies and sectors does AGIF II mainly invest in?",
+    "What net return range does AGIF II aim to deliver to its investors, and what type of impact does it target?",
+
+    # Risk, structure & differentiation
+    "How does TLG Capital manage and mitigate risk in its transactions?",
+    "In what ways do TLG Capital's flexible credit structures help businesses compared with plain-vanilla bank loans?",
+    "What differentiates TLG Capital from other Africa-focused investment firms?",
+    "Why does TLG Capital emphasise working with local banks and on-the-ground partners?",
+    "What is Blackstone?"
 ]
 
 # ---------------------------------------------------------------------
@@ -274,7 +349,7 @@ def post_generate(lut_name: str, user_message: str) -> str:
 
 
 def list_luts_from_api():
-    r = requests.get(f"{BASE_URL}/lut_info", timeout=10)
+    r = requests.get(f"{BASE_URL}/lut_info", timeout=20)
     r.raise_for_status()
     data = r.json()
     print("\nAvailable LUTs:")
@@ -340,7 +415,9 @@ def build_residual_grid():
     Tuned around the region that gave clean, numerically accurate answers.
     """
     residuals = [
-        [0.05, 0.04, 0.03]
+
+    # --- all three active, light to medium ---
+    [0.5, 0.5, 0.5]
     ]
     return residuals
 
