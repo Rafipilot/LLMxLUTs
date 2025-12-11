@@ -225,23 +225,45 @@ class LUT():
         keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
         values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
 
+        for i in range(len(self.lookupTableMetaData)):
+            meta = self.lookupTableMetaData[i]
+            meta[0] = meta[0] + 1
+            self.lookupTableMetaData[i] = meta
+
+
         N, k = keys.shape
 
         keys = torch.nan_to_num(keys, nan=0.0, posinf=0.0, neginf=0.0)
         q_f32 = q.to(torch.float32)
         q_f32 = torch.nan_to_num(q_f32, nan=0.0, posinf=0.0, neginf=0.0)
+
+        ### adding a punishment/ cost for looking up memories which have come up just before
+        costs = []
+        for row in self.lookupTableMetaData:
+            number_of_look_up_since_last_hit = row[0]
+
+            cost = (1/(number_of_look_up_since_last_hit+1))
+            costs.append(cost)
+
+        costs = torch.tensor(costs, device=device)
         
         sims = F.cosine_similarity(keys, q_f32.unsqueeze(0).expand(N, k), dim=-1)
         sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0)
         sims = sims.clamp(-1.0, 1.0)
+        sims = sims - self.cost_scale*costs
 
         max_sim_idx = torch.argmax(sims)
         highest_sim = sims[max_sim_idx].item()
         best_residual = values[max_sim_idx]  # [d]
 
+        print("Highest sim: ", highest_sim)
         if highest_sim < self.CS_threshold:
             print("Low similarity, cs threshold:", self.CS_threshold)
             return torch.zeros_like(best_residual), 0.0
+        
+        row_meta_data = self.lookupTableMetaData[max_sim_idx]
+        self.lookupTableMetaData[max_sim_idx]= [0, row_meta_data[1]+1]
+        
 
         return best_residual.to(q.device), highest_sim
     

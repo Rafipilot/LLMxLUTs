@@ -1,0 +1,109 @@
+{
+  "lut_name": "demo-af56a526",
+  "timestamp_utc": "20251211T133100Z",
+  "threshold": 0.5,
+  "cost_scale": 5,
+  "wnn_blocks": [
+    -1,
+    -6,
+    -11
+  ],
+  "original_residuals": [
+    0.8,
+    0.8,
+    0.8
+  ],
+  "doc_tests": [
+    "In simple terms, what does TLG Capital do?",
+    "When was TLG Capital founded, and who founded it?",
+    "Where is TLG Capital based, and which African regions does it mainly focus on?",
+    "What key problem is TLG Capital trying to solve for African SMEs and mid-market companies?",
+    "Which core sectors does TLG Capital mainly focus on when investing?",
+    "How would you briefly describe TLG Capital's investment strategy as a private-credit investor?",
+    "Roughly how much assets under management does TLG Capital have?",
+    "Give a ballpark figure for how much capital TLG Capital has deployed into SME-focused deals across Africa.",
+    "What is AGIF II and how does it fit within TLG Capital's overall platform?",
+    "What kinds of companies and sectors does AGIF II mainly invest in?",
+    "What net return range does AGIF II aim to deliver to its investors, and what type of impact does it target?",
+    "How does TLG Capital manage and mitigate risk in its transactions?",
+    "In what ways do TLG Capital's flexible credit structures help businesses compared with plain-vanilla bank loans?",
+    "What differentiates TLG Capital from other Africa-focused investment firms?",
+    "Why does TLG Capital emphasise working with local banks and on-the-ground partners?",
+    "What is Blackstone in the finance world?"
+  ],
+  "runs": [
+    {
+      "residuals": [
+        0.8,
+        0.8,
+        0.8
+      ],
+      "tests": [
+        {
+          "question": "In simple terms, what does TLG Capital do?",
+          "answer": "\n\n TLG Capital, often called TLG, is a specialist investment firm focused on SMEs in Africa, particularly Sub-Saharan Africa. It provides flexible private-credit solutions to growth-stage businesses that are underserved by traditional banks."
+        },
+        {
+          "question": "When was TLG Capital founded, and who founded it?",
+          "answer": "\n\n The TLG Capital was founded in 2010 by Zain Latif. He set up TLG to provide flexible capital to businesses across Africa that struggle to access traditional finance."
+        },
+        {
+          "question": "Where is TLG Capital based, and which African regions does it mainly focus on?",
+          "answer": "\n\n TLG Capital is based in London in the United Kingdom. It focuses on markets where SMEs and mid-market companies are often underserved by local banks and international capital. It mainly focuses on Sub-Saharan Africa, in countries such as Nigeria, Ghana, Uganda, Rwanda and Tanzania. These countries tend to have strong SME sectors and are often seen as having clear development impact."
+        },
+        {
+          "question": "What key problem is TLG Capital trying to solve for African SMEs and mid-market companies?",
+          "answer": "At TLG Capital, we are trying to solve the problem of access to services such as healthcare, financial products and basic consumer goods in African markets for SMEs and mid-market companies. It helps businesses fund expansion, working capital and capex when local banks cannot provide sufficient finance or suitable structures."
+        },
+        {
+          "question": "Which core sectors does TLG Capital mainly focus on when investing?",
+          "answer": "\n\n TLG Capital mainly focuses on markets where SMEs and mid-market companies are often underserved by local banks and international capital. It focuses on markets where SMEs and mid-market companies are often underserved by local banks and international capital. It focuses on markets where SMEs and mid-market companies are often underserved by local banks and international capital. It focuses on markets where SMEs and mid-market companies are often underserved by local banks and international capital."
+        },
+        {
+          "question": "How would you briefly describe TLG Capital's investment strategy as a private-credit investor?",
+          "answer": "\n TLG Capital focuses on lending and structured credit rather than traditional control-oriented private equity buyouts. It uses tailored structures that balance attractive risk-adjusted returns for investors with measurable real-economy development."
+        },
+        {
+          "question": "Roughly how much assets under management does TLG Capital have?",
+          "answer": "Approximately USD 200 million."
+        },
+        {
+          "question": "Give a ballpark figure for how much capital TLG Capital has deployed into SME-focused deals across Africa.",
+          "answer": "Approximately one hundred million US dollars have been deployed by TLG Capital into SME-focused deals across Africa. This capital supports growth, working capital and essential services in its target markets."
+        },
+        {
+          "question": "What is AGIF II and how does it fit within TLG Capital's overall platform?",
+          "answer": "AGIF II, or the TLG Africa Growth Impact Fund II, is TLG Capital’s flagship private-credit fund. It provides flexible financing to African SMEs and mid-market companies while targeting both commercial returns and measurable development impact."
+        },
+        {
+          "question": "What kinds of companies and sectors does AGIF II mainly invest in?",
+          "answer": "AGIF II mainly invests in resilient African SMEs and mid-market companies in sectors such as healthcare, financial services and fintech, agriculture and food processing, telecom and fibre infrastructure, logistics, selected manufacturing and education. The fund focuses on businesses that provide essential goods and services."
+        },
+        {
+          "question": "What net return range does AGIF II aim to deliver to its investors, and what type of impact does it target?",
+          "answer": "\n\n The AGIF II targets gross USD returns in roughly the low-to-mid teens per annum over the life of the fund. It also seeks to expand access to essential services such as healthcare, education, financial inclusion and food security in African markets."
+        },
+        {
+          "question": "How does TLG Capital manage and mitigate risk in its transactions?",
+          "answer": "At TLG Capital, we have rigorous credit analysis and strong collateral and security packages in place to manage and mitigate risk through rigorous credit analysis and strong collateral and security packages."
+        },
+        {
+          "question": "In what ways do TLG Capital's flexible credit structures help businesses compared with plain-vanilla bank loans?",
+          "answer": "Compared to plain-vanilla bank loans, the flexible credit structures offered by TLG Capital are tailored to a company’s cash flows and collateral, offering more flexible repayment profiles than standard bank loans. They can be structured around local constraints, helping businesses fund growth and working capital when plain-vanilla bank loans are unavailable or too rigid."
+        },
+        {
+          "question": "What differentiates TLG Capital from other Africa-focused investment firms?",
+          "answer": "At TLG Capital, we emphasise essential sectors and combines commercial discipline with clear, measurable development impact goals. It emphasises essential sectors and combines commercial discipline with clear, measurable development impact goals."
+        },
+        {
+          "question": "Why does TLG Capital emphasise working with local banks and on-the-ground partners?",
+          "answer": "Working with local banks and on-the-ground partners is essential for TLG Capital because they understand local borrowers, regulations and market dynamics. This allows TLG Capital to structure more appropriate, scalable and risk-aware financing solutions."
+        },
+        {
+          "question": "What is Blackstone in the finance world?",
+          "answer": "Blackstone, often called Blackstone Group, is a leading global investment firm focused on private equity buyouts, real estate, and hedge fund solutions."
+        }
+      ]
+    }
+  ]
+}
