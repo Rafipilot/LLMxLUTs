@@ -80,6 +80,8 @@ class Attention(nn.Module):
 
         self.scale = self.args.head_dim**-0.5
 
+        self.attn_scores = None ## for lut
+
         self.wq = nn.Linear(
             args.dim,
             args.n_heads * args.head_dim,
@@ -154,6 +156,7 @@ class Attention(nn.Module):
 
         scores = scores.float()
         scores = nn.functional.softmax(scores, dim=-1).type_as(query)
+        self.attn_scores = scores
         output = torch.matmul(scores, value)  # (bs, n_local_heads, slen, head_dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
         return self.wo(output)
@@ -182,7 +185,7 @@ class FeedForward(nn.Module):
     def forward(self, x) -> torch.Tensor:
         return self.w2(nn.functional.silu(self.w1(x)) * self.w3(x))
 
-class LUT():
+class LUT:
     def __init__(self):
         self.keys = []
         self.values = []
@@ -191,6 +194,7 @@ class LUT():
         self.cost_scale = 0.0
 
     def train(self, xs, ys):
+        # xs, ys: [B, d] or iterable of [d]
         for x, y in zip(xs, ys):
             print("adding rows...")
             x = x.detach().clone().squeeze()
@@ -225,10 +229,17 @@ class LUT():
         keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
         values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
 
-        for i in range(len(self.lookupTableMetaData)):
-            meta = self.lookupTableMetaData[i]
-            meta[0] = meta[0] + 1
-            self.lookupTableMetaData[i] = meta
+        # --- 1. normalize input into a single [d] vector q ---
+        if x.dim() == 3:
+            # [B, T, d] -> last batch, last token
+            q = x[-1, -1, :]
+        elif x.dim() == 2:
+            # [B, d] -> last batch
+            q = x[-1, :]
+        elif x.dim() == 1:
+            q = x
+        else:
+            raise ValueError(f"LUT.forward: unsupported x.dim()={x.dim()}, shape={x.shape}")
 
 
         N, k = keys.shape
@@ -242,8 +253,9 @@ class LUT():
         for row in self.lookupTableMetaData:
             number_of_look_up_since_last_hit = row[0]
 
-            cost = (1/(number_of_look_up_since_last_hit+1))
-            costs.append(cost)
+        # --- 2. empty table: no effect ---
+        if len(self.lookupTable) == 0:
+            return torch.zeros_like(q), 0.0
 
         costs = torch.tensor(costs, device=device)
         
@@ -316,8 +328,9 @@ class TransformerBlock(nn.Module):
         else:
             self.use_wnn = False
         self.pre_wnn_x = None  
-        self.residual_scale = 1
+        self.residual_scale = 1   # or 15, but be consistent everywhere
 
+        # --- projection down to lut_key_dim (from main) ---
         self.lut_key_dim = getattr(args, "lut_key_dim", args.dim // 4)
         self.lut_key_proj = nn.Parameter(
             torch.empty(args.dim, self.lut_key_dim),
@@ -325,106 +338,70 @@ class TransformerBlock(nn.Module):
         )
         nn.init.orthogonal_(self.lut_key_proj)
 
+    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.5):
+        """
+        pre_wnn_x: [1, T, d]  (hidden states at this block)
+        Uses attention to build a context vector, combines with last token,
+        then projects down to lut_key_dim.
+        returns: [1, lut_key_dim] key
+        """
+        import torch
+        import torch.nn.functional as F
 
-    def _compute_lut_key(self, pre_wnn_x):
-        # --- baseline:(last token) ---
-        key = pre_wnn_x[:, -1, :]  # [1, d]
-        key_low = key @ self.lut_key_proj    # [1, lut_key_dim]
+        B, T, d = pre_wnn_x.shape
+        assert B == 1, f"Expected batch size 1, got {B}"
+        device = pre_wnn_x.device
+
+        # --- 1. baseline key: last-token hidden ---
+        key_last = pre_wnn_x[:, -1, :]      # [1, d]
+
+        # --- 2. get attention probs for last query (from attn-hybrid branch) ---
+        attn_scores = getattr(self.attention, "attn_scores", None)
+
+        if attn_scores is not None:
+            # attn_scores: [1, H, T_q, T_k]
+            _, H, T_q, T_k = attn_scores.shape
+            last_q = T_q - 1
+
+            # average heads for the last token: [H, T_k] -> [T_k]
+            alpha = attn_scores[0, :, last_q, :].mean(dim=0)  # [T_k]
+
+            # --- 3. align T_k with T ---
+            if T_k > T:
+                alpha = alpha[-T:]
+            elif T_k < T:
+                pad = T - T_k
+                alpha = torch.cat(
+                    [torch.zeros(pad, device=device, dtype=alpha.dtype), alpha],
+                    dim=0,
+                )  # [T]
+
+            # normalise attention so it sums to 1
+            alpha_sum = alpha.sum()
+            if alpha_sum > 0:
+                alpha = alpha / (alpha_sum + 1e-9)  # [T]
+
+                # --- 4. build context vector using attention over hidden states ---
+                context = (alpha.view(1, T, 1) * pre_wnn_x).sum(dim=1)   # [1, d]
+
+                # --- 5. combine: last token + λ * context ---
+                combined = key_last + lam * context                      # [1, d]
+            else:
+                # degenerate attention -> just use last-token key
+                combined = key_last
+        else:
+            # no attention cached (e.g. in some paths) -> fall back
+            combined = key_last
+
+        # --- 6. normalise in model space ---
+        combined = F.normalize(combined.float(), dim=-1).to(pre_wnn_x.dtype)  # [1, d]
+
+        # --- 7. project down to lut_key_dim (from main branch) ---
+        key_low = combined @ self.lut_key_proj    # [1, lut_key_dim]
         key_low = F.normalize(key_low, dim=-1)
-        return key
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        freqs_cis: torch.Tensor,
-        positions: torch.Tensor,
-        mask: Optional[torch.Tensor],
-    ) -> torch.Tensor:
-        # Standard transformer block forward
-        r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask)
-        h = x + r_attn
+        return key_low
 
-        r_ffn = self.feed_forward(self.ffn_norm(h))
-        base = h + r_ffn  # this is where LUT attaches
-
-        # Cache a DETACHED copy for LUT training
-        self.pre_wnn_x = base.detach()
-
-        out = base
-
-        # LUT only for inference; no grads
-        if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
-            with torch.no_grad():
-
-                wnn_residual, highest_sim = self.LUT.forward(self._compute_lut_key(self.pre_wnn_x))
-                wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
-                res_tensor = torch.zeros_like(out)
-                res_tensor[:, -1, :] = wnn_residual
-            #sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
-            #sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
-            out = out + (highest_sim * self.residual_scale)* res_tensor # this should be out of no grad
-
-        return out
-def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
-    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
-    t = torch.arange(end, device=freqs.device)  # type: ignore
-    freqs = torch.outer(t, freqs).float()  # type: ignore
-    return torch.polar(torch.ones_like(freqs), freqs)  # complex64
-
-
-class Transformer(nn.Module):
-    def __init__(self, args: ModelArgs):
-        super().__init__()
-        self.args = args
-        self.vocab_size = args.vocab_size
-        self.n_layers = args.n_layers
-        assert self.vocab_size > 0
-
-        self.tok_embeddings = nn.Embedding(args.vocab_size, args.dim)
-
-        self.layers = torch.nn.ModuleList(
-            [TransformerBlock(args=args) for _ in range(args.n_layers)]
-        )
-
-        self.norm = RMSNorm(args.dim, eps=args.norm_eps)
-
-        self.output = nn.Linear(
-            args.dim,
-            args.vocab_size,
-            bias=False
-        )
-
-        self.freqs_cis = precompute_freqs_cis(self.args.head_dim, 128_000).to("cuda")
-
-        self.n_ctx = 128000 ## 128 k context window
-
-
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        positions: torch.Tensor,
-    ):
-        h = self.tok_embeddings(input_ids)
-        freqs_cis = self.freqs_cis[positions]
-
-        mask: Optional[torch.Tensor] = None
-        if input_ids.shape[1] > 1:
-            seqlen = input_ids.shape[1]
-            tensor = torch.full(
-                (seqlen, seqlen),
-                dtype=h.dtype,
-                fill_value=1,
-                device=h.device,
-            )
-            mask = torch.tril(tensor, diagonal=0).to(h.dtype)
-            # make the mask banded to account for sliding window
-            mask = torch.triu(mask, diagonal=-self.args.sliding_window)
-            mask = torch.log(mask)
-        
-        for layer in self.layers:
-            h = layer(h, freqs_cis, positions, mask)
-
-        return self.output(self.norm(h)).float()
 
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
 
