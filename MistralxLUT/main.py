@@ -30,6 +30,8 @@ class ModelArgs:
     max_batch_size: int = 0
     rope_theta: float = 1000000.0
 
+    lut_key_dim: int = 128
+
 
 def repeat_kv(keys: torch.Tensor, values: torch.Tensor, repeats: int):
     keys = torch.repeat_interleave(keys, repeats=repeats, dim=2)
@@ -185,8 +187,9 @@ class FeedForward(nn.Module):
 
 class LUT:
     def __init__(self):
-        self.lookupTable = []          # each row: [2, d] (key, value)
-        self.lookupTableMetaData = []  # you can ignore this for now
+        self.keys = []
+        self.values = []
+        self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
         self.CS_threshold = 0.25
         self.cost_scale = 0.0
 
@@ -194,22 +197,37 @@ class LUT:
         # xs, ys: [B, d] or iterable of [d]
         for x, y in zip(xs, ys):
             print("adding rows...")
-            x = x.detach().clone()
-            y = y.detach().clone()
-            row = torch.stack([x, y])     # [2, d]
-            self.lookupTable.append(row)
+            x = x.detach().clone().squeeze()
+            y = y.detach().clone().squeeze()
+            self.keys.append(x)
+            self.values.append(y)
             self.lookupTableMetaData.append([1000, 0])
 
-    def forward(self, x: torch.Tensor):
-        """
-        x can be:
-          - [B, T, d]
-          - [B, d]
-          - [d]
-        Returns (residual: [d], highest_sim: float)
-        """
+    
+    def forward(self, x):
         if x is None:
             return None, None
+
+        if x.dim() == 3:
+            q = x[-1, -1, :]
+        elif x.dim() == 2:
+            q = x[-1, :]
+        elif x.dim() == 1:
+            q = x
+        else:
+            raise ValueError(f"LUT.forward: unsupported x.dim()={x.dim()}, shape={x.shape}")
+
+        q = q.squeeze()
+        q = torch.nan_to_num(q, nan=0.0, posinf=0.0, neginf=0.0)
+
+        
+        if len(self.keys) == 0:
+            return torch.zeros_like(q), 0.0
+
+        device = q.device
+
+        keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
+        values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
 
         # --- 1. normalize input into a single [d] vector q ---
         if x.dim() == 3:
@@ -223,63 +241,61 @@ class LUT:
         else:
             raise ValueError(f"LUT.forward: unsupported x.dim()={x.dim()}, shape={x.shape}")
 
-        q = q.squeeze()
-        q = torch.nan_to_num(q, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # --- 2. empty table: no effect ---
-        if len(self.lookupTable) == 0:
-            return torch.zeros_like(q), 0.0
-
-        device = q.device
-        dtype_q = q.dtype
-
-        # --- 3. stack keys and values: [N, d] each ---
-        keys = torch.stack(
-            [row[0].to(device=device, dtype=torch.float32) for row in self.lookupTable]
-        )  # [N, d]
-        values = torch.stack(
-            [row[1].to(device=device, dtype=dtype_q) for row in self.lookupTable]
-        )  # [N, d]
-
-        N, d = keys.shape
+        N, k = keys.shape
 
         keys = torch.nan_to_num(keys, nan=0.0, posinf=0.0, neginf=0.0)
         q_f32 = q.to(torch.float32)
         q_f32 = torch.nan_to_num(q_f32, nan=0.0, posinf=0.0, neginf=0.0)
 
-        # --- 4. cosine similarity: sims shape [N] ---
-        sims = F.cosine_similarity(keys, q_f32.unsqueeze(0).expand(N, d), dim=-1)  # [N]
+        ### adding a punishment/ cost for looking up memories which have come up just before
+        costs = []
+        for row in self.lookupTableMetaData:
+            number_of_look_up_since_last_hit = row[0]
+
+        # --- 2. empty table: no effect ---
+        if len(self.lookupTable) == 0:
+            return torch.zeros_like(q), 0.0
+
+        costs = torch.tensor(costs, device=device)
+        
+        sims = F.cosine_similarity(keys, q_f32.unsqueeze(0).expand(N, k), dim=-1)
         sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0)
         sims = sims.clamp(-1.0, 1.0)
+        sims = sims - self.cost_scale*costs
 
-        # --- 5. pick best row ---
         max_sim_idx = torch.argmax(sims)
         highest_sim = sims[max_sim_idx].item()
         best_residual = values[max_sim_idx]  # [d]
 
+        print("Highest sim: ", highest_sim)
         if highest_sim < self.CS_threshold:
             print("Low similarity, cs threshold:", self.CS_threshold)
             return torch.zeros_like(best_residual), 0.0
+        
+        row_meta_data = self.lookupTableMetaData[max_sim_idx]
+        self.lookupTableMetaData[max_sim_idx]= [0, row_meta_data[1]+1]
+        
 
-        return best_residual, highest_sim
-
+        return best_residual.to(q.device), highest_sim
     
     def resetLUT(self):
-        self.lookupTable = [] # main lookup table
+        self.keys = []
+        self.values = []
         self.lookupTableMetaData = []
 
     def resetCosts(self):
         for row in self.lookupTableMetaData:
             row[0] = 1000
 
-    def saveLUT(self, save_name):
-        with open(save_name, "w") as f:
-            save_lookup = self.lookupTable.numpy()
-            json.dump(save_lookup, f, indent=2)
+    # def saveLUT(self, save_name):
+    #     with open(save_name, "w") as f:
+    #         save_lookup = self.lookupTable.numpy()
+    #         json.dump(save_lookup, f, indent=2)
 
-    def loadLUT(self, save_name):
-        with open(save_name, "r") as f:
-            self.lookupTable = json.load(f)
+    # def loadLUT(self, save_name):
+    #     with open(save_name, "r") as f:
+    #         self.lookupTable = json.load(f)
 
 class RMSNorm(torch.nn.Module):
     def __init__(self, dim: int, eps: float = 1e-6):
@@ -312,13 +328,22 @@ class TransformerBlock(nn.Module):
         else:
             self.use_wnn = False
         self.pre_wnn_x = None  
-        self.residual_scale = 15
-        
+        self.residual_scale = 1   # or 15, but be consistent everywhere
+
+        # --- projection down to lut_key_dim (from main) ---
+        self.lut_key_dim = getattr(args, "lut_key_dim", args.dim // 4)
+        self.lut_key_proj = nn.Parameter(
+            torch.empty(args.dim, self.lut_key_dim),
+            requires_grad=False
+        )
+        nn.init.orthogonal_(self.lut_key_proj)
+
     def _compute_lut_key(self, pre_wnn_x, lam: float = 0.5):
         """
         pre_wnn_x: [1, T, d]  (hidden states at this block)
-        block.attention.attn_scores: [1, H, T_q, T_k] (softmaxed attention)
-        returns: [1, d] key
+        Uses attention to build a context vector, combines with last token,
+        then projects down to lut_key_dim.
+        returns: [1, lut_key_dim] key
         """
         import torch
         import torch.nn.functional as F
@@ -328,144 +353,54 @@ class TransformerBlock(nn.Module):
         device = pre_wnn_x.device
 
         # --- 1. baseline key: last-token hidden ---
-        key = pre_wnn_x[:, -1, :]      # [1, d]
+        key_last = pre_wnn_x[:, -1, :]      # [1, d]
 
-        # --- 2. get attention probs for last query ---
+        # --- 2. get attention probs for last query (from attn-hybrid branch) ---
         attn_scores = getattr(self.attention, "attn_scores", None)
-        if attn_scores is None:
-            # no attention cached (shouldn't happen in normal flow)
-            return key
 
-        # attn_scores: [1, H, T_q, T_k]
-        _, H, T_q, T_k = attn_scores.shape
-        last_q = T_q - 1
+        if attn_scores is not None:
+            # attn_scores: [1, H, T_q, T_k]
+            _, H, T_q, T_k = attn_scores.shape
+            last_q = T_q - 1
 
-        # average heads for the last token: [H, T_k] -> [T_k]
-        alpha = attn_scores[0, :, last_q, :].mean(dim=0)  # [T_k]
+            # average heads for the last token: [H, T_k] -> [T_k]
+            alpha = attn_scores[0, :, last_q, :].mean(dim=0)  # [T_k]
 
-        # --- 3. align T_k (keys) with T (sequence positions) ---
-        if T_k > T:
-            alpha = alpha[-T:]
-        elif T_k < T:
-            pad = T - T_k
-            alpha = torch.cat(
-                [torch.zeros(pad, device=device, dtype=alpha.dtype), alpha],
-                dim=0,
-            )  # [T]
+            # --- 3. align T_k with T ---
+            if T_k > T:
+                alpha = alpha[-T:]
+            elif T_k < T:
+                pad = T - T_k
+                alpha = torch.cat(
+                    [torch.zeros(pad, device=device, dtype=alpha.dtype), alpha],
+                    dim=0,
+                )  # [T]
 
-        # normalise attention so it sums to 1
-        alpha_sum = alpha.sum()
-        if alpha_sum <= 0:
-            # degenerate attention -> just use last-token key
-            return key
-        alpha = alpha / (alpha_sum + 1e-9)  # [T]
+            # normalise attention so it sums to 1
+            alpha_sum = alpha.sum()
+            if alpha_sum > 0:
+                alpha = alpha / (alpha_sum + 1e-9)  # [T]
 
-        # --- 4. build a context vector using attention over hidden states ---
-        # pre_wnn_x: [1, T, d]
-        # alpha.view(1, T, 1): [1, T, 1]
-        context = (alpha.view(1, T, 1) * pre_wnn_x).sum(dim=1)   # [1, d]
+                # --- 4. build context vector using attention over hidden states ---
+                context = (alpha.view(1, T, 1) * pre_wnn_x).sum(dim=1)   # [1, d]
 
-        # --- 5. combine: activation + λ * context ---
-        combined = key + lam * context                           # [1, d]
+                # --- 5. combine: last token + λ * context ---
+                combined = key_last + lam * context                      # [1, d]
+            else:
+                # degenerate attention -> just use last-token key
+                combined = key_last
+        else:
+            # no attention cached (e.g. in some paths) -> fall back
+            combined = key_last
 
-        # --- 6. (optional but good) normalize the key ---
-        combined = F.normalize(combined.float(), dim=-1).to(pre_wnn_x.dtype)
+        # --- 6. normalise in model space ---
+        combined = F.normalize(combined.float(), dim=-1).to(pre_wnn_x.dtype)  # [1, d]
 
-        return combined  # [1, d]
+        # --- 7. project down to lut_key_dim (from main branch) ---
+        key_low = combined @ self.lut_key_proj    # [1, lut_key_dim]
+        key_low = F.normalize(key_low, dim=-1)
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        freqs_cis: torch.Tensor,
-        positions: torch.Tensor,
-        mask: Optional[torch.Tensor],
-    ) -> torch.Tensor:
-        # Standard transformer block forward
-        r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask)
-        h = x + r_attn
-
-        r_ffn = self.feed_forward(self.ffn_norm(h))
-        base = h + r_ffn  # this is where LUT attaches
-
-        # Cache a DETACHED copy for LUT training
-        self.pre_wnn_x = base.detach()
-
-        out = base
-
-        # LUT only for inference; no grads
-        if self.wnn_block and self.use_wnn and len(self.LUT.lookupTable) > 0:
-            with torch.no_grad():
-                key = self._compute_lut_key(self.pre_wnn_x)
-                wnn_residual, highest_sim = self.LUT.forward(key)
-                wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
-                res_tensor = torch.zeros_like(out)
-                res_tensor[:, -1, :] = wnn_residual
-            #sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
-            #sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
-            out = out + (highest_sim * self.residual_scale)* res_tensor # this should be out of no grad
-
-        return out
-def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
-    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
-    t = torch.arange(end, device=freqs.device)  # type: ignore
-    freqs = torch.outer(t, freqs).float()  # type: ignore
-    return torch.polar(torch.ones_like(freqs), freqs)  # complex64
-
-
-class Transformer(nn.Module):
-    def __init__(self, args: ModelArgs):
-        super().__init__()
-        self.args = args
-        self.vocab_size = args.vocab_size
-        self.n_layers = args.n_layers
-        assert self.vocab_size > 0
-
-        self.tok_embeddings = nn.Embedding(args.vocab_size, args.dim)
-
-        self.layers = torch.nn.ModuleList(
-            [TransformerBlock(args=args) for _ in range(args.n_layers)]
-        )
-
-        self.norm = RMSNorm(args.dim, eps=args.norm_eps)
-
-        self.output = nn.Linear(
-            args.dim,
-            args.vocab_size,
-            bias=False
-        )
-
-        self.freqs_cis = precompute_freqs_cis(self.args.head_dim, 128_000).to("cuda")
-
-        self.n_ctx = 128000 ## 128 k context window
-
-
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        positions: torch.Tensor,
-    ):
-        h = self.tok_embeddings(input_ids)
-        freqs_cis = self.freqs_cis[positions]
-
-        mask: Optional[torch.Tensor] = None
-        if input_ids.shape[1] > 1:
-            seqlen = input_ids.shape[1]
-            tensor = torch.full(
-                (seqlen, seqlen),
-                dtype=h.dtype,
-                fill_value=1,
-                device=h.device,
-            )
-            mask = torch.tril(tensor, diagonal=0).to(h.dtype)
-            # make the mask banded to account for sliding window
-            mask = torch.triu(mask, diagonal=-self.args.sliding_window)
-            mask = torch.log(mask)
-        
-        for layer in self.layers:
-            h = layer(h, freqs_cis, positions, mask)
-
-        return self.output(self.norm(h)).float()
-
+        return key_low
 
 
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
@@ -628,11 +563,18 @@ class Transformer(nn.Module):
             model_args = ModelArgs(**json.loads(f.read()))
         model_args.max_batch_size = max_batch_size
         model = Transformer(model_args).to(device=device, dtype=dtype)
+
         try:
-            loaded = torch.load(folder / 'consolidated.00.pth')
+            loaded = torch.load(folder / 'consolidated.00.pth', map_location="cpu")
         except Exception as e:
             loaded = safe_load(str(folder / "consolidated.safetensors"))
-        model.load_state_dict(loaded)
+
+        missing, unexpected = model.load_state_dict(loaded, strict=False)
+        if missing:
+            print("[from_folder] Missing keys (expected for new stuff like lut_key_proj):", missing)
+        if unexpected:
+            print("[from_folder] Unexpected keys:", unexpected)
+
         return model
 
 
