@@ -402,6 +402,67 @@ class TransformerBlock(nn.Module):
 
         return key_low
 
+def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
+    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+    t = torch.arange(end, device=freqs.device)  # type: ignore
+    freqs = torch.outer(t, freqs).float()  # type: ignore
+    return torch.polar(torch.ones_like(freqs), freqs)  # complex64
+
+
+class Transformer(nn.Module):
+    def __init__(self, args: ModelArgs):
+        super().__init__()
+        self.args = args
+        self.vocab_size = args.vocab_size
+        self.n_layers = args.n_layers
+        assert self.vocab_size > 0
+
+        self.tok_embeddings = nn.Embedding(args.vocab_size, args.dim)
+
+        self.layers = torch.nn.ModuleList(
+            [TransformerBlock(args=args) for _ in range(args.n_layers)]
+        )
+
+        self.norm = RMSNorm(args.dim, eps=args.norm_eps)
+
+        self.output = nn.Linear(
+            args.dim,
+            args.vocab_size,
+            bias=False
+        )
+
+        self.freqs_cis = precompute_freqs_cis(self.args.head_dim, 128_000).to("cuda")
+
+        self.n_ctx = 128000 ## 128 k context window
+
+
+    def forward(
+        self,
+        input_ids: torch.Tensor,
+        positions: torch.Tensor,
+    ):
+        h = self.tok_embeddings(input_ids)
+        freqs_cis = self.freqs_cis[positions]
+
+        mask: Optional[torch.Tensor] = None
+        if input_ids.shape[1] > 1:
+            seqlen = input_ids.shape[1]
+            tensor = torch.full(
+                (seqlen, seqlen),
+                dtype=h.dtype,
+                fill_value=1,
+                device=h.device,
+            )
+            mask = torch.tril(tensor, diagonal=0).to(h.dtype)
+            # make the mask banded to account for sliding window
+            mask = torch.triu(mask, diagonal=-self.args.sliding_window)
+            mask = torch.log(mask)
+        
+        for layer in self.layers:
+            h = layer(h, freqs_cis, positions, mask)
+
+        return self.output(self.norm(h)).float()
+
 
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
 
