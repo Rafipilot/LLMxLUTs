@@ -253,8 +253,11 @@ class LUT:
         for row in self.lookupTableMetaData:
             number_of_look_up_since_last_hit = row[0]
 
+            cost = (1/(number_of_look_up_since_last_hit+1))
+            costs.append(cost)
+
         # --- 2. empty table: no effect ---
-        if len(self.lookupTable) == 0:
+        if len(self.keys) == 0:
             return torch.zeros_like(q), 0.0
 
         costs = torch.tensor(costs, device=device)
@@ -401,6 +404,40 @@ class TransformerBlock(nn.Module):
         key_low = F.normalize(key_low, dim=-1)
 
         return key_low
+
+    def forward(
+        self,
+        x: torch.Tensor,
+        freqs_cis: torch.Tensor,
+        positions: torch.Tensor,
+        mask: Optional[torch.Tensor],
+    ) -> torch.Tensor:
+        # Standard transformer block forward
+        r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask)
+        h = x + r_attn
+
+        r_ffn = self.feed_forward(self.ffn_norm(h))
+        base = h + r_ffn  # this is where LUT attaches
+
+        # Cache a DETACHED copy for LUT training
+        self.pre_wnn_x = base.detach()
+
+        out = base
+
+        # LUT only for inference; no grads
+        if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
+            with torch.no_grad():
+
+                wnn_residual, highest_sim = self.LUT.forward(self._compute_lut_key(self.pre_wnn_x))
+                wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
+                res_tensor = torch.zeros_like(out)
+                res_tensor[:, -1, :] = wnn_residual
+            #sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
+            #sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
+            out = out + (highest_sim * self.residual_scale)* res_tensor # this should be out of no grad
+
+        return out
+
 
 def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
