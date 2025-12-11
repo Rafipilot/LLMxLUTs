@@ -2,6 +2,8 @@ from pathlib import Path
 
 from main import Tokenizer, Transformer, generate
 
+
+device = "cuda"
 model_path = "mistral-7B-Instruct-v0.3"
 max_tokens = 10
 

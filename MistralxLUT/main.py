@@ -197,7 +197,7 @@ class LUT():
             y = y.detach().clone().squeeze()
             self.keys.append(x)
             self.values.append(y)
-            self.lookupTableMetaData.append(1000, 0)
+            self.lookupTableMetaData.append([1000, 0])
 
     
     def forward(self, x):
@@ -235,7 +235,6 @@ class LUT():
         sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0)
         sims = sims.clamp(-1.0, 1.0)
 
-        # --- 5. pick best row ---
         max_sim_idx = torch.argmax(sims)
         highest_sim = sims[max_sim_idx].item()
         best_residual = values[max_sim_idx]  # [d]
@@ -304,6 +303,14 @@ class TransformerBlock(nn.Module):
         )
         nn.init.orthogonal_(self.lut_key_proj)
 
+
+    def _compute_lut_key(self, pre_wnn_x):
+        # --- baseline:(last token) ---
+        key = pre_wnn_x[:, -1, :]  # [1, d]
+        key_low = key @ self.lut_key_proj    # [1, lut_key_dim]
+        key_low = F.normalize(key_low, dim=-1)
+        return key
+
     def forward(
         self,
         x: torch.Tensor,
@@ -324,9 +331,10 @@ class TransformerBlock(nn.Module):
         out = base
 
         # LUT only for inference; no grads
-        if self.wnn_block and self.use_wnn and len(self.LUT.lookupTable) > 0:
+        if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
             with torch.no_grad():
-                wnn_residual, highest_sim = self.LUT.forward(self.pre_wnn_x)
+
+                wnn_residual, highest_sim = self.LUT.forward(self._compute_lut_key(self.pre_wnn_x))
                 wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
                 res_tensor = torch.zeros_like(out)
                 res_tensor[:, -1, :] = wnn_residual
@@ -395,13 +403,6 @@ class Transformer(nn.Module):
             h = layer(h, freqs_cis, positions, mask)
 
         return self.output(self.norm(h)).float()
-
-    def _compute_lut_key(self, block, pre_wnn_x, encoded_ctx, k):
-        # --- baseline:(last token) ---
-        key = pre_wnn_x[:, -1, :]  # [1, d]
-        key_low = key @ self.lut_key_proj    # [1, lut_key_dim]
-        key_low = F.normalize(key_low, dim=-1)
-        return key
 
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
 
@@ -524,7 +525,7 @@ class Transformer(nn.Module):
                 print(f"[trainLUT] Training LUT on block {i}")
                 now_lut = datetime.now()
                 with torch.no_grad():
-                    key_vec = self._compute_lut_key(block, pre_wnn_x.detach(), encoded_ctx, k)
+                    key_vec = block._compute_lut_key(pre_wnn_x.detach())
                     value_vec = wnn_target_residual.detach()[:, -1, :]
                     block.LUT.train(key_vec, value_vec)
                 print(
@@ -563,11 +564,18 @@ class Transformer(nn.Module):
             model_args = ModelArgs(**json.loads(f.read()))
         model_args.max_batch_size = max_batch_size
         model = Transformer(model_args).to(device=device, dtype=dtype)
+
         try:
-            loaded = torch.load(folder / 'consolidated.00.pth')
+            loaded = torch.load(folder / 'consolidated.00.pth', map_location="cpu")
         except Exception as e:
             loaded = safe_load(str(folder / "consolidated.safetensors"))
-        model.load_state_dict(loaded)
+
+        missing, unexpected = model.load_state_dict(loaded, strict=False)
+        if missing:
+            print("[from_folder] Missing keys (expected for new stuff like lut_key_proj):", missing)
+        if unexpected:
+            print("[from_folder] Unexpected keys:", unexpected)
+
         return model
 
 
