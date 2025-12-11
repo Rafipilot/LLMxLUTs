@@ -26,7 +26,7 @@ WNN_BLOCKS = [-1, -6, -11]        # LUT blocks to activate
 # - Block -1  : strongest LUT influence near the top
 # - Block -6  : moderate mid-block influence
 # - Block -11 : smaller but early "cascade" influence
-RESIDUALS = [0.65, 0.5, 0.4]
+RESIDUALS = [0.8, 0.8, 0.8]
 
 GEN_LENGTH = 350  # Slightly longer for nicer answers
 
@@ -415,10 +415,17 @@ def build_residual_grid():
     Tuned around the region that gave clean, numerically accurate answers.
     """
     residuals = [
-
         # --- all three active, light to medium ---
-    [0.8, 0.8, 0.8],
+        [0.8, 0.8, 0.8],    # balanced, strong overall
+        [0.7, 0.7, 0.85],   # slight tilt to last block
+
+        # --- slightly top-heavy: last block wins on facts ---
+        [0.6, 0.6, 0.9],
+
+        # --- gently increasing down the stack ---
+        [0.5, 0.65, 0.85],
     ]
+
 
     return residuals
 
