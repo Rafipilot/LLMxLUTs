@@ -1,5 +1,6 @@
 import torch
 from torch import nn
+import torch.nn.functional as F
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,7 +31,7 @@ class ModelArgs:
     max_batch_size: int = 0
     rope_theta: float = 1000000.0
 
-    lut_key_dim: int = 128
+    lut_key_dim: int = 1024
 
 
 def repeat_kv(keys: torch.Tensor, values: torch.Tensor, repeats: int):
@@ -280,6 +281,8 @@ class LUT:
         
         self.lookupTableMetaData[max_sim_idx][0] = 0
         self.lookupTableMetaData[max_sim_idx][1] += 1
+        for row in self.lookupTableMetaData:
+            row[0] += 1
         
 
         return best_residual.to(q.device), highest_sim
@@ -348,6 +351,7 @@ class TransformerBlock(nn.Module):
         with torch.no_grad():
             nn.init.orthogonal_(self.lut_key_proj)
 
+        
     def _compute_lut_key(self, pre_wnn_x, lam: float = 0.5):
         """
         pre_wnn_x: [1, T, d]  (hidden states at this block)
@@ -362,55 +366,14 @@ class TransformerBlock(nn.Module):
         assert B == 1, f"Expected batch size 1, got {B}"
         device = pre_wnn_x.device
 
-        # --- 1. baseline key: last-token hidden ---
         key_last = pre_wnn_x[:, -1, :]      # [1, d]
-
-        # # --- 2. get attention probs for last query (from attn-hybrid branch) ---
-        # attn_scores = getattr(self.attention, "attn_scores", None)
-
-        # if attn_scores is not None:
-        #     # attn_scores: [1, H, T_q, T_k]
-        #     _, H, T_q, T_k = attn_scores.shape
-        #     last_q = T_q - 1
-
-        #     # average heads for the last token: [H, T_k] -> [T_k]
-        #     alpha = attn_scores[0, :, last_q, :].mean(dim=0)  # [T_k]
-
-        #     # --- 3. align T_k with T ---
-        #     if T_k > T:
-        #         alpha = alpha[-T:]
-        #     elif T_k < T:
-        #         pad = T - T_k
-        #         alpha = torch.cat(
-        #             [torch.zeros(pad, device=device, dtype=alpha.dtype), alpha],
-        #             dim=0,
-        #         )  # [T]
-
-        #     # normalise attention so it sums to 1
-        #     alpha_sum = alpha.sum()
-        #     if alpha_sum > 0:
-        #         alpha = alpha / (alpha_sum + 1e-9)  # [T]
-
-        #         # --- 4. build context vector using attention over hidden states ---
-        #         context = (alpha.view(1, T, 1) * pre_wnn_x).sum(dim=1)   # [1, d]
-
-        #         # --- 5. combine: last token + λ * context ---
-        #         combined = key_last + lam * context                      # [1, d]
-        #     else:
-        #         # degenerate attention -> just use last-token key
-        #         combined = key_last
-        # else:
-        #     # no attention cached (e.g. in some paths) -> fall back
-        #     combined = key_last
-
-        # # --- 6. normalise in model space ---
-        # combined = F.normalize(combined.float(), dim=-1).to(pre_wnn_x.dtype)  # [1, d]
-
-        # # --- 7. project down to lut_key_dim (from main branch) ---
         key_low = key_last @ self.lut_key_proj    # [1, lut_key_dim]
         key_low = F.normalize(key_low, dim=-1)
 
         return key_low
+
+
+
 
     def forward(
         self,
