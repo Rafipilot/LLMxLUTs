@@ -268,6 +268,8 @@ class LUT:
         sims = sims - self.cost_scale*costs
 
         max_sim_idx = torch.argmax(sims)
+        top_sims, top_idx = torch.topk(sims, k=min(5, N))
+        print("top sims:", list(zip(top_sims.tolist(), top_idx.tolist())))
         highest_sim = sims[max_sim_idx].item()
         best_residual = values[max_sim_idx]  # [d]
 
@@ -276,8 +278,8 @@ class LUT:
             print("Low similarity, cs threshold:", self.CS_threshold)
             return torch.zeros_like(best_residual), 0.0
         
-        row_meta_data = self.lookupTableMetaData[max_sim_idx]
-        self.lookupTableMetaData[max_sim_idx]= [0, row_meta_data[1]+1]
+        self.lookupTableMetaData[max_sim_idx][0] = 0
+        self.lookupTableMetaData[max_sim_idx][1] += 1
         
 
         return best_residual.to(q.device), highest_sim
