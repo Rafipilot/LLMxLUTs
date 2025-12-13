@@ -352,25 +352,22 @@ class TransformerBlock(nn.Module):
             nn.init.orthogonal_(self.lut_key_proj)
 
         
-    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.5):
-        """
-        pre_wnn_x: [1, T, d]  (hidden states at this block)
-        Uses attention to build a context vector, combines with last token,
-        then projects down to lut_key_dim.
-        returns: [1, lut_key_dim] key
-        """
-        import torch
-        import torch.nn.functional as F
+    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.65, win: int = 64):
 
-        B, T, d = pre_wnn_x.shape
-        assert B == 1, f"Expected batch size 1, got {B}"
-        device = pre_wnn_x.device
+        x = pre_wnn_x[0]                 # [T, d]
+        T, d = x.shape
 
-        key_last = pre_wnn_x[:, -1, :]      # [1, d]
-        key_low = key_last @ self.lut_key_proj    # [1, lut_key_dim]
-        key_low = F.normalize(key_low, dim=-1)
+        last = x[-1]                     # [d]
+        tail = x[-min(win, T):]          # [<=win, d]
+        ctx = tail.mean(dim=0)           # [d]
 
-        return key_low
+        k_local = lam * last + (1 - lam) * ctx
+        k_local = F.layer_norm(k_local, (d,))
+        k_local = F.normalize(k_local, dim=-1)
+
+        k = F.normalize(k_local, dim=-1)
+        return k.unsqueeze(0)            # [1, d] (or project after this)
+
 
 
 
