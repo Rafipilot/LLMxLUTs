@@ -351,22 +351,33 @@ class TransformerBlock(nn.Module):
         with torch.no_grad():
             nn.init.orthogonal_(self.lut_key_proj)
 
-        
-    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.65, win: int = 64):
-
+            
+    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.40, win: int = 64):
         x = pre_wnn_x[0]                 # [T, d]
         T, d = x.shape
 
-        last = x[-1]                     # [d]
-        tail = x[-min(win, T):]          # [<=win, d]
-        ctx = tail.mean(dim=0)           # [d]
+        last = x[-1]
+        tail = x[-min(win, T):]
+
+        attn = self.attention.attn_scores[0, :, 0, :]      # [H, K] (already probs)
+        w = attn.mean(dim=0)                                # [K]
+        w[0] = 0.0                                          # kill BOS pull
+
+        w = w[-min(win, T):].clone()                        # align to tail length
+        if w.numel() > 1:
+            w[-1] = 0.0                                     # don't double-count last
+
+        s = w.sum()
+        if s > 1e-8:
+            w = w / s
+            ctx = (tail * w.unsqueeze(-1)).sum(dim=0)
+        else:
+            ctx = tail.mean(dim=0)
 
         k_local = lam * last + (1 - lam) * ctx
         k_local = F.layer_norm(k_local, (d,))
         k_local = F.normalize(k_local, dim=-1)
-
-        k = F.normalize(k_local, dim=-1)
-        return k.unsqueeze(0)            # [1, d] (or project after this)
+        return k_local.unsqueeze(0)
 
 
 
