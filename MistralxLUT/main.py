@@ -352,32 +352,24 @@ class TransformerBlock(nn.Module):
             nn.init.orthogonal_(self.lut_key_proj)
 
             
-    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.40, win: int = 64):
+    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.75, win: int = 32):
         x = pre_wnn_x[0]                 # [T, d]
         T, d = x.shape
 
         last = x[-1]
-        tail = x[-min(win, T):]
+        tail = x[-min(win, T):]          # [L, d]
 
-        attn = self.attention.attn_scores[0, :, 0, :]      # [H, K] (already probs)
-        w = attn.mean(dim=0)                                # [K]
-        w[0] = 0.0                                          # kill BOS pull
-
-        w = w[-min(win, T):].clone()                        # align to tail length
-        if w.numel() > 1:
-            w[-1] = 0.0                                     # don't double-count last
-
-        s = w.sum()
-        if s > 1e-8:
-            w = w / s
-            ctx = (tail * w.unsqueeze(-1)).sum(dim=0)
+        # plain (non-attention) context pooling, excluding last to avoid double-counting
+        if tail.shape[0] > 1:
+            ctx = tail[:-1].mean(dim=0)
         else:
-            ctx = tail.mean(dim=0)
+            ctx = last
 
         k_local = lam * last + (1 - lam) * ctx
         k_local = F.layer_norm(k_local, (d,))
         k_local = F.normalize(k_local, dim=-1)
         return k_local.unsqueeze(0)
+
 
 
 
