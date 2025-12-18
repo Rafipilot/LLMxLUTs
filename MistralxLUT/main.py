@@ -161,6 +161,14 @@ class Attention(nn.Module):
         output = torch.matmul(scores, value)  # (bs, n_local_heads, slen, head_dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
         return self.wo(output)
+    
+    @torch.no_grad()
+    def reset_kv_cache(self, bsz: int):
+
+        self.cache_k[:bsz].zero_()
+        self.cache_v[:bsz].zero_()
+
+
 
 
 class FeedForward(nn.Module):
@@ -478,6 +486,9 @@ class Transformer(nn.Module):
             blk.use_wnn = False  # disable lut blocks at the start then re enable at each point 
             if hasattr(blk, "pre_wnn_x"):
                 blk.pre_wnn_x = None
+            if hasattr(blk, "timeStep_buffer"):
+                blk.timeStep_buffer = None
+            blk.attention.reset_kv_cache(bsz=1)
 
         encoded_label = tokenizer.encode(label)
         encoded_label.append(tokenizer.eos_id) # train with a eos token at the end
