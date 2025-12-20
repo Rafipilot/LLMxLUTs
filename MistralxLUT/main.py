@@ -10,6 +10,7 @@ from sentencepiece import SentencePieceProcessor
 
 import torch.nn.functional as F
 from datetime import datetime
+import math
 
 from safetensors.torch import load_file as safe_load
 
@@ -161,6 +162,12 @@ class Attention(nn.Module):
         output = torch.matmul(scores, value)  # (bs, n_local_heads, slen, head_dim)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
         return self.wo(output)
+    
+    @torch.no_grad()
+    def reset_kv_cache(self, bsz: int):
+
+        self.cache_k[:bsz].zero_()
+        self.cache_v[:bsz].zero_()
 
 
 class FeedForward(nn.Module):
@@ -197,14 +204,13 @@ class LUT:
     def train(self, xs, ys):
         # xs, ys: [B, d] or iterable of [d]
         for x, y in zip(xs, ys):
-            print("adding rows...")
             x = x.detach().clone().squeeze()
             y = y.detach().clone().squeeze()
             self.keys.append(x)
             self.values.append(y)
             self.lookupTableMetaData.append([1000, 0])
 
-    
+
     def forward(self, x):
         if x is None:
             return None, None
@@ -270,13 +276,22 @@ class LUT:
 
         max_sim_idx = torch.argmax(sims)
         top_sims, top_idx = torch.topk(sims, k=min(5, N))
-        print("top sims:", list(zip(top_sims.tolist(), top_idx.tolist())))
+        top1 = top_sims[0].item()
+        top2 = top_sims[1].item()
+        margin = top1 - top2
+
+        alpha = 15           # how much margin can relax the threshold
+        min_thresh = 0.4      # never go below this (tune)
+        #eff_thresh = max(min_thresh, self.CS_threshold - alpha * margin)
+
+        # print("top sims:", list(zip(top_sims.tolist(), top_idx.tolist())))
+        eff_thresh = self.CS_threshold
         highest_sim = sims[max_sim_idx].item()
         best_residual = values[max_sim_idx]  # [d]
 
         print("Highest sim: ", highest_sim)
-        if highest_sim < self.CS_threshold:
-            print("Low similarity, cs threshold:", self.CS_threshold)
+        if highest_sim < (eff_thresh):
+            print("Low similarity, cs threshold:", eff_thresh)
             return torch.zeros_like(best_residual), 0.0
         
         self.lookupTableMetaData[max_sim_idx][0] = 0
@@ -286,6 +301,7 @@ class LUT:
         
 
         return best_residual.to(q.device), highest_sim
+
     
     def resetLUT(self):
         self.keys = []
@@ -342,33 +358,52 @@ class TransformerBlock(nn.Module):
         base_seed = getattr(args, "lut_seed", 1337)
         torch.manual_seed(base_seed + block_idx)
 
+        self.timeStep_buffer = None
+
         self.lut_key_dim = getattr(args, "lut_key_dim", args.dim // 4)
 
         self.lut_key_proj = nn.Parameter(
             torch.empty(args.dim, self.lut_key_dim),
             requires_grad=False
         )
+
         with torch.no_grad():
             nn.init.orthogonal_(self.lut_key_proj)
 
             
-    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.75, win: int = 32):
-        x = pre_wnn_x[0]                 # [T, d]
-        T, d = x.shape
+    def _compute_lut_key(self, pre_wnn_x, lam: float = 1, win: int = 32):
+        # pre_wnn_x [B, T, d]
+        x = pre_wnn_x
+        B, T, d = x.shape
 
-        last = x[-1]
-        tail = x[-min(win, T):]          # [L, d]
+        if T == 1:
+            if self.timeStep_buffer is None:
+                self.timeStep_buffer = x.detach()              # [B,1,d]
+            else:
+                self.timeStep_buffer = torch.cat(
+                    [self.timeStep_buffer, x.detach()], dim=1  # append along time
+                )
+                self.timeStep_buffer = self.timeStep_buffer[:, -win:, :]  # keep last win
+            x = self.timeStep_buffer
+            B, T, d = x.shape
 
-        # plain (non-attention) context pooling, excluding last to avoid double-counting
-        if tail.shape[0] > 1:
-            ctx = tail[:-1].mean(dim=0)
+        else:
+            self.timeStep_buffer = x.detach()[:, -win:, :]
+            x = self.timeStep_buffer
+            B, T, d = x.shape
+
+        # now compute key from x (still [B,T,d])
+        last = x[:, -1, :]  # [B,d]
+
+        if T > 1:
+            ctx = x[:, :-1, :].mean(dim=1)  # [B,d]
         else:
             ctx = last
 
         k_local = lam * last + (1 - lam) * ctx
         k_local = F.layer_norm(k_local, (d,))
         k_local = F.normalize(k_local, dim=-1)
-        return k_local.unsqueeze(0)
+        return k_local
 
 
 
@@ -397,14 +432,13 @@ class TransformerBlock(nn.Module):
         # LUT only for inference; no grads
         if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
             with torch.no_grad():
-
-                wnn_residual, highest_sim = self.LUT.forward(self._compute_lut_key(self.pre_wnn_x))
+                wnn_residual, alpha = self.LUT.forward(self._compute_lut_key(self.pre_wnn_x))
                 wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
                 res_tensor = torch.zeros_like(out)
                 res_tensor[:, -1, :] = wnn_residual
             #sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
             #sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
-            out = out + (highest_sim * self.residual_scale)* res_tensor # this should be out of no grad
+            out = out + (alpha * self.residual_scale)* res_tensor # this should be out of no grad
 
         return out
 
@@ -437,6 +471,7 @@ class Transformer(nn.Module):
             args.vocab_size,
             bias=False
         )
+        self._log_key_metrics = False
 
         self.freqs_cis = precompute_freqs_cis(self.args.head_dim, 128_000).to("cuda")
 
@@ -448,6 +483,7 @@ class Transformer(nn.Module):
         input_ids: torch.Tensor,
         positions: torch.Tensor,
     ):
+            
         h = self.tok_embeddings(input_ids)
         freqs_cis = self.freqs_cis[positions]
 
@@ -470,7 +506,6 @@ class Transformer(nn.Module):
 
         return self.output(self.norm(h)).float()
 
-
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
 
         # Disable LUT use during training + clear stale caches
@@ -478,16 +513,27 @@ class Transformer(nn.Module):
             blk.use_wnn = False  # disable lut blocks at the start then re enable at each point 
             if hasattr(blk, "pre_wnn_x"):
                 blk.pre_wnn_x = None
+            if hasattr(blk, "timeStep_buffer"):
+                blk.timeStep_buffer = None
+            blk.attention.reset_kv_cache(bsz=1)
 
         encoded_label = tokenizer.encode(label)
         encoded_label.append(tokenizer.eos_id) # train with a eos token at the end
         if len(encoded_label) == 0:
             return
         
+
+
+        
         if label_context is not None and len(label_context) > 0:
             encoded_ctx = tokenizer.encode(label_context)
+            encoded_ctx.insert(0, 4)
+            encoded_ctx.append(5)
         else:
             encoded_ctx = []
+
+        now = datetime.now()
+        meta_info = f"len context: {len(encoded_ctx)} len label: {len(encoded_label)}"
 
         device = self.tok_embeddings.weight.device
 
@@ -500,7 +546,6 @@ class Transformer(nn.Module):
         for i in wnn_block_indices:
             block = self.layers[i]
             print(f"[trainLUT] Training LUT for block {i}")
-            now_block = datetime.now()
             block.use_wnn = False # ensure current block is disabled per train
 
             for k in range(len(encoded_label)):
@@ -564,8 +609,7 @@ class Transformer(nn.Module):
                 logits = self.output(self.norm(h)).float()  # [1, T, vocab]
                 loss = F.cross_entropy(logits[:, -1, :], target_tensor)
 
-                print(f"[trainLUT] Block {i}, position {k}: computing grad")
-                now_back = datetime.now()
+                #print(f"[trainLUT] Block {i}, position {k}: computing grad")
 
                 grad_pre_wnn_x, = torch.autograd.grad(
                     loss,
@@ -576,11 +620,11 @@ class Transformer(nn.Module):
                 )
 
                 grad_norm = grad_pre_wnn_x.norm().item()
-                print(f"[trainLUT] Block {i}, position {k}: grad_norm={grad_norm:.4e}")
+                #print(f"[trainLUT] Block {i}, position {k}: grad_norm={grad_norm:.4e}")
 
-                print(
-                    f"[trainLUT] Block {i}, position {k}: grad computed in {datetime.now() - now_back}"
-                )
+                # print(
+                #     f"[trainLUT] Block {i}, position {k}: grad computed in {datetime.now() - now_back}"
+                # )
 
                 # Grad to residual
                 wnn_target_residual = (-grad_pre_wnn_x)  # [1, T, d]
@@ -589,15 +633,15 @@ class Transformer(nn.Module):
                 pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :]              # [1, d]
                 target_residual_last = wnn_target_residual.detach()[:, -1, :]  # [1, d]
 
-                print(f"[trainLUT] Training LUT on block {i}")
+                # print(f"[trainLUT] Training LUT on block {i}")
                 now_lut = datetime.now()
                 with torch.no_grad():
                     key_vec = block._compute_lut_key(pre_wnn_x.detach())
                     value_vec = wnn_target_residual.detach()[:, -1, :]
                     block.LUT.train(key_vec, value_vec)
-                print(
-                    f"[trainLUT] Block {i}, position {k}: LUT updated in {datetime.now() - now_lut}"
-                )
+                # print(
+                #     f"[trainLUT] Block {i}, position {k}: LUT updated in {datetime.now() - now_lut}"
+                # )
 
                 # clean any accidental grad references
                 pre_wnn_x.grad = None
@@ -605,11 +649,14 @@ class Transformer(nn.Module):
 
             # block.use_wnn = True # re enable this lut block
 
-            print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
+            # print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
 
         # Re-enable LUT for inference
+        
         for blk in self.layers:
-            blk.use_wnn = True  # this should be redundant
+            blk.use_wnn = True  # this should be redundant#
+        if self._log_key_metrics:
+            print(meta_info+ f"time: {datetime.now()-now}")
 
 
     def saveLUTs(self, save_name):
@@ -669,10 +716,15 @@ class Tokenizer:
 
 @torch.no_grad()
 def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_tokens: int):
+    for layer in model.layers:
+        layer.timeStep_buffer = None
     encoded_prompts = [tokenizer.encode(prompt) for prompt in prompts]
     prompt_lens = [len(x) for x in encoded_prompts]
     min_prompt_len = min(prompt_lens)
     max_prompt_len = max(prompt_lens)
+
+    now = datetime.now()
+    meta_info = f"len context= {encoded_prompts}"
 
     device = "cuda"
 
@@ -765,4 +817,7 @@ def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_t
             answer_text = tokenizer.decode(gen_ids)
 
             res.append(answer_text)
+    meta_info = meta_info + f"len generate: {len(prompt_ids)} time = {datetime.now()- now}"
+    if model._log_key_metrics:
+        print(meta_info)
     return res, all_logprobs

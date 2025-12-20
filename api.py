@@ -100,7 +100,7 @@ def _log_cuda_mem(tag: str, reset_peak: bool = False):
 # =========================
 # NEW: Conditional offload on GPU pressure
 # =========================
-GPU_OFFLOAD_RATIO = float(os.getenv("GPU_OFFLOAD_RATIO", "0.80"))  # 80%
+GPU_OFFLOAD_RATIO = float(os.getenv("GPU_OFFLOAD_RATIO", "0.95"))  # 95%
 GPU_CACHE_TRY_CLEAR_RATIO = float(os.getenv("GPU_CACHE_TRY_CLEAR_RATIO", "0.75"))
 _OFFLOAD_COOLDOWN_S = float(os.getenv("GPU_OFFLOAD_COOLDOWN_S", "3.0"))
 _last_offload_ts = 0.0
