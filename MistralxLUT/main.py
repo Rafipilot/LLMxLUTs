@@ -215,15 +215,8 @@ class LUT:
         if x is None:
             return None, None
 
-        if x.dim() == 3:
-            q = x[-1, -1, :]
-        elif x.dim() == 2:
-            q = x[-1, :]
-        elif x.dim() == 1:
-            q = x
-        else:
-            raise ValueError(f"LUT.forward: unsupported x.dim()={x.dim()}, shape={x.shape}")
 
+        q = x[ -1, :]
         q = q.squeeze()
         q = torch.nan_to_num(q, nan=0.0, posinf=0.0, neginf=0.0)
 
@@ -235,19 +228,6 @@ class LUT:
 
         keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
         values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
-
-        # --- 1. normalize input into a single [d] vector q ---
-        if x.dim() == 3:
-            # [B, T, d] -> last batch, last token
-            q = x[-1, -1, :]
-        elif x.dim() == 2:
-            # [B, d] -> last batch
-            q = x[-1, :]
-        elif x.dim() == 1:
-            q = x
-        else:
-            raise ValueError(f"LUT.forward: unsupported x.dim()={x.dim()}, shape={x.shape}")
-
 
         N, k = keys.shape
 
@@ -372,42 +352,39 @@ class TransformerBlock(nn.Module):
 
             
     def _compute_lut_key(self, pre_wnn_x, lam: float = 1, win: int = 32):
-        # pre_wnn_x [B, T, d]
         x = pre_wnn_x
         B, T, d = x.shape
 
+        # rolling buffer for inference
         if T == 1:
             if self.timeStep_buffer is None:
-                self.timeStep_buffer = x.detach()              # [B,1,d]
+                self.timeStep_buffer = x.detach()
             else:
-                self.timeStep_buffer = torch.cat(
-                    [self.timeStep_buffer, x.detach()], dim=1  # append along time
-                )
-                self.timeStep_buffer = self.timeStep_buffer[:, -win:, :]  # keep last win
+                self.timeStep_buffer = torch.cat([self.timeStep_buffer, x.detach()], dim=1)
+                self.timeStep_buffer = self.timeStep_buffer[:, -win:, :]
             x = self.timeStep_buffer
-            B, T, d = x.shape
-
         else:
             self.timeStep_buffer = x.detach()[:, -win:, :]
             x = self.timeStep_buffer
-            B, T, d = x.shape
 
-        # now compute key from x (still [B,T,d])
-        last = x[:, -1, :]  # [B,d]
+        B, Tw, d = x.shape
 
-        if T > 1:
-            ctx = x[:, :-1, :].mean(dim=1)  # [B,d]
-        else:
-            ctx = last
+        attn = self.attention.attn_scores          
+        K = attn.size(-1)
+        win2 = min(win, Tw, K)
 
-        k_local = lam * last + (1 - lam) * ctx
-        k_local = F.layer_norm(k_local, (d,))
-        k_local = F.normalize(k_local, dim=-1)
-        return k_local
+        attn_last = attn[0, :, -1, -win2:]        
+        w = attn_last.mean(dim=0)                 
+        w = w / (w.sum() + 1e-8)
 
+        x_win = x[0, -win2:, :]                
+        ctx_attn = w @ x_win                       
 
-
-
+        last = x[0, -1, :]                         
+        k = lam * last + (1 - lam) * ctx_attn      
+        k = F.layer_norm(k, (d,))
+        k = F.normalize(k, dim=-1)
+        return k.unsqueeze(0)               
 
 
     def forward(
