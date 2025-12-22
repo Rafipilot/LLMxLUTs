@@ -8,6 +8,9 @@ max_tokens = 25
 tokenizer = Tokenizer(str(Path(model_path) / "tokenizer.model.v3"))
 transformer = Transformer.from_folder(Path(model_path), max_batch_size=3)
 transformer.layers[-1].wnn_block = True
+transformer.layers[-3].wnn_block = True
+transformer.layers[-5].wnn_block = True
+transformer.rebuild_lut_opt()
 #transformer.layers[-5].wnn_block = True
 
 for block in transformer.layers:

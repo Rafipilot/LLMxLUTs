@@ -201,6 +201,9 @@ class LUT:
         self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
         self.CS_threshold = 0.25
         self.cost_scale = 0.0
+        self.top_k = 8
+        self.tau = 0.07
+        self.margin = 0.03
 
     def train(self, xs, ys):
         # xs, ys: [B, d] or iterable of [d]
@@ -213,7 +216,7 @@ class LUT:
             self.lookupTableMetaData.append([1000, 0])
 
     
-    def forward(self, x):
+    def forward(self, x, hard_gate = True):
         if x is None:
             return None, None
 
@@ -238,18 +241,6 @@ class LUT:
         keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
         values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
 
-        # --- 1. normalize input into a single [d] vector q ---
-        if x.dim() == 3:
-            # [B, T, d] -> last batch, last token
-            q = x[-1, -1, :]
-        elif x.dim() == 2:
-            # [B, d] -> last batch
-            q = x[-1, :]
-        elif x.dim() == 1:
-            q = x
-        else:
-            raise ValueError(f"LUT.forward: unsupported x.dim()={x.dim()}, shape={x.shape}")
-
 
         N, k = keys.shape
 
@@ -267,7 +258,7 @@ class LUT:
 
         # --- 2. empty table: no effect ---
         if len(self.keys) == 0:
-            return torch.zeros_like(q), 0.0
+            return torch.zeros_like(q), torch.tensor(0.0, device=device)
 
         costs = torch.tensor(costs, device=device)
         
@@ -276,24 +267,37 @@ class LUT:
         sims = sims.clamp(-1.0, 1.0)
         sims = sims - self.cost_scale*costs
 
-        max_sim_idx = torch.argmax(sims)
-        top_sims, top_idx = torch.topk(sims, k=min(5, N))
-        print("top sims:", list(zip(top_sims.tolist(), top_idx.tolist())))
-        highest_sim = sims[max_sim_idx].item()
-        best_residual = values[max_sim_idx]  # [d]
+        k_use = min(self.top_k, N)
+        top_sims, top_idx = torch.topk(sims, k=k_use)
 
-        print("Highest sim: ", highest_sim)
-        if highest_sim < self.CS_threshold:
-            print("Low similarity, cs threshold:", self.CS_threshold)
-            return torch.zeros_like(best_residual), 0.0
-        
-        self.lookupTableMetaData[max_sim_idx][0] = 0
-        self.lookupTableMetaData[max_sim_idx][1] += 1
+        top1 = top_sims[0]                      
+        top2 = top_sims[1] if k_use > 1 else top1 - 1e9
+
+        print("top sims:", list(zip(top_sims.tolist(), top_idx.tolist())))
+        print("Highest sim:", top1)
+
+        if hard_gate:  # at training we dont want thsi
+            if top1 < self.CS_threshold:
+                print("Low similarity, cs threshold:", self.CS_threshold)
+                return torch.zeros_like(values[0]), torch.tensor(0.0, device=device)
+
+            if (top1 - top2) < self.margin:
+                print(f"Ambiguous retrieval: top1-top2={(top1-top2).item():.4f} < margin={self.margin}")
+                return torch.zeros_like(values[0]), torch.tensor(0.0, device=device)
+
+        # Temperature-soft weights (over top-k only)
+        w = torch.softmax((top_sims - top_sims.max()) / self.tau, dim=0)   # [k_use]
+        cand_values = values[top_idx]                                      # [k_use, D]
+        retrieved = (w.unsqueeze(-1) * cand_values).sum(dim=0)             # [D]
+
+        winner = top_idx[0].item()
+        self.lookupTableMetaData[winner][0] = 0
+        self.lookupTableMetaData[winner][1] += 1
         for row in self.lookupTableMetaData:
             row[0] += 1
-        
 
-        return best_residual.to(q.device), highest_sim
+        return retrieved.to(q.device), top1
+
     
     def resetLUT(self):
         self.keys = []
@@ -338,15 +342,14 @@ class TransformerBlock(nn.Module):
         self.ffn_norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.args = args
         self.LUT = LUT()
-        self.wnn_block = wnn_block # we only activate the wnn block in the last n layers as specified by num_wnn_blocks
+        self.wnn_block = wnn_block 
         if self.wnn_block:
             self.use_wnn = True
         else:
             self.use_wnn = False
         self.pre_wnn_x = None  
-        self.residual_scale = 1   # or 15, but be consistent everywhere
+        self.residual_scale = 1  
 
-        # --- projection down to lut_key_dim (from main) ---
         base_seed = getattr(args, "lut_seed", 1337)
         torch.manual_seed(base_seed + block_idx)
 
@@ -354,32 +357,48 @@ class TransformerBlock(nn.Module):
 
         self.lut_key_proj = nn.Parameter(
             torch.empty(args.dim, self.lut_key_dim),
-            requires_grad=False
+            requires_grad=True
         )
         with torch.no_grad():
             nn.init.orthogonal_(self.lut_key_proj)
 
+        self.lut_value_gate = nn.Linear(args.dim, args.dim, bias=True)  # learned V-matrix
+
+
             
     def _compute_lut_key(self, pre_wnn_x, lam: float = 0.75, win: int = 32):
-        x = pre_wnn_x[0]                 # [T, d]
+        x = pre_wnn_x[0].float()   # <-- FORCE FP32 HERE (biggest fix)
         T, d = x.shape
 
         last = x[-1]
-        tail = x[-min(win, T):]          # [L, d]
+        tail = x[-min(win, T):]
 
-        # plain (non-attention) context pooling, excluding last to avoid double-counting
-        if tail.shape[0] > 1:
-            ctx = tail[:-1].mean(dim=0)
-        else:
-            ctx = last
+        ctx = tail[:-1].mean(dim=0) if tail.shape[0] > 1 else last
 
         k_local = lam * last + (1 - lam) * ctx
+        k_local = torch.nan_to_num(k_local, nan=0.0, posinf=0.0, neginf=0.0)
+
         k_local = F.layer_norm(k_local, (d,))
-        k_local = F.normalize(k_local, dim=-1)
-        return k_local.unsqueeze(0)
+        k_local = torch.nan_to_num(k_local, nan=0.0, posinf=0.0, neginf=0.0)
+
+        k_local = F.normalize(k_local, dim=-1, eps=1e-6)
+        k_local = torch.nan_to_num(k_local, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # make sure projection is fp32 too
+        W = self.lut_key_proj.float()
+        k = k_local @ W
+
+        k = torch.nan_to_num(k, nan=0.0, posinf=0.0, neginf=0.0)
+        k = F.layer_norm(k, (k.shape[0],))
+        k = torch.nan_to_num(k, nan=0.0, posinf=0.0, neginf=0.0)
+
+        k = F.normalize(k, dim=-1, eps=1e-6)
+        k = torch.nan_to_num(k, nan=0.0, posinf=0.0, neginf=0.0)
+
+        print("key norm:", k.norm().item(), "nan?", torch.isnan(k).any().item())
 
 
-
+        return k.unsqueeze(0)  # [1, kdim]
 
 
 
@@ -390,7 +409,6 @@ class TransformerBlock(nn.Module):
         positions: torch.Tensor,
         mask: Optional[torch.Tensor],
     ) -> torch.Tensor:
-        # Standard transformer block forward
         r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask)
         h = x + r_attn
 
@@ -402,17 +420,25 @@ class TransformerBlock(nn.Module):
 
         out = base
 
-        # LUT only for inference; no grads
+        # LUT only for inference no grads
         if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
             with torch.no_grad():
+                key = self._compute_lut_key(self.pre_wnn_x)                   
+                rl, highest_sim = self.LUT.forward(key) 
+                sim_val = float(highest_sim.item()) if torch.is_tensor(highest_sim) else float(highest_sim)
+                if sim_val <= 0.0:
+                    return out                  
 
-                wnn_residual, highest_sim = self.LUT.forward(self._compute_lut_key(self.pre_wnn_x))
-                wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
+                h_last = self.pre_wnn_x[0, -1, :].float()
+                gate = torch.sigmoid(self.lut_value_gate(h_last))
+                gate = torch.nan_to_num(gate, nan=0.0, posinf=0.0, neginf=0.0)
+                rl = torch.nan_to_num(rl, nan=0.0, posinf=0.0, neginf=0.0)
+
+                retrieval_final = (gate * rl).to(out.dtype)
+
                 res_tensor = torch.zeros_like(out)
-                res_tensor[:, -1, :] = wnn_residual
-            #sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
-            #sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
-            out = out + (highest_sim * self.residual_scale)* res_tensor # this should be out of no grad
+                res_tensor[:, -1, :] = retrieval_final.unsqueeze(0)
+                out = out + (highest_sim * self.residual_scale) * res_tensor
 
         return out
 
@@ -450,6 +476,45 @@ class Transformer(nn.Module):
 
         self.n_ctx = 128000 ## 128 k context window
 
+        for p in self.parameters():
+            p.requires_grad = False
+
+        # for blk in self.layers:
+        #     if getattr(blk, "wnn_block", False):
+        #         blk.lut_key_proj.requires_grad = True
+        #         for p in blk.lut_value_gate.parameters():
+        #             p.requires_grad = True
+
+        # params = []
+        # for blk in self.layers:
+        #     if getattr(blk, "wnn_block", False):
+        #         params.append(blk.lut_key_proj)
+        #         params += list(blk.lut_value_gate.parameters())
+        # self.lut_opt = torch.optim.AdamW(params, lr=1e-4)
+
+    def rebuild_lut_opt(self, lr=1e-5):
+
+        params = []
+        for blk in self.layers:
+            if blk.wnn_block:
+                # force fp32 for stability
+                blk.lut_key_proj.data = blk.lut_key_proj.data.float()
+                blk.lut_key_proj.requires_grad = True
+
+                blk.lut_value_gate.to(dtype=torch.float32)
+                for p in blk.lut_value_gate.parameters():
+                    p.requires_grad = True
+
+                params.append(blk.lut_key_proj)
+                params += list(blk.lut_value_gate.parameters())
+            else:
+                blk.lut_key_proj.requires_grad = False
+                for p in blk.lut_value_gate.parameters():
+                    p.requires_grad = False
+
+        self.lut_opt = torch.optim.AdamW(params, lr=lr, weight_decay=0.0)
+
+
 
     def forward(
         self,
@@ -481,7 +546,7 @@ class Transformer(nn.Module):
 
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
 
-        # Disable LUT use during training + clear stale caches
+        # Disable LUT use during training 
         for blk in self.layers:
             blk.use_wnn = False  # disable lut blocks at the start then re enable at each point 
             if hasattr(blk, "pre_wnn_x"):
@@ -502,7 +567,7 @@ class Transformer(nn.Module):
 
         device = self.tok_embeddings.weight.device
 
-        # Which blocks actually have LUTs?
+        # Which blocks actually have LUTs
         wnn_block_indices = [
             idx for idx, blk in enumerate(self.layers)
             if getattr(blk, "wnn_block", False)
@@ -516,6 +581,9 @@ class Transformer(nn.Module):
 
             for k in range(len(encoded_label)):
                 # Optional sparsity: skip some positions
+                for blk in self.layers:
+                    blk.attention.reset_kv_cache(bsz=1)
+
                 if sparsity_level is not None and sparsity_level < 1.0:
                     if torch.rand(()) > sparsity_level:
                         continue
@@ -567,6 +635,25 @@ class Transformer(nn.Module):
 
                 pre_wnn_x = pre_wnn_x_val.detach().clone().requires_grad_(True)
                 h = pre_wnn_x
+                if len(block.LUT.keys) > 0:
+                    key_q = block._compute_lut_key(pre_wnn_x)
+                    rl, sim = block.LUT.forward(key_q, hard_gate = False)
+                    sim_val = float(sim.item())
+                    if sim_val <= 0.0:
+                        # do NOT compute gate / inj, it can be NaN and poison h via 0*NaN
+                        pass
+                    else:
+                        h_last = pre_wnn_x[0, -1, :].float()
+                        gate = torch.sigmoid(block.lut_value_gate(h_last))
+                        gate = torch.nan_to_num(gate, nan=0.0, posinf=0.0, neginf=0.0)
+                        rl = torch.nan_to_num(rl, nan=0.0, posinf=0.0, neginf=0.0)
+
+                        retrieval_final = (gate * rl).to(h.dtype)
+
+                        inj = torch.zeros_like(h)
+                        inj[:, -1, :] = retrieval_final.unsqueeze(0)
+
+                        h = h + (sim_val * block.residual_scale) * inj
 
                 # Forward through blocks AFTER i with grad tracking- we need to be able to backwards up to this point...
                 for block_idx in range(i + 1, len(self.layers)):
@@ -578,13 +665,16 @@ class Transformer(nn.Module):
                 print(f"[trainLUT] Block {i}, position {k}: computing grad")
                 now_back = datetime.now()
 
-                grad_pre_wnn_x, = torch.autograd.grad(
-                    loss,
-                    pre_wnn_x,
-                    retain_graph=False,
-                    create_graph=False,
-                    allow_unused=False,
-                )
+                self.lut_opt.zero_grad(set_to_none=True)
+                loss.backward()                 # backprop through the blocks-after-i path
+                grad_pre_wnn_x = pre_wnn_x.grad.detach()
+                grad_pre_wnn_x = torch.nan_to_num(grad_pre_wnn_x, nan=0.0, posinf=0.0, neginf=0.0)
+
+                torch.nn.utils.clip_grad_norm_(self.lut_opt.param_groups[0]["params"], 1.0)
+                self.lut_opt.step()
+
+
+                
 
                 grad_norm = grad_pre_wnn_x.norm().item()
                 print(f"[trainLUT] Block {i}, position {k}: grad_norm={grad_norm:.4e}")
@@ -684,6 +774,9 @@ def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_t
     prompt_lens = [len(x) for x in encoded_prompts]
     min_prompt_len = min(prompt_lens)
     max_prompt_len = max(prompt_lens)
+
+    for blk in model.layers:
+        blk.attention.reset_kv_cache(bsz=1)
 
     device = "cuda"
 
