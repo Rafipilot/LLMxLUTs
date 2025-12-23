@@ -362,6 +362,7 @@ def _set_wnn_blocks(transformer, active_indices=None):
                     f"[wnn] block {idx}: use_wnn={getattr(block, 'use_wnn', None)}, "
                     f"LUT_rows={lut_len}"
                 )
+    transformer.rebuild_lut_opt()
 
 
 def _apply_lut_hyperparams(
