@@ -201,9 +201,9 @@ class LUT:
         self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
         self.CS_threshold = 0.25
         self.cost_scale = 0.0
-        self.top_k = 8
+        self.top_k = 1
         self.tau = 0.07
-        self.margin = 0.03
+        self.margin = 0.00
 
     def train(self, xs, ys):
         # xs, ys: [B, d] or iterable of [d]
@@ -430,9 +430,15 @@ class TransformerBlock(nn.Module):
                     return out                  
 
                 h_last = self.pre_wnn_x[0, -1, :].float()
-                gate = torch.sigmoid(self.lut_value_gate(h_last))
+                gate = 2.0 * torch.sigmoid(self.lut_value_gate(h_last))
                 gate = torch.nan_to_num(gate, nan=0.0, posinf=0.0, neginf=0.0)
                 rl = torch.nan_to_num(rl, nan=0.0, posinf=0.0, neginf=0.0)
+
+                print("sim", float(highest_sim))
+                print("gate mean/min/max", gate.mean().item(), gate.min().item(), gate.max().item())
+                print("rl norm", rl.float().norm().item())
+                print("retrieval_final norm", (gate * rl).float().norm().item())
+
 
                 retrieval_final = (gate * rl).to(out.dtype)
 
@@ -546,7 +552,7 @@ class Transformer(nn.Module):
 
     def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
 
-        # Disable LUT use during training 
+        # Disable LUT for during training 
         for blk in self.layers:
             blk.use_wnn = False  # disable lut blocks at the start then re enable at each point 
             if hasattr(blk, "pre_wnn_x"):
@@ -556,14 +562,10 @@ class Transformer(nn.Module):
             blk.attention.reset_kv_cache(bsz=1)
 
         encoded_label = tokenizer.encode(label)
-        encoded_label.append(tokenizer.eos_id) # train with a eos token at the end
-        if len(encoded_label) == 0:
-            return
-        
-        if label_context is not None and len(label_context) > 0:
-            encoded_ctx = tokenizer.encode(label_context)
-        else:
-            encoded_ctx = []
+        if encoded_label and encoded_label[0] == tokenizer._model.bos_id():
+            encoded_label = encoded_label[1:]   # remove BOS for continuation- this was a decently big bug lol
+
+        encoded_ctx = tokenizer.encode(label_context) if label_context else []
 
         device = self.tok_embeddings.weight.device
 
@@ -580,7 +582,7 @@ class Transformer(nn.Module):
             block.use_wnn = False # ensure current block is disabled per train
 
             for k in range(len(encoded_label)):
-                # Optional sparsity: skip some positions
+                # Optional sparsity: skip some positions- not sure how useful this tbh
                 for blk in self.layers:
                     blk.attention.reset_kv_cache(bsz=1)
 
@@ -637,23 +639,26 @@ class Transformer(nn.Module):
                 h = pre_wnn_x
                 if len(block.LUT.keys) > 0:
                     key_q = block._compute_lut_key(pre_wnn_x)
-                    rl, sim = block.LUT.forward(key_q, hard_gate = False)
-                    sim_val = float(sim.item())
-                    if sim_val <= 0.0:
-                        # do NOT compute gate / inj, it can be NaN and poison h via 0*NaN
+                    rl, sim = block.LUT.forward(key_q, hard_gate=False)
+
+                    sim_det = sim.detach().item() if torch.is_tensor(sim) else float(sim)
+
+                    if sim_det <= 0.0:
                         pass
                     else:
                         h_last = pre_wnn_x[0, -1, :].float()
                         gate = torch.sigmoid(block.lut_value_gate(h_last))
                         gate = torch.nan_to_num(gate, nan=0.0, posinf=0.0, neginf=0.0)
-                        rl = torch.nan_to_num(rl, nan=0.0, posinf=0.0, neginf=0.0)
 
+                        rl = torch.nan_to_num(rl, nan=0.0, posinf=0.0, neginf=0.0)
                         retrieval_final = (gate * rl).to(h.dtype)
 
                         inj = torch.zeros_like(h)
                         inj[:, -1, :] = retrieval_final.unsqueeze(0)
 
-                        h = h + (sim_val * block.residual_scale) * inj
+                        sim_scale = sim.to(h.dtype)              # keep gradient + keep dtype stable
+                        sim_scale = torch.clamp(sim_scale, min=0)  # optional but usually helps
+                        h = h + (sim_scale * block.residual_scale) * inj
 
                 # Forward through blocks AFTER i with grad tracking- we need to be able to backwards up to this point...
                 for block_idx in range(i + 1, len(self.layers)):
@@ -667,11 +672,20 @@ class Transformer(nn.Module):
 
                 self.lut_opt.zero_grad(set_to_none=True)
                 loss.backward()                 # backprop through the blocks-after-i path
+                print("grad key_proj:", None if block.lut_key_proj.grad is None else block.lut_key_proj.grad.norm().item())
+                print("grad gate_w  :", None if block.lut_value_gate.weight.grad is None else block.lut_value_gate.weight.grad.norm().item())
+
                 grad_pre_wnn_x = pre_wnn_x.grad.detach()
                 grad_pre_wnn_x = torch.nan_to_num(grad_pre_wnn_x, nan=0.0, posinf=0.0, neginf=0.0)
 
                 torch.nn.utils.clip_grad_norm_(self.lut_opt.param_groups[0]["params"], 1.0)
+
+                kp0 = block.lut_key_proj.detach().float().clone()
+                vg0 = block.lut_value_gate.weight.detach().float().clone()
                 self.lut_opt.step()
+
+                print("Δ key_proj:", (block.lut_key_proj.detach().float() - kp0).abs().mean().item())
+                print("Δ gate_w  :", (block.lut_value_gate.weight.detach().float() - vg0).abs().mean().item())
 
 
                 
