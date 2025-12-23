@@ -17,10 +17,7 @@ for block in transformer.layers:
     block.residual_scale = 0.65
     block.LUT.CS_threshold = -1
 
-for i, blk in enumerate(transformer.layers):
-    if blk.wnn_block:
-        print(i, "kp reqgrad", blk.lut_key_proj.requires_grad,
-                 "vg reqgrad", blk.lut_value_gate.weight.requires_grad)
+
 
 print("opt param count:", sum(p.numel() for p in transformer.lut_opt.param_groups[0]["params"]))
 
