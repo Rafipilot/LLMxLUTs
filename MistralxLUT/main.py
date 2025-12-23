@@ -362,10 +362,13 @@ class TransformerBlock(nn.Module):
         with torch.no_grad():
             nn.init.orthogonal_(self.lut_key_proj)
 
-        self.lut_gate = nn.Linear(args.dim, args.dim, bias=True)  # learned V-matrix
-        
-        self.lut_value_proj = nn.Linear(args.dim, args.dim, bias = False) # like a value matrix on rl
-        nn.init.eye_(self.lut_value_proj.weight)  # generally good idea to start with the identiy matrix for stability 
+        self.lut_rank = 64 # low rank
+
+        self.lut_v_down = nn.Linear(args.dim, self.lut_rank, bias=False) 
+        self.lut_v_up   = nn.Linear(self.lut_rank, args.dim, bias=False)  
+        self.lut_v_gate = nn.Linear(args.dim, self.lut_rank, bias=True)   
+
+        nn.init.zeros_(self.lut_v_up.weight)  
 
 
             
@@ -433,19 +436,13 @@ class TransformerBlock(nn.Module):
                     return out                  
 
                 h_last = self.pre_wnn_x[0, -1, :].float()
-                gate = 2.0 * torch.sigmoid(self.lut_gate(h_last))
-                gate = torch.nan_to_num(gate, nan=0.0, posinf=0.0, neginf=0.0)
+
                 rl = torch.nan_to_num(rl, nan=0.0, posinf=0.0, neginf=0.0)
-                r = self.lut_value_proj(rl) # applying the V matrix
-                
+                z  = self.lut_v_down(rl.float())                  
+                g  = 2.0 * torch.sigmoid(self.lut_v_gate(h_last)) # 2 since usually we find that it means on 0.5 ( 2 * 0.5 = 1)
+                delta = self.lut_v_up(g * z)                   
 
-                print("sim", float(highest_sim))
-                print("gate mean/min/max", gate.mean().item(), gate.min().item(), gate.max().item())
-                print("rl norm", rl.float().norm().item())
-                print("retrieval_final norm", (gate * rl).float().norm().item())
-
-
-                retrieval_final = gate * r
+                retrieval_final = (rl.float() + delta).to(out.dtype)
 
                 res_tensor = torch.zeros_like(out)
                 res_tensor[:, -1, :] = retrieval_final.unsqueeze(0)
@@ -504,35 +501,68 @@ class Transformer(nn.Module):
         # self.lut_opt = torch.optim.AdamW(params, lr=1e-4)
 
     def rebuild_lut_opt(self, lr=1e-5):
-
         params = []
+        seen = set()
+
+        def add_param(p):
+            if p is None:
+                return
+            if isinstance(p, torch.nn.Parameter):
+                if id(p) not in seen:
+                    params.append(p)
+                    seen.add(id(p))
+            else:
+                for pp in p:
+                    add_param(pp)
+
         for blk in self.layers:
-            if blk.wnn_block:
-                # force fp32 for stability
+            if getattr(blk, "wnn_block", False):
+                # ---- key proj ----
                 blk.lut_key_proj.data = blk.lut_key_proj.data.float()
                 blk.lut_key_proj.requires_grad = True
+                add_param(blk.lut_key_proj)
 
-                blk.lut_gate.to(dtype=torch.float32)
-                for p in blk.lut_gate.parameters():
-                    p.requires_grad = True
+                if hasattr(blk, "lut_gate"):
+                    blk.lut_gate.to(dtype=torch.float32)
+                    for p in blk.lut_gate.parameters():
+                        p.requires_grad = True
+                    add_param(list(blk.lut_gate.parameters()))
 
-                blk.lut_value_proj.to(dtype=torch.float32)
-                for p in blk.lut_value_proj.parameters():
-                    p.requires_grad = True
+                if hasattr(blk, "lut_value_proj"):
+                    blk.lut_value_proj.to(dtype=torch.float32)
+                    for p in blk.lut_value_proj.parameters():
+                        p.requires_grad = True
+                    add_param(list(blk.lut_value_proj.parameters()))
 
-                params.append(blk.lut_key_proj)
-                
-                params += list(blk.lut_gate.parameters())
-                params += list(blk.lut_value_proj.parameters())
+                # ---- optional: conditional low-rank value transform (if you add it) ----
+                for name in ("lut_v_down", "lut_v_up", "lut_v_gate"):
+                    if hasattr(blk, name):
+                        mod = getattr(blk, name)
+                        mod.to(dtype=torch.float32)
+                        for p in mod.parameters():
+                            p.requires_grad = True
+                        add_param(list(mod.parameters()))
+
             else:
-                blk.lut_key_proj.requires_grad = False
-                for p in blk.lut_gate.parameters():
-                    p.requires_grad = False
+                # disable grads everywhere for non-WNN blocks
+                if hasattr(blk, "lut_key_proj"):
+                    blk.lut_key_proj.requires_grad = False
 
-                for p in blk.lut_value_proj.parameters():
-                    p.requires_grad = False
+                if hasattr(blk, "lut_gate"):
+                    for p in blk.lut_gate.parameters():
+                        p.requires_grad = False
+
+                if hasattr(blk, "lut_value_proj"):
+                    for p in blk.lut_value_proj.parameters():
+                        p.requires_grad = False
+
+                for name in ("lut_v_down", "lut_v_up", "lut_v_gate"):
+                    if hasattr(blk, name):
+                        for p in getattr(blk, name).parameters():
+                            p.requires_grad = False
 
         self.lut_opt = torch.optim.AdamW(params, lr=lr, weight_decay=0.0)
+        print("opt param count:", sum(p.numel() for p in params))
 
 
 
@@ -661,12 +691,14 @@ class Transformer(nn.Module):
                         pass
                     else:
                         h_last = pre_wnn_x[0, -1, :].float()
-                        gate = torch.sigmoid(block.lut_gate(h_last))
-                        gate = torch.nan_to_num(gate, nan=0.0, posinf=0.0, neginf=0.0)
 
                         rl = torch.nan_to_num(rl, nan=0.0, posinf=0.0, neginf=0.0)
-                        r = block.lut_value_proj(rl)
-                        retrieval_final = (gate * r).to(h.dtype)
+                        z  = block.lut_v_down(rl.float())                
+                        g  = 2.0 * torch.sigmoid(block.lut_v_gate(h_last)) 
+                        delta = block.lut_v_up(g * z)                     
+
+                        retrieval_final = (rl.float() + delta)
+
 
                         inj = torch.zeros_like(h)
                         inj[:, -1, :] = retrieval_final.unsqueeze(0)
@@ -687,8 +719,10 @@ class Transformer(nn.Module):
 
                 self.lut_opt.zero_grad(set_to_none=True)
                 loss.backward()                 # backprop through the blocks-after-i path
-                print("grad key_proj:", None if block.lut_key_proj.grad is None else block.lut_key_proj.grad.norm().item())
-                print("grad gate_w  :", None if block.lut_gate.weight.grad is None else block.lut_gate.weight.grad.norm().item())
+                print("grad v_down:", None if block.lut_v_down.weight.grad is None else block.lut_v_down.weight.grad.norm().item())
+                print("grad v_up  :", None if block.lut_v_up.weight.grad   is None else block.lut_v_up.weight.grad.norm().item())
+                print("grad v_gate:", None if block.lut_v_gate.weight.grad is None else block.lut_v_gate.weight.grad.norm().item())
+
 
                 grad_pre_wnn_x = pre_wnn_x.grad.detach()
                 grad_pre_wnn_x = torch.nan_to_num(grad_pre_wnn_x, nan=0.0, posinf=0.0, neginf=0.0)
@@ -696,11 +730,11 @@ class Transformer(nn.Module):
                 torch.nn.utils.clip_grad_norm_(self.lut_opt.param_groups[0]["params"], 1.0)
 
                 kp0 = block.lut_key_proj.detach().float().clone()
-                vg0 = block.lut_gate.weight.detach().float().clone()
+                # vg0 = block.lut_gate.weight.detach().float().clone()
                 self.lut_opt.step()
 
                 print("Δ key_proj:", (block.lut_key_proj.detach().float() - kp0).abs().mean().item())
-                print("Δ gate_w  :", (block.lut_gate.weight.detach().float() - vg0).abs().mean().item())
+                # print("Δ gate_w  :", (block.lut_gate.weight.detach().float() - vg0).abs().mean().item())
 
 
                 
