@@ -21,6 +21,8 @@ from MistralxLUT.main import Tokenizer, Transformer, generate
 
 import gc
 import time
+import traceback  # NEW
+
 
 # =========================
 # Global config / seeds
@@ -64,15 +66,6 @@ EMPTY_LUT_TEMPLATES_MISTRAL = {}   # block_idx -> {slot: empty_LUT_copy}
 # GPU memory logging helper
 # =========================
 def _log_cuda_mem(tag: str, reset_peak: bool = False):
-    """
-    Log CUDA memory stats in GiB.
-
-    allocated: tensors currently alive
-    reserved:  memory held by the caching allocator
-    max_allocated: peak allocated since last reset_peak
-
-    If reset_peak=True, reset the peak counter after logging.
-    """
     if not torch.cuda.is_available():
         print(f"[mem] {tag}: CUDA not available")
         return
@@ -98,21 +91,15 @@ def _log_cuda_mem(tag: str, reset_peak: bool = False):
 
 
 # =========================
-# NEW: Conditional offload on GPU pressure
+# Conditional offload on GPU pressure
 # =========================
-GPU_OFFLOAD_RATIO = float(os.getenv("GPU_OFFLOAD_RATIO", "0.95"))  # 80%
+GPU_OFFLOAD_RATIO = float(os.getenv("GPU_OFFLOAD_RATIO", "0.95"))
 GPU_CACHE_TRY_CLEAR_RATIO = float(os.getenv("GPU_CACHE_TRY_CLEAR_RATIO", "0.75"))
 _OFFLOAD_COOLDOWN_S = float(os.getenv("GPU_OFFLOAD_COOLDOWN_S", "3.0"))
 _last_offload_ts = 0.0
 
 
 def _gpu_pressure(tag: str = "") -> dict:
-    """
-    Returns both driver-side and PyTorch allocator ratios.
-
-    driver_used_ratio counts *everything* on GPU (incl. cache, other processes).
-    allocated_ratio is live tensors; reserved_ratio is caching allocator reservations.
-    """
     if not torch.cuda.is_available():
         return {"cuda": False, "tag": tag}
 
@@ -135,10 +122,6 @@ def _gpu_pressure(tag: str = "") -> dict:
 
 
 def _maybe_offload_mistral(tag: str = "") -> bool:
-    """
-    Offload Mistral only when GPU driver-used ratio exceeds GPU_OFFLOAD_RATIO.
-    Tries torch.cuda.empty_cache() first when it looks like mostly allocator cache.
-    """
     global _last_offload_ts
 
     if not torch.cuda.is_available():
@@ -159,7 +142,6 @@ def _maybe_offload_mistral(tag: str = "") -> bool:
         f"reserved={p['reserved_ratio']:.1%}"
     )
 
-    # If driver usage is high but allocated is relatively low, it's likely cache/reserved.
     if p["used_ratio"] >= GPU_CACHE_TRY_CLEAR_RATIO and p["allocated_ratio"] < (GPU_CACHE_TRY_CLEAR_RATIO * 0.85):
         torch.cuda.empty_cache()
         p2 = _gpu_pressure(tag + ":after_empty_cache")
@@ -184,12 +166,6 @@ def _maybe_offload_mistral(tag: str = "") -> bool:
 
 
 def list_lut_metadata(lut_name: str | None = None):
-    """
-    Return basic metadata about stored LUTs from the SQLite DB.
-
-    If lut_name is given, only that LUT is summarized.
-    Otherwise, all LUTs are listed.
-    """
     conn = _get_conn()
     cur = conn.cursor()
 
@@ -244,9 +220,9 @@ def list_lut_metadata(lut_name: str | None = None):
 # SQLite helpers
 # =========================
 def _get_conn():
-    """Get a SQLite connection and ensure table exists."""
     conn = sqlite3.connect(DB_PATH)
     conn.execute("PRAGMA journal_mode=WAL;")
+
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS lut_blocks (
@@ -258,6 +234,18 @@ def _get_conn():
         )
         """
     )
+
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS lut_params (
+            lut_name   TEXT NOT NULL,
+            block_idx  INTEGER NOT NULL,
+            param_blob BLOB NOT NULL,
+            PRIMARY KEY (lut_name, block_idx)
+        )
+        """
+    )
+
     return conn
 
 
@@ -301,9 +289,6 @@ def _free_mistral():
 # Transformer / block helpers
 # =========================
 def _get_blocks(transformer):
-    """
-    Return the list of blocks for either GPT-2 (.h) or Mistral (.layers).
-    """
     if hasattr(transformer, "h"):
         return transformer.h
     if hasattr(transformer, "layers"):
@@ -312,27 +297,18 @@ def _get_blocks(transformer):
 
 
 def _normalize_block_indices(blocks, indices):
-    """
-    Normalize block indices (supports negative indices like Python).
-
-    Returns a list of normalized indices in the same order as `indices`.
-    Invalid indices are skipped.
-    """
     n = len(blocks)
     norm = []
     for i in indices:
         i = int(i)
         if i < 0:
-            i = n + i  # -1 -> n-1, -2 -> n-2, etc.
+            i = n + i
         if 0 <= i < n:
             norm.append(i)
     return norm
 
 
 def _set_wnn_blocks(transformer, active_indices=None):
-    """
-    Configure which blocks use WNN *for this call*.
-    """
     if active_indices is None:
         print("[wnn] _set_wnn_blocks called with None -> leaving config as-is")
         return
@@ -353,16 +329,8 @@ def _set_wnn_blocks(transformer, active_indices=None):
             if hasattr(block, "use_wnn"):
                 block.use_wnn = is_active
 
-            if is_active and hasattr(block, "LUT") and hasattr(block.LUT, "lookupTable"):
-                try:
-                    lut_len = len(block.LUT.lookupTable)
-                except Exception:
-                    lut_len = -1
-                print(
-                    f"[wnn] block {idx}: use_wnn={getattr(block, 'use_wnn', None)}, "
-                    f"LUT_rows={lut_len}"
-                )
-    transformer.rebuild_lut_opt()
+    if hasattr(transformer, "rebuild_lut_opt"):
+        transformer.rebuild_lut_opt()
 
 
 def _apply_lut_hyperparams(
@@ -372,9 +340,6 @@ def _apply_lut_hyperparams(
     wnn_blocks=None,
     cost_scale: float = 5.0,
 ):
-    """
-    Apply LUT hyperparameters (threshold and residual_scale) to WNN blocks.
-    """
     blocks = _get_blocks(transformer)
     if not blocks:
         return
@@ -393,11 +358,14 @@ def _apply_lut_hyperparams(
     residual_list = None
     if isinstance(residual, (list, tuple)):
         residual_list = list(residual)
+        # CHANGED: never crash here — fallback to first element
         if len(residual_list) != len(target_indices):
-            raise ValueError(
-                f"residual list length ({len(residual_list)}) "
-                f"does not match number of selected blocks ({len(target_indices)})"
+            print(
+                f"[warn] residual list length ({len(residual_list)}) != "
+                f"selected blocks ({len(target_indices)}). Falling back to residual[0]."
             )
+            residual = float(residual_list[0]) if len(residual_list) > 0 else None
+            residual_list = None
 
     for pos, block_idx in enumerate(target_indices):
         block = blocks[block_idx]
@@ -424,9 +392,6 @@ def _apply_lut_hyperparams(
 
 
 def _snapshot_empty_luts(transformer, model_type: str):
-    """
-    Capture a deep-copied template of the *empty* LUTs for this transformer.
-    """
     global EMPTY_LUT_TEMPLATES_GPT2, EMPTY_LUT_TEMPLATES_MISTRAL
 
     blocks = _get_blocks(transformer)
@@ -457,6 +422,169 @@ def _snapshot_empty_luts(transformer, model_type: str):
         EMPTY_LUT_TEMPLATES_GPT2 = templates
     elif model_type == "mistral":
         EMPTY_LUT_TEMPLATES_MISTRAL = templates
+
+
+# =========================
+# Param storage helpers
+# =========================
+def _block_has_trainable_params(block) -> bool:
+    if hasattr(block, "lut_key_proj") and isinstance(block.lut_key_proj, torch.nn.Parameter):
+        if block.lut_key_proj.requires_grad:
+            return True
+    for name in ("lut_v_down", "lut_v_up", "lut_v_gate"):
+        if hasattr(block, name):
+            mod = getattr(block, name)
+            try:
+                if any(p.requires_grad for p in mod.parameters()):
+                    return True
+            except Exception:
+                pass
+    return False
+
+
+def _block_should_store_params(block) -> bool:
+    if getattr(block, "wnn_block", False) or getattr(block, "use_wnn", False):
+        return True
+    return _block_has_trainable_params(block)
+
+
+def _extract_block_params(block) -> dict:
+    out = {}
+
+    if hasattr(block, "lut_key_proj") and isinstance(block.lut_key_proj, torch.nn.Parameter):
+        out["lut_key_proj"] = block.lut_key_proj.detach().float().cpu()
+
+    for name in ("lut_v_down", "lut_v_up", "lut_v_gate"):
+        if hasattr(block, name):
+            mod = getattr(block, name)
+            try:
+                sd = {k: v.detach().float().cpu() for k, v in mod.state_dict().items()}
+                out[name] = sd
+            except Exception:
+                pass
+
+    return out
+
+
+def _apply_block_params(block, payload: dict):
+    if not isinstance(payload, dict):
+        return
+
+    with torch.no_grad():
+        if "lut_key_proj" in payload and hasattr(block, "lut_key_proj") and isinstance(block.lut_key_proj, torch.nn.Parameter):
+            src = payload["lut_key_proj"]
+            if isinstance(src, torch.Tensor):
+                src = src.to(device=block.lut_key_proj.device, dtype=block.lut_key_proj.dtype)
+                if block.lut_key_proj.shape == src.shape:
+                    block.lut_key_proj.copy_(src)
+
+        for name in ("lut_v_down", "lut_v_up", "lut_v_gate"):
+            if name in payload and hasattr(block, name):
+                mod = getattr(block, name)
+                sd = payload.get(name, {})
+                if isinstance(sd, dict):
+                    try:
+                        dev = next(mod.parameters()).device
+                        dtype = next(mod.parameters()).dtype
+                    except Exception:
+                        dev = None
+                        dtype = None
+
+                    fixed = {}
+                    for k, v in sd.items():
+                        if isinstance(v, torch.Tensor):
+                            if dev is not None and dtype is not None:
+                                fixed[k] = v.to(device=dev, dtype=dtype)
+                            elif dev is not None:
+                                fixed[k] = v.to(device=dev)
+                            else:
+                                fixed[k] = v
+                        else:
+                            fixed[k] = v
+
+                    try:
+                        mod.load_state_dict(fixed, strict=False)
+                    except Exception:
+                        pass
+
+
+def load_params_for_user(transformer, lut_name: str):
+    if not lut_name:
+        return transformer
+
+    blocks = _get_blocks(transformer)
+    if not blocks:
+        return transformer
+
+    conn = _get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT block_idx, param_blob FROM lut_params WHERE lut_name = ?",
+        (lut_name,)
+    )
+    rows = cur.fetchall()
+    conn.close()
+
+    if not rows:
+        return transformer
+
+    for block_idx, blob in rows:
+        if block_idx < 0 or block_idx >= len(blocks):
+            continue
+
+        blk = blocks[block_idx]
+        if not _block_should_store_params(blk):
+            continue
+
+        try:
+            payload = pickle.loads(blob)
+        except Exception:
+            continue
+
+        _apply_block_params(blk, payload)
+
+    return transformer
+
+
+def save_params_for_user(transformer, lut_name: str):
+    if not lut_name:
+        return transformer
+
+    blocks = _get_blocks(transformer)
+    if not blocks:
+        return transformer
+
+    conn = _get_conn()
+    cur = conn.cursor()
+
+    saved = 0
+    for block_idx, blk in enumerate(blocks):
+        if not _block_should_store_params(blk):
+            continue
+
+        payload = _extract_block_params(blk)
+        if not payload:
+            continue
+
+        try:
+            blob = pickle.dumps(payload, protocol=pickle.HIGHEST_PROTOCOL)
+        except Exception:
+            continue
+
+        cur.execute(
+            """
+            INSERT OR REPLACE INTO lut_params
+            (lut_name, block_idx, param_blob)
+            VALUES (?, ?, ?)
+            """,
+            (lut_name, int(block_idx), blob)
+        )
+        saved += 1
+
+    conn.commit()
+    conn.close()
+    print(f"[save_params_for_user] saved params for {saved} blocks (lut_name={lut_name})")
+    return transformer
 
 
 # =========================
@@ -599,11 +727,8 @@ def get_mistral():
 
     MISTRAL_TOKENIZER = Tokenizer(str(Path(MISTRAL_PATH) / "tokenizer.model.v3"))
 
-    try:
-        print("[mistral] loading on CUDA...")
-        MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
-    except torch.OutOfMemoryError:
-        raise
+    print("[mistral] loading on CUDA...")
+    MISTRAL_MODEL = Transformer.from_folder(Path(MISTRAL_PATH), max_batch_size=3)
 
     last_idx = len(MISTRAL_MODEL.layers) - 1
     for i, block in enumerate(MISTRAL_MODEL.layers):
@@ -703,6 +828,7 @@ def text_generator_gpt2(
     transformer = model.transformer
 
     _set_wnn_blocks(transformer, wnn_blocks)
+    load_params_for_user(transformer, lut_name)
 
     _apply_lut_hyperparams(
         transformer,
@@ -738,22 +864,41 @@ def text_generator_gpt2(
 def _estimate_lut_bytes(transformer):
     total = 0
     blocks = _get_blocks(transformer)
+
     for blk in blocks:
-        lut_obj = None
-        if hasattr(blk, "LUT") and blk.LUT is not None:
-            lut_obj = blk.LUT
-        elif hasattr(blk, "LUTs") and blk.LUTs:
+        if hasattr(blk, "LUTs") and blk.LUTs:
             for l in (blk.LUTs if isinstance(blk.LUTs, list) else blk.LUTs.values()):
-                if l is not None and hasattr(l, "lookupTable"):
-                    for row in l.lookupTable:
+                if l is None:
+                    continue
+                if hasattr(l, "lookupTable"):
+                    for row in getattr(l, "lookupTable", []):
+                        if isinstance(row, torch.Tensor):
+                            total += row.numel() * row.element_size()
+                else:
+                    for row in getattr(l, "keys", []):
+                        if isinstance(row, torch.Tensor):
+                            total += row.numel() * row.element_size()
+                    for row in getattr(l, "values", []):
                         if isinstance(row, torch.Tensor):
                             total += row.numel() * row.element_size()
             continue
 
-        if lut_obj is not None and hasattr(lut_obj, "lookupTable"):
-            for row in lut_obj.lookupTable:
+        lut_obj = getattr(blk, "LUT", None)
+        if lut_obj is None:
+            continue
+
+        if hasattr(lut_obj, "lookupTable"):
+            for row in getattr(lut_obj, "lookupTable", []):
                 if isinstance(row, torch.Tensor):
                     total += row.numel() * row.element_size()
+        else:
+            for row in getattr(lut_obj, "keys", []):
+                if isinstance(row, torch.Tensor):
+                    total += row.numel() * row.element_size()
+            for row in getattr(lut_obj, "values", []):
+                if isinstance(row, torch.Tensor):
+                    total += row.numel() * row.element_size()
+
     return total
 
 
@@ -766,20 +911,20 @@ def text_generator_mistral(
     wnn_blocks,
     cost_scale,
 ):
-    # pre-check: if GPU is already pressured, offload before loading/using it
     _maybe_offload_mistral("gen_mistral:pre")
 
     model, tokenizer = get_mistral()
     model = load_lut_for_user(model, lut_name)
     transformer = model
 
+    _set_wnn_blocks(transformer, wnn_blocks)
+    load_params_for_user(transformer, lut_name)
+
     lut_bytes = _estimate_lut_bytes(transformer)
     print(
         f"[gen_mistral] lut_name={lut_name} "
         f"LUT approx size after load: {lut_bytes / (1024 ** 2):.2f} MiB"
     )
-
-    _set_wnn_blocks(transformer, wnn_blocks)
 
     _apply_lut_hyperparams(
         transformer,
@@ -790,12 +935,12 @@ def text_generator_mistral(
     )
 
     for block in model.layers:
-        block.LUT.resetCosts()
+        if hasattr(block, "LUT") and hasattr(block.LUT, "resetCosts"):
+            block.LUT.resetCosts()
 
     outs, _ = generate([text_input], model, tokenizer, max_tokens=length)
     text = outs[0]
 
-    # post-check: offload only if >=80% driver usage
     _maybe_offload_mistral("gen_mistral:post")
     return text
 
@@ -858,6 +1003,7 @@ def trainLUT_gpt2(
     transformer = model.transformer
 
     _set_wnn_blocks(transformer, wnn_blocks)
+    load_params_for_user(transformer, lut_name)
 
     _apply_lut_hyperparams(
         transformer,
@@ -880,6 +1026,7 @@ def trainLUT_gpt2(
     )
 
     save_lut_for_user(transformer, lut_name)
+    save_params_for_user(transformer, lut_name)
 
     print("Time to train LUT (GPT-2): ", datetime.now() - before_training_lut)
     _log_cuda_mem("trainLUT_gpt2: after")
@@ -893,18 +1040,8 @@ def trainLUT_mistral(
     sparsity=1.0,
     threshold=None,
     residual=None,
-    reset_after_train: bool = False,  # CHANGED: default keep loaded; offload only on pressure
+    reset_after_train: bool = False,
 ):
-    """
-    Train LUT for Mistral using a persistent model.
-
-    reset_after_train:
-      - False (default): keep model loaded, only offload if GPU usage >= GPU_OFFLOAD_RATIO
-      - True: always offload after training
-    """
-    global MISTRAL_MODEL, MISTRAL_TOKENIZER
-
-    # pre-check: if GPU is already pressured, offload before a heavy train
     _maybe_offload_mistral("trainLUT_mistral:pre")
 
     model, tokenizer = get_mistral()
@@ -912,6 +1049,7 @@ def trainLUT_mistral(
     transformer = model
 
     _set_wnn_blocks(transformer, wnn_blocks)
+    load_params_for_user(transformer, lut_name)
 
     _apply_lut_hyperparams(
         transformer,
@@ -935,6 +1073,7 @@ def trainLUT_mistral(
         )
 
         save_lut_for_user(transformer, lut_name)
+        save_params_for_user(transformer, lut_name)
 
         print("Time to train LUT (Mistral): ", datetime.now() - before_training_lut)
 
@@ -945,39 +1084,6 @@ def trainLUT_mistral(
         )
 
         _log_cuda_mem("trainLUT_mistral: after train")
-
-    except torch.cuda.OutOfMemoryError as e:
-        print("[OOM] trainLUT_mistral hit CUDA OOM, resetting Mistral model:", e)
-
-        _log_cuda_mem("OOM: before clear/free")
-
-        if torch.cuda.is_available():
-            try:
-                torch.cuda.synchronize()
-            except Exception as sync_e:
-                print("[OOM] cuda.synchronize failed:", repr(sync_e))
-
-            torch.cuda.empty_cache()
-
-        _log_cuda_mem("OOM: after empty_cache, before free")
-
-        _free_mistral()
-        _free_gpt2()
-        gc.collect()
-
-        _log_cuda_mem("OOM: after free + gc")
-
-        time.sleep(5)
-
-        try:
-            print("[OOM] Reloading Mistral after OOM so next request starts clean...")
-            get_mistral()
-            _log_cuda_mem("OOM: after get_mistral reload")
-        except Exception as e2:
-            print("[OOM] Failed to reload Mistral after OOM:", repr(e2))
-            _log_cuda_mem("OOM: after failed reload")
-
-        raise
 
     finally:
         _log_cuda_mem("trainLUT_mistral: finally (before optional reset)")
@@ -1034,29 +1140,11 @@ def trainLUT_backend(
 # Flask app
 # =========================
 app = Flask(__name__)
-
-CORS(
-    app,
-    resources={r"/*": {"origins": "*"}}
-)
+CORS(app, resources={r"/*": {"origins": "*"}})
 
 
 @app.route("/generate", methods=["POST"])
 def generate_endpoint():
-    """
-    JSON body:
-    {
-        "prompt": "TLG Capital is",
-        "length": 20,
-        "lut_name": "user123",
-        "model": "gpt2" | "mistral",
-        "threshold": 0.25,
-        "residual": 20.0,
-        "residuals": [10.0, 20.0],
-        "wnn_blocks": [18, 19, 20],
-        "cost_scale": 3.0
-    }
-    """
     data = request.get_json(force=True, silent=True) or {}
     prompt = data.get("prompt", "")
     length = data.get("length", 50)
@@ -1065,12 +1153,14 @@ def generate_endpoint():
     threshold = data.get("threshold", 0.25)
     cost_scale = data.get("cost_scale", 0.0)
 
+    wnn_blocks = data.get("wnn_blocks", [-1])
+
     residual = data.get("residual", 20.0)
     residuals = data.get("residuals")
-    if residuals is not None:
-        residual = residuals
 
-    wnn_blocks = data.get("wnn_blocks", [-1])
+    # CHANGED: only accept residuals list if it matches wnn_blocks length
+    if isinstance(residuals, (list, tuple)) and isinstance(wnn_blocks, (list, tuple)) and len(residuals) == len(wnn_blocks):
+        residual = residuals
 
     try:
         completion = text_generator(
@@ -1094,25 +1184,13 @@ def generate_endpoint():
             "cost_scale": cost_scale,
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        tb = traceback.format_exc()
+        print(tb)
+        return jsonify({"error": str(e), "traceback": tb}), 500
 
 
 @app.route("/train_lut", methods=["POST"])
 def train_lut_endpoint():
-    """
-    JSON body:
-    {
-        "label": "TLG Capital is an asset management firm.",
-        "label_context": "optional context...",
-        "lut_name": "user123",
-        "model": "gpt2" | "mistral",
-        "wnn_blocks": [18, 19, 20],
-        "sparsity": 1.0,
-        "threshold": 0.25,
-        "residual": 20.0,
-        "residuals": [10.0, 20.0]
-    }
-    """
     data = request.get_json(force=True, silent=True) or {}
     label = data.get("label")
     label_context = data.get("label_context")
@@ -1124,7 +1202,9 @@ def train_lut_endpoint():
 
     residual = data.get("residual")
     residuals = data.get("residuals")
-    if residuals is not None:
+
+    # CHANGED: only accept residuals list if it matches wnn_blocks length
+    if isinstance(residuals, (list, tuple)) and isinstance(wnn_blocks, (list, tuple)) and len(residuals) == len(wnn_blocks):
         residual = residuals
 
     if not label:
@@ -1151,7 +1231,9 @@ def train_lut_endpoint():
             "residual": residual,
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        tb = traceback.format_exc()
+        print(tb)
+        return jsonify({"error": str(e), "traceback": tb}), 500
 
 
 @app.route("/reset_models", methods=["GET", "POST"])

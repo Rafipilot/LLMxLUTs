@@ -605,7 +605,7 @@ class Transformer(nn.Module):
                 blk.timeStep_buffer = None
             blk.attention.reset_kv_cache(bsz=1)
 
-        encoded_label = tokenizer.encode(label)
+        encoded_label = tokenizer.encode(label) + tokenizer.eos_id 
         if encoded_label and encoded_label[0] == tokenizer._model.bos_id():
             encoded_label = encoded_label[1:]   # remove BOS for continuation- this was a decently big bug lol
 
