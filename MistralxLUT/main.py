@@ -372,8 +372,8 @@ class TransformerBlock(nn.Module):
 
 
             
-    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.75, win: int = 32):
-        x = pre_wnn_x[0].float()   # <-- FORCE FP32 HERE (biggest fix)
+    def _compute_lut_key(self, pre_wnn_x, lam: float = 1, win: int = 32):
+        x = pre_wnn_x[0].float()  
         T, d = x.shape
 
         last = x[-1]
@@ -499,6 +499,8 @@ class Transformer(nn.Module):
         #         params.append(blk.lut_key_proj)
         #         params += list(blk.lut_value_gate.parameters())
         # self.lut_opt = torch.optim.AdamW(params, lr=1e-4)
+        self.grad_buffer_max_size = 128
+        self.grad_buffer = []
 
     def rebuild_lut_opt(self, lr=1e-5):
         params = []
@@ -605,7 +607,8 @@ class Transformer(nn.Module):
                 blk.timeStep_buffer = None
             blk.attention.reset_kv_cache(bsz=1)
 
-        encoded_label = tokenizer.encode(label) + tokenizer.eos_id 
+        encoded_label = tokenizer.encode(label)
+        encoded_label.append(tokenizer.eos_id) 
         if encoded_label and encoded_label[0] == tokenizer._model.bos_id():
             encoded_label = encoded_label[1:]   # remove BOS for continuation- this was a decently big bug lol
 
@@ -621,7 +624,6 @@ class Transformer(nn.Module):
 
         for i in wnn_block_indices:
             block = self.layers[i]
-            print(f"[trainLUT] Training LUT for block {i}")
             now_block = datetime.now()
             block.use_wnn = False # ensure current block is disabled per train
 
@@ -714,60 +716,58 @@ class Transformer(nn.Module):
                 logits = self.output(self.norm(h)).float()  # [1, T, vocab]
                 loss = F.cross_entropy(logits[:, -1, :], target_tensor)
 
-                print(f"[trainLUT] Block {i}, position {k}: computing grad")
-                now_back = datetime.now()
 
                 self.lut_opt.zero_grad(set_to_none=True)
-                loss.backward()                 # backprop through the blocks-after-i path
-                print("grad v_down:", None if block.lut_v_down.weight.grad is None else block.lut_v_down.weight.grad.norm().item())
-                print("grad v_up  :", None if block.lut_v_up.weight.grad   is None else block.lut_v_up.weight.grad.norm().item())
-                print("grad v_gate:", None if block.lut_v_gate.weight.grad is None else block.lut_v_gate.weight.grad.norm().item())
+                loss.backward()
 
 
+                now_back = datetime.now()
+              # backprop through the blocks-afte
                 grad_pre_wnn_x = pre_wnn_x.grad.detach()
                 grad_pre_wnn_x = torch.nan_to_num(grad_pre_wnn_x, nan=0.0, posinf=0.0, neginf=0.0)
+                grad_norm = grad_pre_wnn_x.norm().item()
+                if len(self.grad_buffer) < self.grad_buffer_max_size:
+                    self.grad_buffer.append(grad_norm)
+                else:
+                    # rolling buffer
+                    self.grad_buffer.pop(0)
+                    self.grad_buffer.append(grad_norm)
+
+                if len(self.grad_buffer) > 50:  # warmup
+                    q = 0.15  # 40th percentile -> write if in top 60%
+                    buf = torch.tensor(self.grad_buffer, dtype=torch.float32)  # CPU tensor is fine
+                    thresh = torch.quantile(buf, q).item()
+                    do_write = (grad_norm >= thresh)
+                else:
+                    do_write = True
 
                 torch.nn.utils.clip_grad_norm_(self.lut_opt.param_groups[0]["params"], 1.0)
 
-                kp0 = block.lut_key_proj.detach().float().clone()
-                # vg0 = block.lut_gate.weight.detach().float().clone()
-                self.lut_opt.step()
+ 
+                if not do_write:  # if we are not writing we are adapting the matrices
+                
+                    torch.nn.utils.clip_grad_norm_(self.lut_opt.param_groups[0]["params"], 1.0)
+                    self.lut_opt.step()
 
-                print("Δ key_proj:", (block.lut_key_proj.detach().float() - kp0).abs().mean().item())
                 # print("Δ gate_w  :", (block.lut_gate.weight.detach().float() - vg0).abs().mean().item())
 
 
                 
 
-                grad_norm = grad_pre_wnn_x.norm().item()
-                print(f"[trainLUT] Block {i}, position {k}: grad_norm={grad_norm:.4e}")
-
-                print(
-                    f"[trainLUT] Block {i}, position {k}: grad computed in {datetime.now() - now_back}"
-                )
+                
 
                 # Grad to residual
                 wnn_target_residual = (-grad_pre_wnn_x)  # [1, T, d]
 
-                # Last time step
-                pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :]              # [1, d]
-                target_residual_last = wnn_target_residual.detach()[:, -1, :]  # [1, d]
-
-                print(f"[trainLUT] Training LUT on block {i}")
                 now_lut = datetime.now()
-                with torch.no_grad():
-                    key_vec = block._compute_lut_key(pre_wnn_x.detach())
-                    value_vec = wnn_target_residual.detach()[:, -1, :]
-                    block.LUT.train(key_vec, value_vec)
-                print(
-                    f"[trainLUT] Block {i}, position {k}: LUT updated in {datetime.now() - now_lut}"
-                )
+                if do_write:
+                    with torch.no_grad():
+                        key_vec = block._compute_lut_key(pre_wnn_x.detach())
+                        value_vec = wnn_target_residual.detach()[:, -1, :]
+                        block.LUT.train(key_vec, value_vec)
 
-                # clean any accidental grad references
-                pre_wnn_x.grad = None
-                self.layers[i].pre_wnn_x = None
-
-            # block.use_wnn = True # re enable this lut block
+                        pre_wnn_x.grad = None
+                        self.layers[i].pre_wnn_x = None
 
             print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
 
