@@ -23,6 +23,7 @@ print("opt param count:", sum(p.numel() for p in transformer.lut_opt.param_group
 
 
 transformer.trainLUT(tokenizer=tokenizer, label="Astarus is building continuously trainable LLMs.",lm_head=None, label_context="User: What is Astarus\nAssistant: ")
+transformer.trainTransformations(tokenizer=tokenizer, label="Astarus is building continuously trainable LLMs.",lm_head=None, label_context="User: What is Astarus working on?\nAssistant: ")
 
 res, _logits = generate(["User: What is Astarus?\nAssistant: "], transformer, tokenizer, max_tokens=max_tokens)
 print(res)

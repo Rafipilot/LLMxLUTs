@@ -39,6 +39,11 @@ BASE_DIR = Path(__file__).parent
 DB_PATH = "LUT.db"
 
 # =========================
+# GLOBAL matrices trainer LUT name (NEW)
+# =========================
+GLOBAL_MATRICES_LUT_NAME = "global_matrices_trainer"
+
+# =========================
 # GPT-2 globals
 # =========================
 MODEL = None
@@ -60,6 +65,12 @@ MISTRAL_TOKENIZER = None
 # =========================
 EMPTY_LUT_TEMPLATES_GPT2 = {}      # block_idx -> {slot: empty_LUT_copy}
 EMPTY_LUT_TEMPLATES_MISTRAL = {}   # block_idx -> {slot: empty_LUT_copy}
+
+# =========================
+# Empty PARAM templates (to reset learned matrices)
+# =========================
+EMPTY_PARAM_TEMPLATES_GPT2 = {}      # block_idx -> payload dict
+EMPTY_PARAM_TEMPLATES_MISTRAL = {}   # block_idx -> payload dict
 
 
 # =========================
@@ -249,8 +260,50 @@ def _get_conn():
     return conn
 
 
+def _delete_params_from_db(lut_name: str, block_idxs: list[int] | None = None) -> int:
+    conn = _get_conn()
+    cur = conn.cursor()
+
+    if block_idxs:
+        block_idxs = [int(i) for i in block_idxs]
+        placeholders = ",".join(["?"] * len(block_idxs))
+
+        cur.execute(
+            f"SELECT COUNT(*) FROM lut_params WHERE lut_name = ? AND block_idx IN ({placeholders})",
+            (lut_name, *block_idxs),
+        )
+        before = int(cur.fetchone()[0] or 0)
+
+        cur.execute(
+            f"DELETE FROM lut_params WHERE lut_name = ? AND block_idx IN ({placeholders})",
+            (lut_name, *block_idxs),
+        )
+    else:
+        cur.execute("SELECT COUNT(*) FROM lut_params WHERE lut_name = ?", (lut_name,))
+        before = int(cur.fetchone()[0] or 0)
+
+        cur.execute("DELETE FROM lut_params WHERE lut_name = ?", (lut_name,))
+
+    conn.commit()
+    conn.close()
+    return before
+
+
+def _delete_lut_rows_from_db(lut_name: str) -> int:
+    conn = _get_conn()
+    cur = conn.cursor()
+
+    cur.execute("SELECT COUNT(*) FROM lut_blocks WHERE lut_name = ?", (lut_name,))
+    before = int(cur.fetchone()[0] or 0)
+
+    cur.execute("DELETE FROM lut_blocks WHERE lut_name = ?", (lut_name,))
+    conn.commit()
+    conn.close()
+    return before
+
+
 def _free_gpt2():
-    global MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE, ENABLE_GPT2, EMPTY_LUT_TEMPLATES_GPT2
+    global MODEL, LM_HEAD, CONFIG, ENC, TEMPERATURE, ENABLE_GPT2, EMPTY_LUT_TEMPLATES_GPT2, EMPTY_PARAM_TEMPLATES_GPT2
 
     if MODEL is not None:
         try:
@@ -267,10 +320,12 @@ def _free_gpt2():
 
     if EMPTY_LUT_TEMPLATES_GPT2:
         EMPTY_LUT_TEMPLATES_GPT2.clear()
+    if EMPTY_PARAM_TEMPLATES_GPT2:
+        EMPTY_PARAM_TEMPLATES_GPT2.clear()
 
 
 def _free_mistral():
-    global MISTRAL_MODEL, MISTRAL_TOKENIZER, EMPTY_LUT_TEMPLATES_MISTRAL
+    global MISTRAL_MODEL, MISTRAL_TOKENIZER, EMPTY_LUT_TEMPLATES_MISTRAL, EMPTY_PARAM_TEMPLATES_MISTRAL
 
     if MISTRAL_MODEL is not None:
         try:
@@ -283,6 +338,8 @@ def _free_mistral():
 
     if EMPTY_LUT_TEMPLATES_MISTRAL:
         EMPTY_LUT_TEMPLATES_MISTRAL.clear()
+    if EMPTY_PARAM_TEMPLATES_MISTRAL:
+        EMPTY_PARAM_TEMPLATES_MISTRAL.clear()
 
 
 # =========================
@@ -506,6 +563,49 @@ def _apply_block_params(block, payload: dict):
                         mod.load_state_dict(fixed, strict=False)
                     except Exception:
                         pass
+
+
+def _snapshot_empty_params(transformer, model_type: str):
+    """
+    Capture a 'fresh-load' snapshot of trainable transformation params
+    so we can restore them later without restarting the server.
+    """
+    global EMPTY_PARAM_TEMPLATES_GPT2, EMPTY_PARAM_TEMPLATES_MISTRAL
+
+    blocks = _get_blocks(transformer)
+    snap = {}
+
+    for idx, blk in enumerate(blocks):
+        payload = _extract_block_params(blk)
+        if payload:
+            snap[idx] = payload
+
+    if model_type == "gpt2":
+        EMPTY_PARAM_TEMPLATES_GPT2 = snap
+    elif model_type == "mistral":
+        EMPTY_PARAM_TEMPLATES_MISTRAL = snap
+
+
+def _restore_empty_params(transformer, model_type: str):
+    """
+    Restore params from the fresh-load snapshot.
+    """
+    blocks = _get_blocks(transformer)
+    if not blocks:
+        return
+
+    templates = EMPTY_PARAM_TEMPLATES_MISTRAL if model_type == "mistral" else EMPTY_PARAM_TEMPLATES_GPT2
+    if not templates:
+        print(f"[restore_empty_params] No snapshot available for model_type={model_type}")
+        return
+
+    restored = 0
+    for block_idx, payload in templates.items():
+        if 0 <= block_idx < len(blocks):
+            _apply_block_params(blocks[block_idx], payload)
+            restored += 1
+
+    print(f"[restore_empty_params] restored params for {restored} blocks (model_type={model_type})")
 
 
 def load_params_for_user(transformer, lut_name: str):
@@ -743,6 +843,7 @@ def get_mistral():
             block.LUT.CS_threshold = 0.25
 
     _snapshot_empty_luts(MISTRAL_MODEL, model_type="mistral")
+    _snapshot_empty_params(MISTRAL_MODEL, model_type="mistral")  # NEW
     return MISTRAL_MODEL, MISTRAL_TOKENIZER
 
 
@@ -801,6 +902,7 @@ def _setup_gpt2_model():
     TEMPERATURE = temperature
 
     _snapshot_empty_luts(transformer, model_type="gpt2")
+    _snapshot_empty_params(transformer, model_type="gpt2")  # NEW
 
     return model, lm_head, config, enc, temperature
 
@@ -828,7 +930,9 @@ def text_generator_gpt2(
     transformer = model.transformer
 
     _set_wnn_blocks(transformer, wnn_blocks)
-    load_params_for_user(transformer, lut_name)
+
+    # always load global matrices params (not per-user)
+    load_params_for_user(transformer, GLOBAL_MATRICES_LUT_NAME)
 
     _apply_lut_hyperparams(
         transformer,
@@ -918,7 +1022,9 @@ def text_generator_mistral(
     transformer = model
 
     _set_wnn_blocks(transformer, wnn_blocks)
-    load_params_for_user(transformer, lut_name)
+
+    # always load global matrices params (not per-user)
+    load_params_for_user(transformer, GLOBAL_MATRICES_LUT_NAME)
 
     lut_bytes = _estimate_lut_bytes(transformer)
     print(
@@ -1003,7 +1109,9 @@ def trainLUT_gpt2(
     transformer = model.transformer
 
     _set_wnn_blocks(transformer, wnn_blocks)
-    load_params_for_user(transformer, lut_name)
+
+    # always load global matrices params before writing LUT rows
+    load_params_for_user(transformer, GLOBAL_MATRICES_LUT_NAME)
 
     _apply_lut_hyperparams(
         transformer,
@@ -1025,8 +1133,11 @@ def trainLUT_gpt2(
         sparsity_level=sparsity
     )
 
+    # restore global matrices params (defensive)
+    load_params_for_user(transformer, GLOBAL_MATRICES_LUT_NAME)
+
     save_lut_for_user(transformer, lut_name)
-    save_params_for_user(transformer, lut_name)
+    # do NOT save per-user params anymore
 
     print("Time to train LUT (GPT-2): ", datetime.now() - before_training_lut)
     _log_cuda_mem("trainLUT_gpt2: after")
@@ -1049,7 +1160,9 @@ def trainLUT_mistral(
     transformer = model
 
     _set_wnn_blocks(transformer, wnn_blocks)
-    load_params_for_user(transformer, lut_name)
+
+    # always load global matrices params before writing LUT rows
+    load_params_for_user(transformer, GLOBAL_MATRICES_LUT_NAME)
 
     _apply_lut_hyperparams(
         transformer,
@@ -1072,8 +1185,11 @@ def trainLUT_mistral(
             sparsity_level=sparsity,
         )
 
+        # restore global matrices params (defensive)
+        load_params_for_user(transformer, GLOBAL_MATRICES_LUT_NAME)
+
         save_lut_for_user(transformer, lut_name)
-        save_params_for_user(transformer, lut_name)
+        # do NOT save per-user params anymore
 
         print("Time to train LUT (Mistral): ", datetime.now() - before_training_lut)
 
@@ -1137,6 +1253,78 @@ def trainLUT_backend(
 
 
 # =========================
+# NEW: Train matrices endpoint backend (Mistral only)
+# =========================
+def trainMatrices_mistral(
+    train_text,
+    train_context=None,
+    wnn_blocks=None,
+    threshold=None,
+    residual=None,
+    cost_scale: float = 0.0,
+    reset_after_train: bool = False,
+):
+    """
+    Train transformation params (key/v_down/v_up/v_gate, etc.) and store them ONLY
+    under GLOBAL_MATRICES_LUT_NAME.
+    """
+    _maybe_offload_mistral("trainMatrices_mistral:pre")
+
+    model, tokenizer = get_mistral()
+
+    # IMPORTANT: matrices training uses the LUT named GLOBAL_MATRICES_LUT_NAME
+    model = load_lut_for_user(model, GLOBAL_MATRICES_LUT_NAME)
+    transformer = model
+
+    _set_wnn_blocks(transformer, wnn_blocks)
+
+    # load existing global matrices params so this continues training
+    load_params_for_user(transformer, GLOBAL_MATRICES_LUT_NAME)
+
+    _apply_lut_hyperparams(
+        transformer,
+        threshold=threshold,
+        residual=residual,
+        wnn_blocks=wnn_blocks,
+        cost_scale=cost_scale,
+    )
+
+    print("[trainMatrices_mistral] starting training (GLOBAL matrices)")
+    _log_cuda_mem("trainMatrices_mistral: before", reset_peak=True)
+
+    before_training = datetime.now()
+
+    try:
+        transformer.trainTransformations(
+            tokenizer=tokenizer,
+            lm_head=None,
+            label=train_text,
+            label_context=train_context,
+        )
+
+        # Persist ONLY the params for global matrices
+        save_params_for_user(transformer, GLOBAL_MATRICES_LUT_NAME)
+
+        print("Time to train matrices (Mistral): ", datetime.now() - before_training)
+        _log_cuda_mem("trainMatrices_mistral: after train")
+
+    finally:
+        _log_cuda_mem("trainMatrices_mistral: finally (before optional reset)")
+
+        if reset_after_train:
+            print("[trainMatrices_mistral] reset_after_train=True, freeing Mistral + cache")
+            _free_mistral()
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            _log_cuda_mem("trainMatrices_mistral: after forced reset", reset_peak=True)
+        else:
+            did_offload = _maybe_offload_mistral("trainMatrices_mistral:post")
+            if not did_offload:
+                print("[trainMatrices_mistral] keeping model in memory (below threshold)")
+
+
+# =========================
 # Flask app
 # =========================
 app = Flask(__name__)
@@ -1158,7 +1346,7 @@ def generate_endpoint():
     residual = data.get("residual", 20.0)
     residuals = data.get("residuals")
 
-    # CHANGED: only accept residuals list if it matches wnn_blocks length
+    # only accept residuals list if it matches wnn_blocks length
     if isinstance(residuals, (list, tuple)) and isinstance(wnn_blocks, (list, tuple)) and len(residuals) == len(wnn_blocks):
         residual = residuals
 
@@ -1182,6 +1370,7 @@ def generate_endpoint():
             "threshold": threshold,
             "residual": residual,
             "cost_scale": cost_scale,
+            "global_matrices_lut": GLOBAL_MATRICES_LUT_NAME,
         })
     except Exception as e:
         tb = traceback.format_exc()
@@ -1203,7 +1392,7 @@ def train_lut_endpoint():
     residual = data.get("residual")
     residuals = data.get("residuals")
 
-    # CHANGED: only accept residuals list if it matches wnn_blocks length
+    # only accept residuals list if it matches wnn_blocks length
     if isinstance(residuals, (list, tuple)) and isinstance(wnn_blocks, (list, tuple)) and len(residuals) == len(wnn_blocks):
         residual = residuals
 
@@ -1229,11 +1418,108 @@ def train_lut_endpoint():
             "sparsity": sparsity,
             "threshold": threshold,
             "residual": residual,
+            "global_matrices_lut": GLOBAL_MATRICES_LUT_NAME,
         })
     except Exception as e:
         tb = traceback.format_exc()
         print(tb)
         return jsonify({"error": str(e), "traceback": tb}), 500
+
+
+# =========================
+# NEW: Train matrices endpoint (Mistral only)
+# =========================
+@app.route("/train_matrices", methods=["POST"])
+def train_matrices_endpoint():
+    data = request.get_json(force=True, silent=True) or {}
+
+    label = data.get("label")
+    label_context = data.get("label_context")
+    model_name = (data.get("model", "mistral") or "mistral").lower()
+    wnn_blocks = data.get("wnn_blocks", [-1])
+    threshold = data.get("threshold", 0.25)
+    cost_scale = data.get("cost_scale", 0.0)
+
+    residual = data.get("residual")
+    residuals = data.get("residuals")
+
+    if isinstance(residuals, (list, tuple)) and isinstance(wnn_blocks, (list, tuple)) and len(residuals) == len(wnn_blocks):
+        residual = residuals
+
+    if not label:
+        return jsonify({"error": "Missing 'label' field"}), 400
+
+    if model_name != "mistral":
+        return jsonify({"error": "train_matrices supports only model='mistral'"}), 400
+
+    try:
+        trainMatrices_mistral(
+            label,
+            train_context=label_context,
+            wnn_blocks=wnn_blocks,
+            threshold=threshold,
+            residual=residual,
+            cost_scale=cost_scale,
+        )
+        return jsonify({
+            "status": "ok",
+            "model": "mistral",
+            "lut_name_used_for_matrices": GLOBAL_MATRICES_LUT_NAME,
+            "wnn_blocks": wnn_blocks,
+            "threshold": threshold,
+            "residual": residual,
+            "cost_scale": cost_scale,
+        })
+    except Exception as e:
+        tb = traceback.format_exc()
+        print(tb)
+        return jsonify({"error": str(e), "traceback": tb}), 500
+
+
+# =========================
+# NEW: Reset learned matrices (DB + in-memory restore)
+# =========================
+@app.route("/reset_matrices", methods=["POST"])
+def reset_matrices_endpoint():
+    """
+    Reset the GLOBAL learned matrices:
+    - Deletes saved params from DB under GLOBAL_MATRICES_LUT_NAME
+    - Restores in-memory params back to fresh-load snapshot (no restart needed)
+
+    Body options:
+      {
+        "block_idxs": [31, 25, ...],      # optional: reset only some blocks
+        "reset_lut_rows": false,          # optional: also clear lut_blocks for that lut_name
+        "reset_in_memory": true           # optional: default true
+      }
+    """
+    data = request.get_json(force=True, silent=True) or {}
+
+    block_idxs = data.get("block_idxs")  # optional
+    reset_lut_rows = bool(data.get("reset_lut_rows", False))
+    reset_in_memory = bool(data.get("reset_in_memory", True))
+
+    deleted_params = _delete_params_from_db(GLOBAL_MATRICES_LUT_NAME, block_idxs=block_idxs)
+
+    deleted_lut_rows = 0
+    if reset_lut_rows:
+        deleted_lut_rows = _delete_lut_rows_from_db(GLOBAL_MATRICES_LUT_NAME)
+
+    if reset_in_memory:
+        # Restore live model weights so changes take effect immediately
+        if MISTRAL_MODEL is not None:
+            _restore_empty_params(MISTRAL_MODEL, model_type="mistral")
+        if MODEL is not None and getattr(MODEL, "transformer", None) is not None:
+            _restore_empty_params(MODEL.transformer, model_type="gpt2")
+
+    return jsonify({
+        "status": "ok",
+        "lut_name": GLOBAL_MATRICES_LUT_NAME,
+        "deleted_param_rows": int(deleted_params),
+        "deleted_lut_rows": int(deleted_lut_rows),
+        "reset_in_memory": reset_in_memory,
+        "block_idxs": block_idxs,
+    })
 
 
 @app.route("/reset_models", methods=["GET", "POST"])
