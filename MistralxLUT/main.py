@@ -199,21 +199,24 @@ class FeedForward(nn.Module):
 class LUT:
     def __init__(self):
         self.keys = []
+        self.raw_keys = []
         self.values = []
         self.lookupTableMetaData = []
         self.CS_threshold = 0.25
         self.cost_scale = 0.0
 
-    def train(self, xs, ys):
-        for x, y in zip(xs, ys):
-            print("adding rows...")
-            x = x.detach().clone().squeeze()
-            y = y.detach().clone().squeeze()
+    def train(self, xs, ys, raw_keys):
+        for x, y, rx in zip(xs, ys, raw_keys):
+            x  = x.detach().clone().squeeze()
+            y  = y.detach().clone().squeeze()
+            rx = rx.detach().clone().squeeze()
             self.keys.append(x)
             self.values.append(y)
+            self.raw_keys.append(rx)
             self.lookupTableMetaData.append([1000, 0])
 
-    def forward(self, x, topk=8, tau=0.05, differentiable=False, beta=0.02):
+
+    def forward(self, x, topk=8, tau=0.05, differentiable=False, beta=0.02, adapt_key_fn=None):
         if x is None:
             return None, None
 
@@ -226,6 +229,12 @@ class LUT:
         device = q.device
         keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
         values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
+
+
+        if differentiable:  # if we are in train matries we want to adapt the raw keys so we can learn as transformation. In non diffentiable mode (normal inference) we used cached key values, since they dont change unless we perform train_matrices
+            if adapt_key_fn:
+                keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.raw_keys])
+                keys = adapt_key_fn(keys)
 
         N, d = keys.shape
 
@@ -312,27 +321,32 @@ class TransformerBlock(nn.Module):
         self.lut_q_up = nn.Linear(self.lut_rank, args.dim, bias=False, dtype=torch.float16)
         self.lut_q_gate = nn.Linear(args.dim, self.lut_rank, bias=True, dtype=torch.float16)
 
+        self.lut_k_down = nn.Linear(args.dim, self.lut_rank, bias=False, dtype=torch.float16)
+        self.lut_k_up = nn.Linear(self.lut_rank, args.dim, bias=False, dtype=torch.float16)
+        self.lut_k_gate = nn.Linear(args.dim, self.lut_rank, bias=True, dtype=torch.float16)
+
         self.lut_v_down = nn.Linear(args.dim, self.lut_rank, bias=False)
         self.lut_v_up = nn.Linear(self.lut_rank, args.dim, bias=False)
         self.lut_v_gate = nn.Linear(args.dim, self.lut_rank, bias=True)
 
         nn.init.normal_(self.lut_v_up.weight, mean=0.0, std=1e-3)
+        nn.init.zeros_(self.lut_q_up.weight)
+        nn.init.zeros_(self.lut_k_up.weight)
 
-    def _compute_lut_key(self, pre_wnn_x, lam=1, win=32, adapt=False):
-        x = pre_wnn_x[0]
+
+    def _compute_lut_key(self, pre_wnn_x, lam=1.0, win=32, adapt=True):
+        x = pre_wnn_x[0]              # [T, d]
         T, d = x.shape
-
         last = x[-1]
         tail = x[-min(win, T):]
-
         ctx = tail[:-1].mean(dim=0) if tail.shape[0] > 1 else last
 
-        k_local = lam * last + (1 - lam) * ctx
-        k_local = F.layer_norm(k_local, (d,))
-        k_local = F.normalize(k_local, dim=-1)
-        if adapt:
-            k_local = self.adapt_query(k_local)
-        return k_local.unsqueeze(0)
+        q_raw = lam * last + (1 - lam) * ctx
+        q_raw = F.layer_norm(q_raw, (d,))
+        q_raw = F.normalize(q_raw, dim=-1)
+
+        q_adapt = self.adapt_query(q_raw) if adapt else q_raw
+        return q_adapt.unsqueeze(0), q_raw.unsqueeze(0)
 
     def adapt_query(self, q, alpha=2):
         wd = self.lut_q_down.weight.dtype
@@ -347,6 +361,20 @@ class TransformerBlock(nn.Module):
         q2 = F.layer_norm(q2, (q2.shape[-1],))
         q2 = F.normalize(q2, dim=-1)
         return q2
+    
+    def adapt_key_batch(self, K, alpha=2.0): # applying the transformation in a batched way
+        wd = self.lut_k_down.weight.dtype
+        K = K.to(wd)
+
+        z = self.lut_k_down(K)
+        g = 2.0 * torch.sigmoid(self.lut_k_gate(K))
+        dK = self.lut_k_up(g * z)
+
+        k2 = K + alpha * dK
+        k2 = F.layer_norm(k2, (k2.shape[-1],))
+        k2 = F.normalize(k2, dim=-1)
+        return k2
+            
 
     def forward(self, x: torch.Tensor, freqs_cis: torch.Tensor, positions: torch.Tensor, mask: Optional[torch.Tensor]):
         r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask)
@@ -361,7 +389,7 @@ class TransformerBlock(nn.Module):
 
         if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
             with torch.no_grad():
-                key = self._compute_lut_key(self.pre_wnn_x, adapt=True)
+                key, _ = self._compute_lut_key(self.pre_wnn_x, adapt=True)
                 rl, highest_sim = self.LUT.forward(key, topk=8, tau=0.05)
                 if highest_sim <= 0.0:
                     return out
@@ -434,6 +462,9 @@ class Transformer(nn.Module):
                     "lut_q_down",
                     "lut_q_up",
                     "lut_q_gate",
+                    "lut_k_down",
+                    "lut_k_up",
+                    "lut_k_gate",
                 ):
                     mod = getattr(blk, name, None)
                     if mod is None:
@@ -450,6 +481,9 @@ class Transformer(nn.Module):
                     "lut_q_down",
                     "lut_q_up",
                     "lut_q_gate",
+                    "lut_k_down",
+                    "lut_k_up",
+                    "lut_k_gate",
                 ):
                     mod = getattr(blk, name, None)
                     if mod is None:
@@ -554,9 +588,9 @@ class Transformer(nn.Module):
                 wnn_target_residual = -grad_pre_wnn_x
 
                 with torch.no_grad():
-                    key_vec = block._compute_lut_key(pre_wnn_x.detach(), adapt=True)
+                    key_vec, raw_key_vec = block._compute_lut_key(pre_wnn_x.detach(), adapt=False)  # we want to store the raw key, not the adapted one!
                     value_vec = wnn_target_residual.detach()[:, -1, :]
-                    block.LUT.train(key_vec, value_vec)
+                    block.LUT.train(key_vec, value_vec, raw_key_vec)
 
                     pre_wnn_x.grad = None
                     self.layers[i].pre_wnn_x = None
@@ -565,6 +599,8 @@ class Transformer(nn.Module):
 
         for blk in self.layers:
             blk.use_wnn = True
+
+        
 
     def trainTransformations(self, tokenizer, lm_head, label, label_context=None):
         if self.lut_opt is None:
@@ -628,10 +664,13 @@ class Transformer(nn.Module):
                 pre_wnn_x = pre_wnn_x_val.detach().clone().requires_grad_(True)
                 h = pre_wnn_x
 
+                q_adapt, _q_raw = block._compute_lut_key(pre_wnn_x.detach(), adapt=True)
                 rl, sim = block.LUT.forward(
-                    block._compute_lut_key(pre_wnn_x.detach(), adapt=True),
+                    q_adapt,
                     differentiable=True,
+                    adapt_key_fn=block.adapt_key_batch,
                 )
+
                 if sim <= 0.0:
                     continue
 
@@ -668,7 +707,14 @@ class Transformer(nn.Module):
             print(f"[trainTransformations] Finished block {i} in {datetime.now() - now_block}")
 
         for blk in self.layers:
-            blk.use_wnn = True
+            if blk.wnn_block:
+                blk.use_wnn = True
+                with torch.no_grad():
+                    K_raw = torch.stack([rk.to(device=device, dtype=torch.float32) for rk in blk.LUT.raw_keys])
+                    K_new = blk.adapt_key_batch(K_raw)
+                    blk.LUT.keys = [K_new[i].detach().cpu() for i in range(K_new.shape[0])] # apply the key matrix again to the keys and store it every time it changes
+
+        
 
     def saveLUTs(self, save_name):
         base_name = save_name

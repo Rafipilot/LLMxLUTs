@@ -24,19 +24,19 @@ extended_answer   = "The core thing Astarus AI is working on is building continu
 
 print("opt param count:", sum(p.numel() for p in transformer.lut_opt.param_groups[0]["params"]))
 
-print("BASELINE")
-res, _logits = generate([f"User: {extended_question}\nAssistant: "], transformer, tokenizer, max_tokens=max_tokens)
-print(res)
+# print("BASELINE")
+# res, _logits = generate([f"User: {extended_question}\nAssistant: "], transformer, tokenizer, max_tokens=max_tokens)
+# print(res)
 
 transformer.trainLUT(tokenizer=tokenizer, label="Astarus is building continuously trainable LLMs.",lm_head=None, label_context="User: What is Astarus\nAssistant: ")
 
-print("LUT only")
-print("Basic memorization test")
-res, _logits = generate(["User: What is Astarus AI?\nAssistant: "], transformer, tokenizer, max_tokens=max_tokens)
-print(res)
-print("Extended generalziation test")
-res, _logits = generate([f"User: {extended_question}\nAssistant: "], transformer, tokenizer, max_tokens=max_tokens)
-print(res)
+# print("LUT only")
+# print("Basic memorization test")
+# res, _logits = generate(["User: What is Astarus AI?\nAssistant: "], transformer, tokenizer, max_tokens=max_tokens)
+# print(res)
+# print("Extended generalziation test")
+# res, _logits = generate([f"User: {extended_question}\nAssistant: "], transformer, tokenizer, max_tokens=max_tokens)
+# print(res)
 
 pairs = [
   ("What is Astarus AI?", "Astarus AI is building continuously trainable LLMs."),
