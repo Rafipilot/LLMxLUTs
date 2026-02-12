@@ -260,7 +260,7 @@ class LUT:
 
         max_sim = top_sims.max().item()
 
-        print("max sim: ", max_sim)
+        # print("max sim: ", max_sim)
 
         if max_sim < self.CS_threshold:
             return torch.zeros_like(q), 0.0
@@ -334,7 +334,7 @@ class TransformerBlock(nn.Module):
         nn.init.zeros_(self.lut_k_up.weight)
 
 
-    def _compute_lut_key(self, pre_wnn_x, lam=1.0, win=32, adapt=True):
+    def _compute_lut_key(self, pre_wnn_x, lam=1, win=32, adapt=True):
         x = pre_wnn_x[0]              # [T, d]
         T, d = x.shape
         last = x[-1]
@@ -348,7 +348,7 @@ class TransformerBlock(nn.Module):
         q_adapt = self.adapt_query(q_raw) if adapt else q_raw
         return q_adapt.unsqueeze(0), q_raw.unsqueeze(0)
 
-    def adapt_query(self, q, alpha=2):
+    def adapt_query(self, q, alpha=4):
         wd = self.lut_q_down.weight.dtype
         if q.dtype != wd:
             q = q.to(wd)
@@ -362,7 +362,7 @@ class TransformerBlock(nn.Module):
         q2 = F.normalize(q2, dim=-1)
         return q2
     
-    def adapt_key_batch(self, K, alpha=2.0): # applying the transformation in a batched way
+    def adapt_key_batch(self, K, alpha=4): # applying the transformation in a batched way
         wd = self.lut_k_down.weight.dtype
         K = K.to(wd)
 
@@ -451,7 +451,7 @@ class Transformer(nn.Module):
 
         self.lut_opt = None
 
-    def rebuild_lut_opt(self, lr: float = 7e-5):
+    def rebuild_lut_opt(self, lr = 1e-5):
         params = []
         for blk in self.layers:
             if getattr(blk, "wnn_block", False):

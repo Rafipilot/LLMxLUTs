@@ -16,6 +16,7 @@ transformer.rebuild_lut_opt()
 for block in transformer.layers:
     block.residual_scale = 0.65
     block.LUT.CS_threshold = -1
+    block.LUT.cost_scale = 0.0
 
 
 
