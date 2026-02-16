@@ -1,20 +1,16 @@
-import torch
-from torch import nn
-import torch.nn.functional as F
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
-import json
-from typing import Optional, Tuple, List
+import torch
+from torch import nn
+import torch.nn.functional as F
+from safetensors.torch import load_file as safe_load
 from sentencepiece import SentencePieceProcessor
 
-import torch.nn.functional as F
-from datetime import datetime
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print("device:", device)
 
-from safetensors.torch import load_file as safe_load
-
-device =torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print("device : ", device)
 
 @dataclass
 class ModelArgs:
@@ -24,27 +20,24 @@ class ModelArgs:
     hidden_dim: int
     n_heads: int
     n_kv_heads: int
-    sliding_window: int =4096 
+    sliding_window: int = 4096
     norm_eps: float = None
-    vocab_size: int= None
+    vocab_size: int = None
 
     max_batch_size: int = 0
     rope_theta: float = 1000000.0
 
+    # kept for compatibility, but we will infer key dim from n_kv_heads * head_dim
     lut_key_dim: int = 1024
 
 
-def repeat_kv(keys: torch.Tensor, values: torch.Tensor, repeats: int):
+def repeat_kv(keys, values, repeats):
     keys = torch.repeat_interleave(keys, repeats=repeats, dim=2)
     values = torch.repeat_interleave(values, repeats=repeats, dim=2)
     return keys, values
 
 
-def _reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor) -> torch.Tensor:
-    """
-    freqs_cis: complex - (seq_len, head_dim / 2)
-    x: complex - (bsz, seq_len, head_dim / 2)
-    """
+def _reshape_for_broadcast(freqs_cis, x):
     ndim = x.ndim
     assert 1 < ndim
     assert freqs_cis.shape == (x.shape[1], x.shape[-1]), (
@@ -55,11 +48,7 @@ def _reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor) -> torch.Te
     return freqs_cis.view(*shape)
 
 
-def apply_rotary_emb(
-    xq: torch.Tensor,
-    xk: torch.Tensor,
-    freqs_cis: torch.Tensor,
-) -> Tuple[torch.Tensor, torch.Tensor]:
+def apply_rotary_emb(xq, xk, freqs_cis):
     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
     freqs_cis = _reshape_for_broadcast(freqs_cis, xq_)
@@ -68,62 +57,48 @@ def apply_rotary_emb(
     return xq_out.type_as(xq), xk_out.type_as(xk)
 
 
+def precompute_freqs_cis(dim, end, theta=10000.0):
+    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+    t = torch.arange(end, device=freqs.device)
+    freqs = torch.outer(t, freqs).float()
+    return torch.polar(torch.ones_like(freqs), freqs)
+
+
 class Attention(nn.Module):
-    def __init__(self, args: ModelArgs):
+    def __init__(self, args):
         super().__init__()
         self.args = args
+        self.n_heads = args.n_heads
+        self.n_kv_heads = args.n_kv_heads
 
-        self.n_heads: int = args.n_heads
-        self.n_kv_heads: int = args.n_kv_heads
-        
         self.repeats = self.n_heads // self.n_kv_heads
-        self.sliding_window = self.args.sliding_window
+        self.sliding_window = args.sliding_window
+        self.scale = args.head_dim ** -0.5
 
-        self.scale = self.args.head_dim**-0.5
+        self.attn_scores = None
 
-        self.attn_scores = None ## for lut
+        self.wq = nn.Linear(args.dim, args.n_heads * args.head_dim, bias=False)
+        self.wk = nn.Linear(args.dim, args.n_kv_heads * args.head_dim, bias=False)
+        self.wv = nn.Linear(args.dim, args.n_kv_heads * args.head_dim, bias=False)
+        self.wo = nn.Linear(args.n_heads * args.head_dim, args.dim, bias=False)
 
-        self.wq = nn.Linear(
-            args.dim,
-            args.n_heads * args.head_dim,
-            bias=False
-        )
-        self.wk = nn.Linear(
-            args.dim,
-            args.n_kv_heads * args.head_dim,
-            bias=False
-        )
-        self.wv = nn.Linear(
-            args.dim,
-            args.n_kv_heads * args.head_dim,
-            bias=False
-        )
-        self.wo = nn.Linear(
-            args.n_heads * args.head_dim,
-            args.dim,
-            bias=False
-        )
         self.cache_k = torch.empty(
-            (
-                args.max_batch_size,
-                args.sliding_window,
-                self.n_kv_heads,
-                self.args.head_dim,
-            ), dtype=torch.float16
-        ).cuda()
+            (args.max_batch_size, args.sliding_window, self.n_kv_heads, args.head_dim),
+            dtype=torch.float16,
+            device="cuda",
+        )
         self.cache_v = torch.empty(
-            (
-                args.max_batch_size,
-                args.sliding_window,
-                self.n_kv_heads,
-                self.args.head_dim,
-            ), dtype=torch.float16
-        ).cuda()
+            (args.max_batch_size, args.sliding_window, self.n_kv_heads, args.head_dim),
+            dtype=torch.float16,
+            device="cuda",
+        )
 
-    def forward(
-        self, x: torch.Tensor, freqs_cis: torch.Tensor, positions: torch.Tensor, mask: Optional[torch.Tensor]
-    ) -> torch.Tensor:
-        
+    @torch.no_grad()
+    def reset_kv_cache(self, bsz):
+        self.cache_k[:bsz].zero_()
+        self.cache_v[:bsz].zero_()
+
+    def forward(self, x, freqs_cis, positions, mask):
         bsz, seqlen, _ = x.shape
 
         xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
@@ -131,163 +106,52 @@ class Attention(nn.Module):
         xk = xk.view(bsz, seqlen, self.n_kv_heads, self.args.head_dim)
         xv = xv.view(bsz, seqlen, self.n_kv_heads, self.args.head_dim)
         xq, xk = apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
-        
-        # The cache is a rotating buffer
+
         scatter_pos = (positions[-self.sliding_window:] % self.sliding_window)[None, :, None, None]
         scatter_pos = scatter_pos.repeat(bsz, 1, self.n_kv_heads, self.args.head_dim)
         self.cache_k[:bsz].scatter_(dim=1, index=scatter_pos, src=xk[:, -self.sliding_window:])
         self.cache_v[:bsz].scatter_(dim=1, index=scatter_pos, src=xv[:, -self.sliding_window:])
 
-
         if positions.shape[0] > 1:
-            # prefill
             key, value = repeat_kv(xk, xv, self.repeats)
         else:
             cur_pos = positions[-1].item() + 1
-            key, value = repeat_kv(self.cache_k[:bsz, :cur_pos, ...], self.cache_v[:bsz, :cur_pos, ...], self.repeats)
-            
+            key, value = repeat_kv(
+                self.cache_k[:bsz, :cur_pos, ...],
+                self.cache_v[:bsz, :cur_pos, ...],
+                self.repeats,
+            )
+
         query = xq.transpose(1, 2)
         key = key.transpose(1, 2)
         value = value.transpose(1, 2)
-        # scores : [bsz, n_heads, seqlen | 1, seqlen]
+
         scores = torch.matmul(query, key.transpose(2, 3)) * self.scale
-        
         if mask is not None:
-            scores += mask[None, None, ...]
+            scores = scores + mask[None, None, ...]
 
         scores = scores.float()
-        scores = nn.functional.softmax(scores, dim=-1).type_as(query)
+        scores = torch.softmax(scores, dim=-1).type_as(query)
         self.attn_scores = scores
-        output = torch.matmul(scores, value)  # (bs, n_local_heads, slen, head_dim)
-        output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
-        return self.wo(output)
+
+        out = torch.matmul(scores, value)
+        out = out.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
+        return self.wo(out)
 
 
 class FeedForward(nn.Module):
-    def __init__(self, args: ModelArgs):
+    def __init__(self, args):
         super().__init__()
+        self.w1 = nn.Linear(args.dim, args.hidden_dim, bias=False)
+        self.w2 = nn.Linear(args.hidden_dim, args.dim, bias=False)
+        self.w3 = nn.Linear(args.dim, args.hidden_dim, bias=False)
 
-        self.w1 = nn.Linear(
-            args.dim,
-            args.hidden_dim,
-            bias=False
-        )
-        self.w2 = nn.Linear(
-            args.hidden_dim,
-            args.dim,
-            bias=False
-        )
-        self.w3 = nn.Linear(
-            args.dim,
-            args.hidden_dim,
-            bias=False
-        )
-
-    def forward(self, x) -> torch.Tensor:
-        return self.w2(nn.functional.silu(self.w1(x)) * self.w3(x))
-
-class LUT:
-    def __init__(self):
-        self.keys = []
-        self.values = []
-        self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
-        self.CS_threshold = 0.25
-        self.cost_scale = 0.0
-
-    def train(self, xs, ys):
-        # xs, ys: [B, d] or iterable of [d]
-        for x, y in zip(xs, ys):
-            print("adding rows...")
-            x = x.detach().clone().squeeze()
-            y = y.detach().clone().squeeze()
-            self.keys.append(x)
-            self.values.append(y)
-            self.lookupTableMetaData.append([1000, 0])
-
-    
     def forward(self, x):
-        if x is None:
-            return None, None
-
-        q = x[-1, :]
-
-        q = q.squeeze()
-        q = torch.nan_to_num(q, nan=0.0, posinf=0.0, neginf=0.0)
-
-        
-        if len(self.keys) == 0:
-            return torch.zeros_like(q), 0.0
-
-        device = q.device
-
-        keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
-        values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
+        return self.w2(F.silu(self.w1(x)) * self.w3(x))
 
 
-        N, k = keys.shape
-
-        keys = torch.nan_to_num(keys, nan=0.0, posinf=0.0, neginf=0.0)
-        q_f32 = q.to(torch.float32)
-        q_f32 = torch.nan_to_num(q_f32, nan=0.0, posinf=0.0, neginf=0.0)
-
-        ### adding a punishment/ cost for looking up memories which have come up just before
-        costs = []
-        for row in self.lookupTableMetaData:
-            number_of_look_up_since_last_hit = row[0]
-
-            cost = (1/(number_of_look_up_since_last_hit+1))
-            costs.append(cost)
-
-        # --- 2. empty table: no effect ---
-        if len(self.keys) == 0:
-            return torch.zeros_like(q), 0.0
-
-        costs = torch.tensor(costs, device=device)
-        
-        sims = F.cosine_similarity(keys, q_f32.unsqueeze(0).expand(N, k), dim=-1)
-        sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0)
-        sims = sims.clamp(-1.0, 1.0)
-        sims = sims - self.cost_scale*costs
-
-        max_sim_idx = torch.argmax(sims)
-        top_sims, top_idx = torch.topk(sims, k=min(5, N))
-        print("top sims:", list(zip(top_sims.tolist(), top_idx.tolist())))
-        highest_sim = sims[max_sim_idx].item()
-        best_residual = values[max_sim_idx]  # [d]
-
-        print("Highest sim: ", highest_sim)
-        if highest_sim < self.CS_threshold:
-            print("Low similarity, cs threshold:", self.CS_threshold)
-            return torch.zeros_like(best_residual), 0.0
-        
-        self.lookupTableMetaData[max_sim_idx][0] = 0
-        self.lookupTableMetaData[max_sim_idx][1] += 1
-        for row in self.lookupTableMetaData:
-            row[0] += 1
-        
-
-        return best_residual.to(q.device), highest_sim
-    
-    def resetLUT(self):
-        self.keys = []
-        self.values = []
-        self.lookupTableMetaData = []
-
-    def resetCosts(self):
-        for row in self.lookupTableMetaData:
-            row[0] = 1000
-
-    # def saveLUT(self, save_name):
-    #     with open(save_name, "w") as f:
-    #         save_lookup = self.lookupTable.numpy()
-    #         json.dump(save_lookup, f, indent=2)
-
-    # def loadLUT(self, save_name):
-    #     with open(save_name, "r") as f:
-    #         self.lookupTable = json.load(f)
-
-class RMSNorm(torch.nn.Module):
-    def __init__(self, dim: int, eps: float = 1e-6):
+class RMSNorm(nn.Module):
+    def __init__(self, dim, eps=1e-6):
         super().__init__()
         self.eps = eps
         self.weight = nn.Parameter(torch.ones(dim))
@@ -296,109 +160,206 @@ class RMSNorm(torch.nn.Module):
         return x * torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
 
     def forward(self, x):
-        output = self._norm(x.float()).type_as(x)
-        return output * self.weight
+        y = self._norm(x.float()).type_as(x)
+        return y * self.weight
+
+
+class LUT(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.keys = []                 # CPU list of [r]
+        self.mems = nn.ParameterList() # params [d]
+        self.lookupTableMetaData = []
+        self.CS_threshold = 0.25
+        self.cost_scale = 0.0
+        self.key_dim = None
+        self.mem_dim = None
+
+    # IMPORTANT: do NOT call this "train" (nn.Module already uses train/eval)
+    def add_rows(self, xs, ms):
+        for x, m in zip(xs, ms):
+            x = x.detach().clone().squeeze()
+            m = m.detach().clone().squeeze()
+
+            if self.key_dim is None:
+                self.key_dim = int(x.numel())
+            if self.mem_dim is None:
+                self.mem_dim = int(m.numel())
+
+            self.keys.append(x.cpu())
+            self.mems.append(nn.Parameter(m))
+            self.lookupTableMetaData.append([1000, 0])
+
+    def forward(self, q_in, topk=5, tau=0.05, differentiable=False):
+        if q_in is None:
+            return None, None
+
+        q = q_in[-1, :].squeeze()
+        q = torch.nan_to_num(q, nan=0.0, posinf=0.0, neginf=0.0).float()
+        device = q.device
+
+        if len(self.keys) == 0:
+            if self.mem_dim is None:
+                return torch.zeros(1, device=device), 0.0
+            return torch.zeros(self.mem_dim, device=device), 0.0
+
+        keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])  # [N, r]
+        mems = torch.stack([m.to(device=device, dtype=torch.float32) for m in self.mems])      # [N, d]
+
+        N, r = keys.shape
+
+        sims = F.cosine_similarity(keys, q.unsqueeze(0).expand(N, r), dim=-1)
+        sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0).clamp(-1.0, 1.0)
+
+        if differentiable:
+            w = torch.softmax(sims / tau, dim=0)          # [N]
+            m_read = (w[:, None] * mems).sum(dim=0)       # [d]
+            sim_soft = (w * sims).sum()                   # scalar tensor
+            return m_read, sim_soft
+
+        costs = []
+        for row in self.lookupTableMetaData:
+            calls_since_last_hit = row[0]
+            costs.append(1.0 / (calls_since_last_hit + 1.0))
+        costs = torch.tensor(costs, device=device, dtype=torch.float32)
+
+        sims = sims - self.cost_scale * costs
+
+        k = min(topk, N)
+        top_sims, top_idx = torch.topk(sims, k=k)
+        highest_sim = top_sims.max().item()
+
+        if highest_sim < self.CS_threshold:
+            return torch.zeros(mems.shape[-1], device=device), 0.0
+
+        w = torch.softmax(top_sims / tau, dim=-1)        # [k]
+        v = mems.index_select(0, top_idx)                # [k, d]
+        m_read = (w.unsqueeze(-1) * v).sum(dim=0)        # [d]
+
+        best_i = top_idx[torch.argmax(top_sims)].item()
+        self.lookupTableMetaData[best_i][0] = 0
+        self.lookupTableMetaData[best_i][1] += 1
+        for row in self.lookupTableMetaData:
+            row[0] += 1
+
+        return m_read, highest_sim
+
+    def resetLUT(self):
+        self.keys = []
+        self.mems = nn.ParameterList()
+        self.lookupTableMetaData = []
+        self.key_dim = None
+        self.mem_dim = None
 
 
 class TransformerBlock(nn.Module):
-    def __init__(self, args: ModelArgs, wnn_block=False, block_idx = 0):
+    def __init__(self, args):
         super().__init__()
-        self.n_heads = args.n_heads
-        self.dim = args.dim
+        self.args = args
         self.attention = Attention(args)
-        self.feed_forward = FeedForward(args=args)
+        self.feed_forward = FeedForward(args)
         self.attention_norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.ffn_norm = RMSNorm(args.dim, eps=args.norm_eps)
-        self.args = args
+
         self.LUT = LUT()
-        self.wnn_block = wnn_block # we only activate the wnn block in the last n layers as specified by num_wnn_blocks
-        if self.wnn_block:
-            self.use_wnn = True
-        else:
-            self.use_wnn = False
-        self.pre_wnn_x = None  
-        self.residual_scale = 1   # or 15, but be consistent everywhere
+        self.wnn_block = False
+        self.use_wnn = False
+        self.pre_wnn_x = None
 
-        # --- projection down to lut_key_dim (from main) ---
-        base_seed = getattr(args, "lut_seed", 1337)
-        torch.manual_seed(base_seed + block_idx)
+        self.residual_scale = 0.6
 
-        self.lut_key_dim = getattr(args, "lut_key_dim", args.dim // 4)
+        self.prompt_lut_key = None   # cached at prompt boundary
+        self.forced_lut_key = None   # write-time forced routing
+        self.key_blend = 0.85        # prompt anchor blend weight
 
-        self.lut_key_proj = nn.Parameter(
-            torch.empty(args.dim, self.lut_key_dim),
-            requires_grad=False
-        )
-        with torch.no_grad():
-            nn.init.orthogonal_(self.lut_key_proj)
+        self.debug_lut = False
 
-            
-    def _compute_lut_key(self, pre_wnn_x, lam: float = 0.75, win: int = 32):
-        x = pre_wnn_x[0]                 # [T, d]
+    def _compute_lut_key(self, pre_wnn_x, lam=0.75, win=32):
+        x = pre_wnn_x[0]  # [T, d]
         T, d = x.shape
 
         last = x[-1]
-        tail = x[-min(win, T):]          # [L, d]
+        tail = x[-min(win, T):]
 
-        # plain (non-attention) context pooling, excluding last to avoid double-counting
         if tail.shape[0] > 1:
             ctx = tail[:-1].mean(dim=0)
         else:
             ctx = last
 
-        k_local = lam * last + (1 - lam) * ctx
-        k_local = F.layer_norm(k_local, (d,))
-        k_local = F.normalize(k_local, dim=-1)
-        return k_local.unsqueeze(0)
+        h = lam * last + (1 - lam) * ctx
+        h = F.layer_norm(h, (d,))
+        h = F.normalize(h, dim=-1)
 
+        # KEY TRANSFORM: reuse pretrained wk (no new matrices)
+        wd = self.attention.wk.weight.dtype
+        hk = h.to(wd)
 
+        k = self.attention.wk(hk)  # [n_kv_heads * head_dim]
+        k = k.float()
+        k = F.layer_norm(k, (k.shape[-1],))
+        k = F.normalize(k, dim=-1)
 
+        return k.unsqueeze(0)
 
+    def _get_query_key(self):
+        if self.forced_lut_key is not None:
+            return self.forced_lut_key
 
+        q_dyn = self._compute_lut_key(self.pre_wnn_x)
+        if self.prompt_lut_key is None:
+            return q_dyn
 
-    def forward(
-        self,
-        x: torch.Tensor,
-        freqs_cis: torch.Tensor,
-        positions: torch.Tensor,
-        mask: Optional[torch.Tensor],
-    ) -> torch.Tensor:
-        # Standard transformer block forward
+        a = float(self.key_blend)
+        q = a * self.prompt_lut_key + (1.0 - a) * q_dyn
+
+        q = q.squeeze(0)
+        q = F.layer_norm(q, (q.shape[-1],))
+        q = F.normalize(q, dim=-1)
+        return q.unsqueeze(0)
+
+    def forward(self, x, freqs_cis, positions, mask):
         r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask)
         h = x + r_attn
 
         r_ffn = self.feed_forward(self.ffn_norm(h))
-        base = h + r_ffn  # this is where LUT attaches
+        base = h + r_ffn
 
-        # Cache a DETACHED copy for LUT training
         self.pre_wnn_x = base.detach()
-
         out = base
 
-        # LUT only for inference; no grads
         if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
-            with torch.no_grad():
+            key = self._get_query_key()
 
-                wnn_residual, highest_sim = self.LUT.forward(self._compute_lut_key(self.pre_wnn_x))
-                wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
-                res_tensor = torch.zeros_like(out)
-                res_tensor[:, -1, :] = wnn_residual
-            #sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
-            #sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
-            out = out + (highest_sim * self.residual_scale)* res_tensor # this should be out of no grad
+            m_read, sim = self.LUT.forward(
+                key,
+                topk=5,
+                tau=0.05,
+                differentiable=torch.is_grad_enabled(),
+            )
+
+            # sim is float in inference mode, tensor in differentiable mode
+            if torch.is_tensor(sim):
+                if sim.item() <= 0.0:
+                    return out
+                scale = sim.to(device=out.device, dtype=out.dtype)
+            else:
+                if sim <= 0.0:
+                    return out
+                scale = torch.tensor(sim, device=out.device, dtype=out.dtype)
+
+            if self.debug_lut and not torch.is_grad_enabled():
+                print("[LUT] sim:", float(scale))
+
+            res_tensor = torch.zeros_like(out)
+            res_tensor[:, -1, :] = m_read.to(out.dtype).unsqueeze(0)
+
+            out = out + (scale * self.residual_scale) * res_tensor
 
         return out
 
 
-def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0) -> torch.Tensor:
-    freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
-    t = torch.arange(end, device=freqs.device)  # type: ignore
-    freqs = torch.outer(t, freqs).float()  # type: ignore
-    return torch.polar(torch.ones_like(freqs), freqs)  # complex64
-
-
 class Transformer(nn.Module):
-    def __init__(self, args: ModelArgs):
+    def __init__(self, args):
         super().__init__()
         self.args = args
         self.vocab_size = args.vocab_size
@@ -406,347 +367,240 @@ class Transformer(nn.Module):
         assert self.vocab_size > 0
 
         self.tok_embeddings = nn.Embedding(args.vocab_size, args.dim)
-
-        self.layers = torch.nn.ModuleList(
-            [TransformerBlock(args=args, block_idx=i) for i in range(args.n_layers)]
-        )
+        self.layers = nn.ModuleList([TransformerBlock(args) for _ in range(args.n_layers)])
 
         self.norm = RMSNorm(args.dim, eps=args.norm_eps)
-
-        self.output = nn.Linear(
-            args.dim,
-            args.vocab_size,
-            bias=False
-        )
+        self.output = nn.Linear(args.dim, args.vocab_size, bias=False)
 
         self.freqs_cis = precompute_freqs_cis(self.args.head_dim, 128_000).to("cuda")
+        self.n_ctx = 128000
 
-        self.n_ctx = 128000 ## 128 k context window
+    @torch.no_grad()
+    def reset_kv_caches(self, bsz):
+        for blk in self.layers:
+            blk.attention.reset_kv_cache(bsz)
 
+    @torch.no_grad()
+    def set_prompt_keys(self):
+        for blk in self.layers:
+            if not blk.wnn_block:
+                continue
+            if blk.pre_wnn_x is None:
+                continue
+            blk.prompt_lut_key = blk._compute_lut_key(blk.pre_wnn_x).detach()
 
-    def forward(
-        self,
-        input_ids: torch.Tensor,
-        positions: torch.Tensor,
-    ):
+    @torch.no_grad()
+    def clear_prompt_keys(self):
+        for blk in self.layers:
+            blk.prompt_lut_key = None
+
+    def forward(self, input_ids, positions):
         h = self.tok_embeddings(input_ids)
         freqs_cis = self.freqs_cis[positions]
 
-        mask: Optional[torch.Tensor] = None
+        mask = None
         if input_ids.shape[1] > 1:
             seqlen = input_ids.shape[1]
-            tensor = torch.full(
-                (seqlen, seqlen),
-                dtype=h.dtype,
-                fill_value=1,
-                device=h.device,
-            )
+            tensor = torch.full((seqlen, seqlen), dtype=h.dtype, fill_value=1, device=h.device)
             mask = torch.tril(tensor, diagonal=0).to(h.dtype)
-            # make the mask banded to account for sliding window
             mask = torch.triu(mask, diagonal=-self.args.sliding_window)
             mask = torch.log(mask)
-        
+
         for layer in self.layers:
             h = layer(h, freqs_cis, positions, mask)
 
         return self.output(self.norm(h)).float()
 
-
-    def trainLUT(self, tokenizer, lm_head, label, label_context=None, sparsity_level=None):
-
-        # Disable LUT use during training + clear stale caches
-        for blk in self.layers:
-            blk.use_wnn = False  # disable lut blocks at the start then re enable at each point 
-            if hasattr(blk, "pre_wnn_x"):
-                blk.pre_wnn_x = None
-
-        encoded_label = tokenizer.encode(label)
-        encoded_label.append(tokenizer.eos_id) # train with a eos token at the end
-        if len(encoded_label) == 0:
-            return
-        
-        if label_context is not None and len(label_context) > 0:
-            encoded_ctx = tokenizer.encode(label_context)
-            encoded_ctx.insert(0, 4)
-            encoded_ctx.append(5)
-            
-        else:
-            encoded_ctx = []
-
+    def write_memory_latent(self, tokenizer, question, answer, blocks, lr=5e-2, epochs=1):
         device = self.tok_embeddings.weight.device
 
-        # Which blocks actually have LUTs?
-        wnn_block_indices = [
-            idx for idx, blk in enumerate(self.layers)
-            if getattr(blk, "wnn_block", False)
-        ]
+        prompt = f"User: {question}\nAssistant: "
+        prompt_ids = tokenizer.encode(prompt)
 
-        for i in wnn_block_indices:
-            block = self.layers[i]
-            print(f"[trainLUT] Training LUT for block {i}")
-            now_block = datetime.now()
-            block.use_wnn = False # ensure current block is disabled per train
+        ans_ids = tokenizer.encode(answer)
+        ans_ids.append(tokenizer.eos_id)
 
-            for k in range(len(encoded_label)):
-                # Optional sparsity: skip some positions
-                if sparsity_level is not None and sparsity_level < 1.0:
-                    if torch.rand(()) > sparsity_level:
-                        continue
+        if len(ans_ids) > 0 and ans_ids[0] == tokenizer._model.bos_id():
+            ans_ids = ans_ids[1:]
 
-                context = encoded_ctx+ encoded_label[:k]
-                context = context[-self.n_ctx:]
-                if len(context) == 0:
-                    continue
-
-                context_tensor = torch.tensor(
-                    context, dtype=torch.long, device=device
-                ).unsqueeze(0)  # [1, T]
-                target_tensor = torch.tensor(
-                    [encoded_label[k]], dtype=torch.long, device=device
-                )
-
-                T = context_tensor.size(1)
-                position_ids = torch.arange(T, dtype=torch.long, device=device)
-
-                # --- mask ---
-                if T > 1:
-                    seqlen = T
-                    tensor = torch.full(
-                        (seqlen, seqlen),
-                        dtype=torch.float32,
-                        fill_value=1,
-                        device=device,
-                    )
-                    mask = torch.tril(tensor, diagonal=0)
-                    mask = torch.triu(mask, diagonal=-self.args.sliding_window)
-                    mask = torch.log(mask)
-                else:
-                    mask = None
-
-                # forward to block i (no_grad)
-                with torch.no_grad():
-                    h = self.tok_embeddings(context_tensor)
-                    freqs_cis = self.freqs_cis[position_ids]
-
-                    for block_idx in range(i):
-                        h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
-
-                    # Run block i once to populate pre_wnn_x (detached)- no need to do backwards 
-                    _ = self.layers[i](h, freqs_cis, position_ids, mask)
-                    pre_wnn_x_val = getattr(self.layers[i], "pre_wnn_x", None)
-
-                if pre_wnn_x_val is None:
-                    continue
-
-                pre_wnn_x = pre_wnn_x_val.detach().clone().requires_grad_(True)
-                h = pre_wnn_x
-
-                # Forward through blocks AFTER i with grad tracking- we need to be able to backwards up to this point...
-                for block_idx in range(i + 1, len(self.layers)):
-                    h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
-
-                logits = self.output(self.norm(h)).float()  # [1, T, vocab]
-                loss = F.cross_entropy(logits[:, -1, :], target_tensor)
-
-                print(f"[trainLUT] Block {i}, position {k}: computing grad")
-                now_back = datetime.now()
-
-                grad_pre_wnn_x, = torch.autograd.grad(
-                    loss,
-                    pre_wnn_x,
-                    retain_graph=False,
-                    create_graph=False,
-                    allow_unused=False,
-                )
-
-                grad_norm = grad_pre_wnn_x.norm().item()
-                print(f"[trainLUT] Block {i}, position {k}: grad_norm={grad_norm:.4e}")
-
-                print(
-                    f"[trainLUT] Block {i}, position {k}: grad computed in {datetime.now() - now_back}"
-                )
-
-                # Grad to residual
-                wnn_target_residual = (-grad_pre_wnn_x)  # [1, T, d]
-
-                # Last time step
-                pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :]              # [1, d]
-                target_residual_last = wnn_target_residual.detach()[:, -1, :]  # [1, d]
-
-                print(f"[trainLUT] Training LUT on block {i}")
-                now_lut = datetime.now()
-                with torch.no_grad():
-                    key_vec = block._compute_lut_key(pre_wnn_x.detach())
-                    value_vec = wnn_target_residual.detach()[:, -1, :]
-                    block.LUT.train(key_vec, value_vec)
-                print(
-                    f"[trainLUT] Block {i}, position {k}: LUT updated in {datetime.now() - now_lut}"
-                )
-
-                # clean any accidental grad references
-                pre_wnn_x.grad = None
-                self.layers[i].pre_wnn_x = None
-
-            # block.use_wnn = True # re enable this lut block
-
-            print(f"[trainLUT] Finished block {i} in {datetime.now() - now_block}")
-
-        # Re-enable LUT for inference
+        # disable LUT everywhere for key collection pass
         for blk in self.layers:
-            blk.use_wnn = True  # this should be redundant
+            blk.use_wnn = False
+            blk.forced_lut_key = None
+            blk.prompt_lut_key = None
+            blk.pre_wnn_x = None
 
+        self.reset_kv_caches(bsz=1)
 
-    def saveLUTs(self, save_name):
-        base_name = save_name
-        for i, block in enumerate(self.layers):
-            save_name = base_name +"blockNumber"+str(i)
-            if block.wnn_block:
-                block.LUT.saveLUT(save_name)
+        # run prompt once to populate pre_wnn_x
+        with torch.no_grad():
+            x = torch.tensor(prompt_ids, device=device, dtype=torch.long).unsqueeze(0)
+            pos = torch.arange(x.size(1), device=device, dtype=torch.long)
+            _ = self.forward(x, pos)
 
-    def loadLUTs(self, save_name):
-        for i, block in enumerate(self.layers):
-            save_name = save_name +"blockNumber"+str(i)
-            if block.wnn_block:
-                block.LUT.loadLUT(save_name)
+        mem_params = []
+        restores = []
+
+        for i in blocks:
+            blk = self.layers[i]
+            blk.use_wnn = True
+
+            restores.append((blk, blk.key_blend))
+            blk.key_blend = 1.0
+
+            key = blk._compute_lut_key(blk.pre_wnn_x)   # [1, r]
+            blk.forced_lut_key = key.detach()
+
+            m0 = torch.zeros(1, self.args.dim, device=device, dtype=torch.float32)
+            blk.LUT.add_rows(key, m0)
+            mem_params.append(blk.LUT.mems[-1])
+
+        opt = torch.optim.AdamW(mem_params, lr=lr, weight_decay=0.0)
+
+        self.train()
+        for _ in range(epochs):
+            for t in range(len(ans_ids)):
+                self.reset_kv_caches(bsz=1)
+
+                ctx_ids = prompt_ids + ans_ids[:t]
+                x = torch.tensor(ctx_ids, device=device, dtype=torch.long).unsqueeze(0)
+                y = torch.tensor([ans_ids[t]], device=device, dtype=torch.long)
+
+                pos = torch.arange(x.size(1), device=device, dtype=torch.long)
+                logits = self.forward(x, pos)
+                loss = F.cross_entropy(logits[:, -1, :], y)
+
+                opt.zero_grad(set_to_none=True)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(mem_params, 1.0)
+                opt.step()
+
+        for blk in self.layers:
+            blk.use_wnn = True
+            blk.forced_lut_key = None
+
+        for blk, old in restores:
+            blk.key_blend = old
 
     @staticmethod
-    def from_folder(folder: Path, max_batch_size: int = 1, device="cuda", dtype=torch.float16):
-        with open(folder / 'params.json', 'r') as f:
+    def from_folder(folder, max_batch_size=1, device="cuda", dtype=torch.float16):
+        with open(folder / "params.json", "r") as f:
             model_args = ModelArgs(**json.loads(f.read()))
         model_args.max_batch_size = max_batch_size
+
         model = Transformer(model_args).to(device=device, dtype=dtype)
 
+        loaded = None
         try:
-            loaded = torch.load(folder / 'consolidated.00.pth', map_location="cpu")
-        except Exception as e:
+            try:
+                loaded = torch.load(folder / "consolidated.00.pth", map_location="cpu", weights_only=True)
+            except TypeError:
+                loaded = torch.load(folder / "consolidated.00.pth", map_location="cpu")
+        except Exception:
             loaded = safe_load(str(folder / "consolidated.safetensors"))
 
         missing, unexpected = model.load_state_dict(loaded, strict=False)
         if missing:
-            print("[from_folder] Missing keys (expected for new stuff like lut_key_proj):", missing)
+            print("[from_folder] Missing keys:", missing[:5], "...", len(missing))
         if unexpected:
-            print("[from_folder] Unexpected keys:", unexpected)
+            print("[from_folder] Unexpected keys:", unexpected[:5], "...", len(unexpected))
+
+        for p in model.parameters():
+            p.requires_grad = False
 
         return model
 
 
 class Tokenizer:
-    def __init__(self, model_path: str):
+    def __init__(self, model_path):
         assert Path(model_path).exists(), model_path
         self._model = SentencePieceProcessor(model_file=model_path)
         assert self._model.vocab_size() == self._model.get_piece_size()
 
     @property
-    def eos_id(self) -> int:
+    def eos_id(self):
         return self._model.eos_id()
 
     @property
-    def pad_id(self) -> int:
+    def pad_id(self):
         return self._model.pad_id()
 
-    def encode(self, s: str) -> List[int]:
+    def encode(self, s):
         return [self._model.bos_id(), *self._model.encode(s)]
 
-    def decode(self, t: List[int]) -> str:
+    def decode(self, t):
         return self._model.decode(t)
 
 
 @torch.no_grad()
-def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_tokens: int):
-    encoded_prompts = [tokenizer.encode(prompt) for prompt in prompts]
+def generate(prompts, model, tokenizer, max_tokens):
+    encoded_prompts = [tokenizer.encode(p) for p in prompts]
     prompt_lens = [len(x) for x in encoded_prompts]
     min_prompt_len = min(prompt_lens)
     max_prompt_len = max(prompt_lens)
 
     device = "cuda"
+    bsz = len(prompts)
 
-    # [B, max_prompt_len] padded inputs
+    model.reset_kv_caches(bsz)
+    model.clear_prompt_keys()
+
     input_tokens = torch.full(
-        (len(prompts), max_prompt_len),
+        (bsz, max_prompt_len),
         tokenizer.pad_id,
         dtype=torch.long,
         device=device,
     )
-    for i, encoded in enumerate(encoded_prompts):
-        input_tokens[i, :len(encoded)] = torch.tensor(encoded, device=device)
-    input_mask = input_tokens != tokenizer.pad_id  # True where prompt token, False where pad
+    for i, enc in enumerate(encoded_prompts):
+        input_tokens[i, : len(enc)] = torch.tensor(enc, device=device)
 
-    # ---------- prefill over shared prefix ----------
+    input_mask = input_tokens != tokenizer.pad_id
+
     positions = torch.arange(0, min_prompt_len, device=device)
     logits = model.forward(input_tokens[:, :min_prompt_len], positions)
-    logprobs = nn.functional.log_softmax(logits, dim=-1)
+    logprobs = F.log_softmax(logits, dim=-1)
 
-    # NLL for prompt tokens (teacher forcing)
-    all_logprobs = [
-        logprobs[:, :-1, :].gather(2, input_tokens[:, 1:min_prompt_len, None]).squeeze(-1),
-    ]
+    # cache prompt boundary keys for the enabled LUT blocks
+    model.set_prompt_keys()
 
-    # ---------- decode ----------
     generated = []
     cur_pos = min_prompt_len
 
-    eos_id = tokenizer.eos_id  
-    finished = torch.zeros(len(prompts), dtype=torch.bool, device=device)
+    eos_id = tokenizer.eos_id
+    finished = torch.zeros(bsz, dtype=torch.bool, device=device)
 
     for _ in range(max_tokens):
-        # should implement temperature!!
-        sampled = torch.argmax(logprobs[:, -1, :], dim=-1)  # (B,)
+        sampled = torch.argmax(logprobs[:, -1, :], dim=-1)
 
-        # Are we still inside the original prompt at this position?
         if cur_pos < input_mask.shape[1]:
-            is_prompt_pos = input_mask[:, cur_pos]  # True = still prompt token for that example
+            is_prompt_pos = input_mask[:, cur_pos]
             next_token = torch.where(is_prompt_pos, input_tokens[:, cur_pos], sampled)
         else:
             is_prompt_pos = torch.zeros_like(sampled, dtype=torch.bool, device=device)
             next_token = sampled
 
-        
-
-        # Logprob of chosen token (prompt or generated)
-        all_logprobs.append(
-            logprobs[:, -1, :].gather(1, next_token[:, None])
-        )
-
-        # Mark EOS hits, but ONLY on genuinely generated tokens
-        # (i.e. not on teacher-forced prompt positions).
         if eos_id is not None:
             eos_hit = (~is_prompt_pos) & (~finished) & (next_token == eos_id)
             finished = finished | eos_hit
 
-        generated.append(next_token[:, None])  # (B, 1)
+        generated.append(next_token[:, None])
 
-        # One-step forward for next position
-        logits = model.forward(
-            next_token[:, None],
-            torch.LongTensor([cur_pos]).to(next_token),
-        )
-        logprobs = nn.functional.log_softmax(logits, dim=-1)
+        logits = model.forward(next_token[:, None], torch.LongTensor([cur_pos]).to(next_token))
+        logprobs = F.log_softmax(logits, dim=-1)
         cur_pos += 1
 
-        # If every sequence has produced EOS somewhere in its generated region, stop early
         if finished.all():
             break
 
-    all_logprobs = torch.cat(all_logprobs, dim=1)
+    model.clear_prompt_keys()
+
     res = []
-
     if max_tokens > 0 and generated:
-        generated = torch.cat(generated, dim=1)  # (B, T_gen)
-
-        for i, x in enumerate(encoded_prompts):
+        generated = torch.cat(generated, dim=1)
+        for i in range(bsz):
             gen_tokens = generated[i].tolist()
-
-            # Trim at first EOS in generated region (if any)
             if eos_id is not None and eos_id in gen_tokens:
-                eos_index = gen_tokens.index(eos_id)
-                gen_tokens = gen_tokens[:eos_index]
+                gen_tokens = gen_tokens[: gen_tokens.index(eos_id)]
+            res.append(tokenizer.decode(gen_tokens))
 
-            # Reconstruct output: shared prefix (up to min_prompt_len) + generated tail
-            prompt_ids = x[:min_prompt_len] + gen_tokens
-            gen_ids = gen_tokens
-
-            prompt_text = tokenizer.decode(prompt_ids)
-            answer_text = tokenizer.decode(gen_ids)
-
-            res.append(answer_text)
-    return res, all_logprobs
+    return res
