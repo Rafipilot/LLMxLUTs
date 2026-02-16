@@ -64,6 +64,11 @@ def precompute_freqs_cis(dim, end, theta=10000.0):
     return torch.polar(torch.ones_like(freqs), freqs)
 
 
+def _safe_l2_normalize(x, eps=1e-8):
+    denom = torch.clamp(torch.norm(x, p=2, dim=-1, keepdim=True), min=eps)
+    return x / denom
+
+
 class Attention(nn.Module):
     def __init__(self, args):
         super().__init__()
@@ -168,7 +173,7 @@ class LUT(nn.Module):
     def __init__(self):
         super().__init__()
         self.keys = []                 # CPU list of [r]
-        self.mems = nn.ParameterList() # params [d]
+        self.mems = nn.ParameterList() # params [r]
         self.lookupTableMetaData = []
         self.CS_threshold = 0.25
         self.cost_scale = 0.0
@@ -178,13 +183,28 @@ class LUT(nn.Module):
     # IMPORTANT: do NOT call this "train" (nn.Module already uses train/eval)
     def add_rows(self, xs, ms):
         for x, m in zip(xs, ms):
-            x = x.detach().clone().squeeze()
-            m = m.detach().clone().squeeze()
+            x = x.detach().clone().squeeze().float()
+            m = m.detach().clone().squeeze().float()
+
+            if x.ndim != 1:
+                x = x.reshape(-1)
+            if m.ndim != 1:
+                m = m.reshape(-1)
+
+            x = torch.nan_to_num(x, nan=0.0, posinf=0.0, neginf=0.0)
+            m = torch.nan_to_num(m, nan=0.0, posinf=0.0, neginf=0.0)
+            x = _safe_l2_normalize(x, eps=1e-8)
 
             if self.key_dim is None:
                 self.key_dim = int(x.numel())
             if self.mem_dim is None:
                 self.mem_dim = int(m.numel())
+            if int(x.numel()) != int(self.key_dim):
+                raise ValueError(f"LUT key dim mismatch: got {x.numel()} expected {self.key_dim}")
+            if int(m.numel()) != int(self.mem_dim):
+                raise ValueError(f"LUT mem dim mismatch: got {m.numel()} expected {self.mem_dim}")
+            if self.key_dim != self.mem_dim:
+                raise ValueError(f"Latent LUT expects key_dim == mem_dim, got {self.key_dim} vs {self.mem_dim}")
 
             self.keys.append(x.cpu())
             self.mems.append(nn.Parameter(m))
@@ -203,17 +223,20 @@ class LUT(nn.Module):
                 return torch.zeros(1, device=device), 0.0
             return torch.zeros(self.mem_dim, device=device), 0.0
 
+        q = _safe_l2_normalize(q, eps=1e-8)
         keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])  # [N, r]
-        mems = torch.stack([m.to(device=device, dtype=torch.float32) for m in self.mems])      # [N, d]
+        mems = torch.stack([m.to(device=device, dtype=torch.float32) for m in self.mems])      # [N, r]
 
         N, r = keys.shape
+        if q.numel() != r:
+            raise ValueError(f"Query key dim mismatch: got {q.numel()} expected {r}")
 
         sims = F.cosine_similarity(keys, q.unsqueeze(0).expand(N, r), dim=-1)
         sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0).clamp(-1.0, 1.0)
 
         if differentiable:
             w = torch.softmax(sims / tau, dim=0)          # [N]
-            m_read = (w[:, None] * mems).sum(dim=0)       # [d]
+            m_read = (w[:, None] * mems).sum(dim=0)       # [r]
             sim_soft = (w * sims).sum()                   # scalar tensor
             return m_read, sim_soft
 
@@ -233,8 +256,8 @@ class LUT(nn.Module):
             return torch.zeros(mems.shape[-1], device=device), 0.0
 
         w = torch.softmax(top_sims / tau, dim=-1)        # [k]
-        v = mems.index_select(0, top_idx)                # [k, d]
-        m_read = (w.unsqueeze(-1) * v).sum(dim=0)        # [d]
+        v = mems.index_select(0, top_idx)                # [k, r]
+        m_read = (w.unsqueeze(-1) * v).sum(dim=0)        # [r]
 
         best_i = top_idx[torch.argmax(top_sims)].item()
         self.lookupTableMetaData[best_i][0] = 0
@@ -243,6 +266,11 @@ class LUT(nn.Module):
             row[0] += 1
 
         return m_read, highest_sim
+
+    def resetCosts(self):
+        for row in self.lookupTableMetaData:
+            row[0] = 1000
+            row[1] = 0
 
     def resetLUT(self):
         self.keys = []
@@ -274,7 +302,7 @@ class TransformerBlock(nn.Module):
 
         self.debug_lut = False
 
-    def _compute_lut_key(self, pre_wnn_x, lam=0.75, win=32):
+    def _compute_lut_key(self, pre_wnn_x, proj, lam=0.75, win=32):
         x = pre_wnn_x[0]  # [T, d]
         T, d = x.shape
 
@@ -288,24 +316,28 @@ class TransformerBlock(nn.Module):
 
         h = lam * last + (1 - lam) * ctx
         h = F.layer_norm(h, (d,))
-        h = F.normalize(h, dim=-1)
+        h = _safe_l2_normalize(h, eps=1e-8)
 
-        # KEY TRANSFORM: reuse pretrained wk (no new matrices)
-        wd = self.attention.wk.weight.dtype
-        hk = h.to(wd)
+        if proj is None:
+            # Compatibility fallback if block is used in isolation.
+            wd = self.attention.wk.weight.dtype
+            hk = h.to(wd)
+            k = self.attention.wk(hk).float()
+        else:
+            p = proj.to(device=h.device, dtype=h.dtype)
+            k = torch.matmul(h, p).float()  # [r] = [dim] @ [dim, r]
 
-        k = self.attention.wk(hk)  # [n_kv_heads * head_dim]
-        k = k.float()
+        k = torch.nan_to_num(k, nan=0.0, posinf=0.0, neginf=0.0)
         k = F.layer_norm(k, (k.shape[-1],))
-        k = F.normalize(k, dim=-1)
+        k = _safe_l2_normalize(k, eps=1e-8)
 
         return k.unsqueeze(0)
 
-    def _get_query_key(self):
+    def _get_query_key(self, proj):
         if self.forced_lut_key is not None:
             return self.forced_lut_key
 
-        q_dyn = self._compute_lut_key(self.pre_wnn_x)
+        q_dyn = self._compute_lut_key(self.pre_wnn_x, proj)
         if self.prompt_lut_key is None:
             return q_dyn
 
@@ -314,10 +346,10 @@ class TransformerBlock(nn.Module):
 
         q = q.squeeze(0)
         q = F.layer_norm(q, (q.shape[-1],))
-        q = F.normalize(q, dim=-1)
+        q = _safe_l2_normalize(q, eps=1e-8)
         return q.unsqueeze(0)
 
-    def forward(self, x, freqs_cis, positions, mask):
+    def forward(self, x, freqs_cis, positions, mask, proj):
         r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask)
         h = x + r_attn
 
@@ -328,7 +360,7 @@ class TransformerBlock(nn.Module):
         out = base
 
         if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
-            key = self._get_query_key()
+            key = self._get_query_key(proj)
 
             m_read, sim = self.LUT.forward(
                 key,
@@ -350,8 +382,14 @@ class TransformerBlock(nn.Module):
             if self.debug_lut and not torch.is_grad_enabled():
                 print("[LUT] sim:", float(scale))
 
+            if proj is None:
+                return out
+
+            p_t = proj.transpose(0, 1).to(device=out.device, dtype=out.dtype)  # [r, dim]
+            delta = torch.matmul(m_read.to(device=out.device, dtype=out.dtype), p_t)  # [dim]
+
             res_tensor = torch.zeros_like(out)
-            res_tensor[:, -1, :] = m_read.to(out.dtype).unsqueeze(0)
+            res_tensor[:, -1, :] = delta.unsqueeze(0)
 
             out = out + (scale * self.residual_scale) * res_tensor
 
@@ -366,8 +404,11 @@ class Transformer(nn.Module):
         self.n_layers = args.n_layers
         assert self.vocab_size > 0
 
+        self.lut_rank = int(args.lut_key_dim or (args.n_kv_heads * args.head_dim))
         self.tok_embeddings = nn.Embedding(args.vocab_size, args.dim)
         self.layers = nn.ModuleList([TransformerBlock(args) for _ in range(args.n_layers)])
+        self.P = nn.Parameter(torch.empty(args.dim, self.lut_rank))
+        nn.init.orthogonal_(self.P)
 
         self.norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.output = nn.Linear(args.dim, args.vocab_size, bias=False)
@@ -387,7 +428,7 @@ class Transformer(nn.Module):
                 continue
             if blk.pre_wnn_x is None:
                 continue
-            blk.prompt_lut_key = blk._compute_lut_key(blk.pre_wnn_x).detach()
+            blk.prompt_lut_key = blk._compute_lut_key(blk.pre_wnn_x, self.P).detach()
 
     @torch.no_grad()
     def clear_prompt_keys(self):
@@ -407,23 +448,65 @@ class Transformer(nn.Module):
             mask = torch.log(mask)
 
         for layer in self.layers:
-            h = layer(h, freqs_cis, positions, mask)
+            h = layer(h, freqs_cis, positions, mask, self.P)
 
         return self.output(self.norm(h)).float()
 
-    def write_memory_latent(self, tokenizer, question, answer, blocks, lr=5e-2, epochs=1):
-        device = self.tok_embeddings.weight.device
+    def _normalize_block_indices(self, blocks):
+        n = len(self.layers)
+        if blocks is None:
+            picked = [i for i, blk in enumerate(self.layers) if getattr(blk, "wnn_block", False)]
+            return picked if picked else [n - 1]
 
-        prompt = f"User: {question}\nAssistant: "
-        prompt_ids = tokenizer.encode(prompt)
+        out = []
+        seen = set()
+        for b in blocks:
+            idx = int(b)
+            if idx < 0:
+                idx = n + idx
+            if 0 <= idx < n and idx not in seen:
+                out.append(idx)
+                seen.add(idx)
+        if not out:
+            raise ValueError(f"No valid block indices in: {blocks}")
+        return out
 
+    def _encode_answer_tokens(self, tokenizer, answer):
         ans_ids = tokenizer.encode(answer)
-        ans_ids.append(tokenizer.eos_id)
+        eos_id = tokenizer.eos_id
+        if eos_id is not None and int(eos_id) >= 0:
+            ans_ids.append(int(eos_id))
 
-        if len(ans_ids) > 0 and ans_ids[0] == tokenizer._model.bos_id():
+        bos_id = None
+        if hasattr(tokenizer, "_model") and hasattr(tokenizer._model, "bos_id"):
+            bos_id = int(tokenizer._model.bos_id())
+        if bos_id is not None and len(ans_ids) > 0 and ans_ids[0] == bos_id:
             ans_ids = ans_ids[1:]
+        return ans_ids
+
+    def _write_memory_from_prompt(
+        self,
+        tokenizer,
+        prompt,
+        answer,
+        blocks,
+        lr=5e-2,
+        epochs=1,
+        tune_projection=False,
+        projection_lr=None,
+    ):
+        device = self.tok_embeddings.weight.device
+        prompt_ids = tokenizer.encode(prompt)
+        ans_ids = self._encode_answer_tokens(tokenizer, answer)
+        block_ids = self._normalize_block_indices(blocks)
+        if len(ans_ids) == 0:
+            return {"avg_loss": 0.0, "steps": 0, "blocks": block_ids}
 
         # disable LUT everywhere for key collection pass
+        prev_use_wnn = [blk.use_wnn for blk in self.layers]
+        prev_wnn_block = [blk.wnn_block for blk in self.layers]
+        prev_key_blend = [blk.key_blend for blk in self.layers]
+
         for blk in self.layers:
             blk.use_wnn = False
             blk.forced_lut_key = None
@@ -439,26 +522,36 @@ class Transformer(nn.Module):
             _ = self.forward(x, pos)
 
         mem_params = []
-        restores = []
-
-        for i in blocks:
+        for i in block_ids:
             blk = self.layers[i]
+            blk.wnn_block = True
             blk.use_wnn = True
-
-            restores.append((blk, blk.key_blend))
             blk.key_blend = 1.0
 
-            key = blk._compute_lut_key(blk.pre_wnn_x)   # [1, r]
+            key = blk._compute_lut_key(blk.pre_wnn_x, self.P).detach()  # [1, r]
+            blk.prompt_lut_key = key
             blk.forced_lut_key = key.detach()
 
-            m0 = torch.zeros(1, self.args.dim, device=device, dtype=torch.float32)
+            m0 = torch.zeros(1, self.lut_rank, device=device, dtype=torch.float32)
             blk.LUT.add_rows(key, m0)
             mem_params.append(blk.LUT.mems[-1])
 
-        opt = torch.optim.AdamW(mem_params, lr=lr, weight_decay=0.0)
+        opt_groups = [{"params": mem_params, "lr": float(lr)}]
+        prev_proj_grad = bool(self.P.requires_grad)
+        if tune_projection:
+            self.P.requires_grad_(True)
+            opt_groups.append(
+                {
+                    "params": [self.P],
+                    "lr": float(projection_lr if projection_lr is not None else (0.1 * lr)),
+                }
+            )
+        opt = torch.optim.AdamW(opt_groups, weight_decay=0.0)
 
+        loss_sum = 0.0
+        n_steps = 0
         self.train()
-        for _ in range(epochs):
+        for _ in range(max(1, int(epochs))):
             for t in range(len(ans_ids)):
                 self.reset_kv_caches(bsz=1)
 
@@ -473,14 +566,86 @@ class Transformer(nn.Module):
                 opt.zero_grad(set_to_none=True)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(mem_params, 1.0)
+                if tune_projection:
+                    torch.nn.utils.clip_grad_norm_([self.P], 1.0)
                 opt.step()
+                loss_sum += float(loss.item())
+                n_steps += 1
 
-        for blk in self.layers:
-            blk.use_wnn = True
+        for i, blk in enumerate(self.layers):
+            blk.use_wnn = prev_use_wnn[i]
+            blk.wnn_block = prev_wnn_block[i]
+            blk.key_blend = prev_key_blend[i]
             blk.forced_lut_key = None
+            blk.prompt_lut_key = None
+        for i in block_ids:
+            self.layers[i].wnn_block = True
+            self.layers[i].use_wnn = True
+        self.P.requires_grad_(prev_proj_grad)
+        self.eval()
 
-        for blk, old in restores:
-            blk.key_blend = old
+        return {
+            "avg_loss": (loss_sum / n_steps) if n_steps > 0 else 0.0,
+            "steps": n_steps,
+            "blocks": block_ids,
+        }
+
+    def write_memory_latent(
+        self,
+        tokenizer,
+        question,
+        answer,
+        blocks,
+        lr=5e-2,
+        epochs=1,
+        tune_projection=False,
+        projection_lr=None,
+    ):
+        prompt = f"User: {question}\nAssistant: "
+        return self._write_memory_from_prompt(
+            tokenizer=tokenizer,
+            prompt=prompt,
+            answer=answer,
+            blocks=blocks,
+            lr=lr,
+            epochs=epochs,
+            tune_projection=tune_projection,
+            projection_lr=projection_lr,
+        )
+
+    # Compatibility API used by api.py.
+    def trainLUT(
+        self,
+        tokenizer,
+        lm_head=None,
+        label="",
+        label_context=None,
+        sparsity_level=1.0,
+        blocks=None,
+        lr=8e-2,
+        epochs=12,
+        tune_projection=False,
+        projection_lr=None,
+    ):
+        del lm_head, sparsity_level
+
+        if label_context is None:
+            prompt = "User: \nAssistant: "
+        else:
+            prompt = str(label_context)
+            if "Assistant:" not in prompt and not prompt.rstrip().endswith("[/INST]"):
+                prompt = f"User: {prompt.strip()}\nAssistant: "
+
+        return self._write_memory_from_prompt(
+            tokenizer=tokenizer,
+            prompt=prompt,
+            answer=str(label),
+            blocks=blocks,
+            lr=lr,
+            epochs=epochs,
+            tune_projection=tune_projection,
+            projection_lr=projection_lr,
+        )
 
     @staticmethod
     def from_folder(folder, max_batch_size=1, device="cuda", dtype=torch.float16):
