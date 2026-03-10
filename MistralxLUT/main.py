@@ -224,6 +224,8 @@ class LUT:
         best = values[max_idx]
         best_sim = sims[max_idx].item()
 
+        # print("Best sim: ", best_sim)
+
         if best_sim < self.CS_threshold:
             return torch.zeros_like(best), 0.0
 
@@ -339,9 +341,10 @@ class TransformerBlock(nn.Module):
         # LUT inference
         if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
             with torch.no_grad():
-                h_last = self.pre_wnn_x[0, -1, :].float()
+                mem_dtype = next(self.mem_dec.parameters()).dtype
+                h_last = self.pre_wnn_x[0, -1, :].to(dtype=mem_dtype)
 
-                q = self.mem_key(h_last)
+                q = self.mem_key(h_last).float()
                 q = F.layer_norm(q, (q.shape[-1],))
                 q = F.normalize(q, dim=-1)
 
@@ -349,7 +352,7 @@ class TransformerBlock(nn.Module):
                 if sim <= 0.0:
                     return out
 
-                mem = mem.float()
+                mem = mem.to(dtype=mem_dtype)
                 dec_in = torch.cat([mem, h_last], dim=-1)
                 delta = self.mem_dec(dec_in)
 
@@ -358,8 +361,7 @@ class TransformerBlock(nn.Module):
 
                 res_tensor = torch.zeros_like(out)
                 res_tensor[:, -1, :] = delta.to(out.dtype).unsqueeze(0)
-
-            out = out + scale * res_tensor
+                out = out + scale * res_tensor
 
         return out
 
@@ -512,18 +514,15 @@ class Transformer(nn.Module):
                 if pre_wnn_x_val is None:
                     continue
 
-                pre_wnn_x = pre_wnn_x_val.detach().clone().requires_grad_(True)
-                
-                h_last = pre_wnn_x_val[0, -1, :].float()
-
                 with torch.no_grad():
-                    h_last = pre_wnn_x_val[0, -1, :].float()
+                    mem_dtype = next(block.mem_key.parameters()).dtype
+                    h_last = pre_wnn_x_val[0, -1, :].to(dtype=mem_dtype)
 
-                    key_vec = block.mem_key(h_last)
+                    key_vec = block.mem_key(h_last).float()
                     key_vec = F.layer_norm(key_vec, (key_vec.shape[-1],))
                     key_vec = F.normalize(key_vec, dim=-1).unsqueeze(0)
 
-                    val_vec = block.mem_enc(h_last).unsqueeze(0)  # [1, dim]
+                    val_vec = block.mem_enc(h_last).float().unsqueeze(0)
 
                     block.LUT.train(key_vec, val_vec)
 
