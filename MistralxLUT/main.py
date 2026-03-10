@@ -31,8 +31,6 @@ class ModelArgs:
     max_batch_size: int = 0
     rope_theta: float = 1000000.0
 
-    lut_key_dim: int = 1024
-
 
 def repeat_kv(keys: torch.Tensor, values: torch.Tensor, repeats: int):
     keys = torch.repeat_interleave(keys, repeats=repeats, dim=2)
@@ -187,12 +185,12 @@ class FeedForward(nn.Module):
         return self.w2(nn.functional.silu(self.w1(x)) * self.w3(x))
 
 class LUT:
-    def __init__(self):
+    def __init__(self, value_dim):
         self.keys = []
         self.values = []
         self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
         self.CS_threshold = 0.25
-        self.cost_scale = 0.0
+        self.value_dim = value_dim
 
     def train(self, xs, ys):
         # xs, ys: [B, d] or iterable of [d]
@@ -205,68 +203,31 @@ class LUT:
             self.lookupTableMetaData.append([1000, 0])
 
     
-    def forward(self, x):
-        if x is None:
-            return None, None
-
-        q = x[-1, :]
+    def forward(self, q):
+        if q is None:
+            return None, 0.0
 
         q = q.squeeze()
-        q = torch.nan_to_num(q, nan=0.0, posinf=0.0, neginf=0.0)
+        q = torch.nan_to_num(q, nan=0.0, posinf=0.0, neginf=0.0).float()
 
-        
         if len(self.keys) == 0:
-            return torch.zeros_like(q), 0.0
+            return torch.zeros(self.value_dim, device=q.device), 0.0
 
         device = q.device
-
         keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
         values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
 
+        sims = F.cosine_similarity(keys, q.unsqueeze(0).expand(keys.shape[0], keys.shape[1]), dim=-1)
+        sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0).clamp(-1.0, 1.0)
 
-        N, k = keys.shape
+        max_idx = torch.argmax(sims)
+        best = values[max_idx]
+        best_sim = sims[max_idx].item()
 
-        keys = torch.nan_to_num(keys, nan=0.0, posinf=0.0, neginf=0.0)
-        q_f32 = q.to(torch.float32)
-        q_f32 = torch.nan_to_num(q_f32, nan=0.0, posinf=0.0, neginf=0.0)
+        if best_sim < self.CS_threshold:
+            return torch.zeros_like(best), 0.0
 
-        ### adding a punishment/ cost for looking up memories which have come up just before
-        costs = []
-        for row in self.lookupTableMetaData:
-            number_of_look_up_since_last_hit = row[0]
-
-            cost = (1/(number_of_look_up_since_last_hit+1))
-            costs.append(cost)
-
-        # --- 2. empty table: no effect ---
-        if len(self.keys) == 0:
-            return torch.zeros_like(q), 0.0
-
-        costs = torch.tensor(costs, device=device)
-        
-        sims = F.cosine_similarity(keys, q_f32.unsqueeze(0).expand(N, k), dim=-1)
-        sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0)
-        sims = sims.clamp(-1.0, 1.0)
-        sims = sims - self.cost_scale*costs
-
-        max_sim_idx = torch.argmax(sims)
-        top_sims, top_idx = torch.topk(sims, k=min(5, N))
-        print("top sims:", list(zip(top_sims.tolist(), top_idx.tolist())))
-        highest_sim = sims[max_sim_idx].item()
-        best_residual = values[max_sim_idx]  # [d]
-
-        print("Highest sim: ", highest_sim)
-        if highest_sim < self.CS_threshold:
-            print("Low similarity, cs threshold:", self.CS_threshold)
-            return torch.zeros_like(best_residual), 0.0
-        
-        self.lookupTableMetaData[max_sim_idx][0] = 0
-        self.lookupTableMetaData[max_sim_idx][1] += 1
-        for row in self.lookupTableMetaData:
-            row[0] += 1
-        
-
-        return best_residual.to(q.device), highest_sim
+        return best.to(device), best_sim
     
     def resetLUT(self):
         self.keys = []
@@ -310,7 +271,7 @@ class TransformerBlock(nn.Module):
         self.attention_norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.ffn_norm = RMSNorm(args.dim, eps=args.norm_eps)
         self.args = args
-        self.LUT = LUT()
+        self.LUT = LUT(args.dim)
         self.wnn_block = wnn_block # we only activate the wnn block in the last n layers as specified by num_wnn_blocks
         if self.wnn_block:
             self.use_wnn = True
@@ -319,18 +280,22 @@ class TransformerBlock(nn.Module):
         self.pre_wnn_x = None  
         self.residual_scale = 1   # or 15, but be consistent everywhere
 
-        # --- projection down to lut_key_dim (from main) ---
-        base_seed = getattr(args, "lut_seed", 1337)
-        torch.manual_seed(base_seed + block_idx)
+        # new approach create three mlps: memory_encoder (h_last -> memory), memory_decoder (memory + h_last -> residual_correction) and the memory key (h_last -> key)
 
-        self.lut_key_dim = getattr(args, "lut_key_dim", args.dim // 4)
+        self.key_dim = args.dim // 4 # to be tuned tho this is probs fine for now
 
-        self.lut_key_proj = nn.Parameter(
-            torch.empty(args.dim, self.lut_key_dim),
-            requires_grad=False
-        )
-        with torch.no_grad():
-            nn.init.orthogonal_(self.lut_key_proj)
+        self.mem_key = nn.Sequential(nn.Linear(args.dim, args.dim, bias=False), nn.SiLU(), nn.Linear(args.dim, self.key_dim, bias=False))
+        self.mem_enc = nn.Sequential(nn.Linear(args.dim, args.dim, bias=False), nn.SiLU(), nn.Linear(args.dim, args.dim, bias=False))
+        self.mem_dec = nn.Sequential(nn.Linear(2 * args.dim, args.dim, bias=False), nn.SiLU(), nn.Linear(args.dim, args.dim, bias=False))
+
+        self.read_gate = nn.Linear(args.dim, 1, bias=True)
+
+    def pool_span(self, pre_wnn_x, win=32):
+        x = pre_wnn_x[0]  # [T, d]
+        tail = x[-min(win, x.shape[0]):]
+        pooled = tail.mean(dim=0)
+        pooled = F.layer_norm(pooled, (pooled.shape[-1],))
+        return pooled
 
             
     def _compute_lut_key(self, pre_wnn_x, lam: float = 0.75, win: int = 32):
@@ -352,10 +317,6 @@ class TransformerBlock(nn.Module):
         return k_local.unsqueeze(0)
 
 
-
-
-
-
     def forward(
         self,
         x: torch.Tensor,
@@ -375,17 +336,30 @@ class TransformerBlock(nn.Module):
 
         out = base
 
-        # LUT only for inference; no grads
+        # LUT inference
         if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
             with torch.no_grad():
+                h_last = self.pre_wnn_x[0, -1, :].float()
 
-                wnn_residual, highest_sim = self.LUT.forward(self._compute_lut_key(self.pre_wnn_x))
-                wnn_residual = wnn_residual.unsqueeze(0)  # [1, d]
+                q = self.mem_key(h_last)
+                q = F.layer_norm(q, (q.shape[-1],))
+                q = F.normalize(q, dim=-1)
+
+                mem, sim = self.LUT.forward(q)
+                if sim <= 0.0:
+                    return out
+
+                mem = mem.float()
+                dec_in = torch.cat([mem, h_last], dim=-1)
+                delta = self.mem_dec(dec_in)
+
+                gate = torch.sigmoid(self.read_gate(h_last)).item()
+                scale = gate * sim * self.residual_scale
+
                 res_tensor = torch.zeros_like(out)
-                res_tensor[:, -1, :] = wnn_residual
-            #sim_scale = (highest_sim- self.LUT.CS_threshold) / (1- self.LUT.CS_threshold)
-            #sim_scale = sim_scale = max(0.0, min(1.0, sim_scale))
-            out = out + (highest_sim * self.residual_scale)* res_tensor # this should be out of no grad
+                res_tensor[:, -1, :] = delta.to(out.dtype).unsqueeze(0)
+
+            out = out + scale * res_tensor
 
         return out
 
@@ -539,53 +513,19 @@ class Transformer(nn.Module):
                     continue
 
                 pre_wnn_x = pre_wnn_x_val.detach().clone().requires_grad_(True)
-                h = pre_wnn_x
+                
+                h_last = pre_wnn_x_val[0, -1, :].float()
 
-                # Forward through blocks AFTER i with grad tracking- we need to be able to backwards up to this point...
-                for block_idx in range(i + 1, len(self.layers)):
-                    h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
-
-                logits = self.output(self.norm(h)).float()  # [1, T, vocab]
-                loss = F.cross_entropy(logits[:, -1, :], target_tensor)
-
-                print(f"[trainLUT] Block {i}, position {k}: computing grad")
-                now_back = datetime.now()
-
-                grad_pre_wnn_x, = torch.autograd.grad(
-                    loss,
-                    pre_wnn_x,
-                    retain_graph=False,
-                    create_graph=False,
-                    allow_unused=False,
-                )
-
-                grad_norm = grad_pre_wnn_x.norm().item()
-                print(f"[trainLUT] Block {i}, position {k}: grad_norm={grad_norm:.4e}")
-
-                print(
-                    f"[trainLUT] Block {i}, position {k}: grad computed in {datetime.now() - now_back}"
-                )
-
-                # Grad to residual
-                wnn_target_residual = (-grad_pre_wnn_x)  # [1, T, d]
-
-                # Last time step
-                pre_wnn_x_last = pre_wnn_x.detach()[:, -1, :]              # [1, d]
-                target_residual_last = wnn_target_residual.detach()[:, -1, :]  # [1, d]
-
-                print(f"[trainLUT] Training LUT on block {i}")
-                now_lut = datetime.now()
                 with torch.no_grad():
-                    key_vec = block._compute_lut_key(pre_wnn_x.detach())
-                    value_vec = wnn_target_residual.detach()[:, -1, :]
-                    block.LUT.train(key_vec, value_vec)
-                print(
-                    f"[trainLUT] Block {i}, position {k}: LUT updated in {datetime.now() - now_lut}"
-                )
+                    h_last = pre_wnn_x_val[0, -1, :].float()
 
-                # clean any accidental grad references
-                pre_wnn_x.grad = None
-                self.layers[i].pre_wnn_x = None
+                    key_vec = block.mem_key(h_last)
+                    key_vec = F.layer_norm(key_vec, (key_vec.shape[-1],))
+                    key_vec = F.normalize(key_vec, dim=-1).unsqueeze(0)
+
+                    val_vec = block.mem_enc(h_last).unsqueeze(0)  # [1, dim]
+
+                    block.LUT.train(key_vec, val_vec)
 
             # block.use_wnn = True # re enable this lut block
 
