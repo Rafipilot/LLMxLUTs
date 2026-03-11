@@ -118,6 +118,10 @@ class Attention(nn.Module):
             ), dtype=torch.float16
         ).cuda()
 
+    def reset_kv_cache(self, bsz):
+        self.cache_k[:bsz].zero_()
+        self.cache_v[:bsz].zero_()
+
     def forward(
         self, x: torch.Tensor, freqs_cis: torch.Tensor, positions: torch.Tensor, mask: Optional[torch.Tensor]
     ) -> torch.Tensor:
@@ -534,19 +538,161 @@ class Transformer(nn.Module):
         for blk in self.layers:
             blk.use_wnn = True  # this should be redundant
 
+    def trainTransformations(self, tokenizer, lm_head, label, label_context=None):
+        if self.lut_opt is None:
+            self.rebuild_lut_opt(lr=1e-5)
 
-    def saveLUTs(self, save_name):
-        base_name = save_name
-        for i, block in enumerate(self.layers):
-            save_name = base_name +"blockNumber"+str(i)
-            if block.wnn_block:
-                block.LUT.saveLUT(save_name)
+        for blk in self.layers:
+            blk.use_wnn = False
+            blk.pre_wnn_x = None
+            if hasattr(blk.attention, "reset_kv_cache"):
+                blk.attention.reset_kv_cache(bsz=1)
 
-    def loadLUTs(self, save_name):
-        for i, block in enumerate(self.layers):
-            save_name = save_name +"blockNumber"+str(i)
-            if block.wnn_block:
-                block.LUT.loadLUT(save_name)
+        encoded_label = tokenizer.encode(label)
+        encoded_label.append(tokenizer.eos_id)
+        if encoded_label and encoded_label[0] == tokenizer._model.bos_id():
+            encoded_label = encoded_label[1:]
+
+        encoded_ctx = tokenizer.encode(label_context) if label_context else []
+        device = self.tok_embeddings.weight.device
+
+        wnn_block_indices = [
+            idx for idx, blk in enumerate(self.layers)
+            if getattr(blk, "wnn_block", False)
+        ]
+
+        for i in wnn_block_indices:
+            block = self.layers[i]
+            now_block = datetime.now()
+            block.use_wnn = False
+
+            for k in range(len(encoded_label)):
+                for blk in self.layers:
+                    if hasattr(blk.attention, "reset_kv_cache"):
+                        blk.attention.reset_kv_cache(bsz=1)
+
+                context = (encoded_ctx + encoded_label[:k])[-self.n_ctx:]
+                if len(context) == 0:
+                    continue
+
+                context_tensor = torch.tensor(
+                    context, dtype=torch.long, device=device
+                ).unsqueeze(0)
+                target_tensor = torch.tensor(
+                    [encoded_label[k]], dtype=torch.long, device=device
+                )
+
+                T = context_tensor.size(1)
+                position_ids = torch.arange(T, dtype=torch.long, device=device)
+
+                if T > 1:
+                    seqlen = T
+                    tensor = torch.full(
+                        (seqlen, seqlen),
+                        dtype=torch.float32,
+                        fill_value=1,
+                        device=device,
+                    )
+                    mask = torch.tril(tensor, diagonal=0)
+                    mask = torch.triu(mask, diagonal=-self.args.sliding_window)
+                    mask = torch.log(mask)
+                else:
+                    mask = None
+
+                with torch.no_grad():
+                    h0 = self.tok_embeddings(context_tensor)
+                    freqs_cis = self.freqs_cis[position_ids]
+
+                    for block_idx in range(i):
+                        h0 = self.layers[block_idx](h0, freqs_cis, position_ids, mask)
+
+                    _ = self.layers[i](h0, freqs_cis, position_ids, mask)
+                    pre_wnn_x_val = getattr(self.layers[i], "pre_wnn_x", None)
+
+                if pre_wnn_x_val is None:
+                    continue
+
+                pre_wnn_x = pre_wnn_x_val.detach().clone()
+                h = pre_wnn_x
+
+                mem_dtype = next(block.mem_dec.parameters()).dtype
+                h_last = pre_wnn_x[0, -1, :].to(device=device, dtype=mem_dtype)
+
+                with torch.no_grad():
+                    q = block.mem_key(h_last).float()
+                    q = F.layer_norm(q, (q.shape[-1],))
+                    q = F.normalize(q, dim=-1)
+
+                    mem, sim = block.LUT.forward(q)
+
+                if sim <= 0.0:
+                    continue
+
+                mem = mem.to(device=device, dtype=mem_dtype)
+                sim_t = torch.tensor(sim, device=device, dtype=mem_dtype)
+
+                dec_in = torch.cat([mem, h_last], dim=-1)
+                delta = block.mem_dec(dec_in)
+                gate = torch.sigmoid(block.read_gate(h_last)).squeeze(-1)
+
+                inj = torch.zeros_like(h)
+                inj[:, -1, :] = delta.to(h.dtype).unsqueeze(0)
+
+                h = h + (gate * sim_t * block.residual_scale) * inj
+
+                for block_idx in range(i + 1, len(self.layers)):
+                    h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
+
+                logits = self.output(self.norm(h)).float()
+                loss = F.cross_entropy(logits[:, -1, :], target_tensor)
+
+                self.lut_opt.zero_grad(set_to_none=True)
+                loss.backward()
+                torch.nn.utils.clip_grad_norm_(self.lut_opt.param_groups[0]["params"], 1.0)
+                self.lut_opt.step()
+
+                self.layers[i].pre_wnn_x = None
+
+            print(f"[trainTransformations] Finished block {i} in {datetime.now() - now_block}")
+
+        for blk in self.layers:
+            if blk.wnn_block:
+                blk.use_wnn = True
+
+    def rebuild_lut_opt(self, lr=1e-5):
+        params = []
+
+        for blk in self.layers:
+            if getattr(blk, "wnn_block", False):
+                for name in ("mem_dec", "read_gate"): # unlcear what is happening here 
+                    mod = getattr(blk, name, None)
+                    if mod is None:
+                        continue
+
+                    mod.to(dtype=torch.float32)
+                    for p in mod.parameters():
+                        p.requires_grad = True
+                    params += list(mod.parameters())
+
+                if hasattr(blk, "mem_key"):
+                    for p in blk.mem_key.parameters():
+                        p.requires_grad = False
+
+                if hasattr(blk, "mem_enc"):
+                    for p in blk.mem_enc.parameters():
+                        p.requires_grad = False
+
+            else:
+                for name in ("mem_key", "mem_enc", "mem_dec", "read_gate"):
+                    mod = getattr(blk, name, None)
+                    if mod is None:
+                        continue
+                    for p in mod.parameters():
+                        p.requires_grad = False
+
+        self.lut_opt = torch.optim.AdamW(params, lr=lr, weight_decay=0.0)
+        print("opt param count:", sum(p.numel() for p in params))
+
 
     @staticmethod
     def from_folder(folder: Path, max_batch_size: int = 1, device="cuda", dtype=torch.float16):
