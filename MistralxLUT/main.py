@@ -192,19 +192,22 @@ class LUT:
     def __init__(self, value_dim):
         self.keys = []
         self.values = []
+        self.raw_hiddens = []
         self.lookupTableMetaData = [] # idx 0 calls since last response, idx 1 number of calls
         self.CS_threshold = 0.25
         self.value_dim = value_dim
 
-    def train(self, xs, ys):
+    def train(self, xs, ys, raw_hs=None):
         # xs, ys: [B, d] or iterable of [d]
-        for x, y in zip(xs, ys):
-            print("adding rows...")
+        # raw_hs: optional raw hidden states for differentiable recomputation
+        for idx, (x, y) in enumerate(zip(xs, ys)):
             x = x.detach().clone().squeeze()
             y = y.detach().clone().squeeze()
             self.keys.append(x)
             self.values.append(y)
             self.lookupTableMetaData.append([1000, 0])
+            if raw_hs is not None:
+                self.raw_hiddens.append(raw_hs[idx].detach().clone().squeeze())
 
     
     def forward(self, q):
@@ -220,6 +223,8 @@ class LUT:
         device = q.device
         keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
         values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
+        keys = torch.nan_to_num(keys, nan=0.0, posinf=0.0, neginf=0.0)
+        values = torch.nan_to_num(values, nan=0.0, posinf=0.0, neginf=0.0)
 
         sims = F.cosine_similarity(keys, q.unsqueeze(0).expand(keys.shape[0], keys.shape[1]), dim=-1)
         sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0).clamp(-1.0, 1.0)
@@ -228,7 +233,7 @@ class LUT:
         best = values[max_idx]
         best_sim = sims[max_idx].item()
 
-        # print("Best sim: ", best_sim)
+        print("Best sim: ", best_sim)
 
         if best_sim < self.CS_threshold:
             return torch.zeros_like(best), 0.0
@@ -248,19 +253,24 @@ class LUT:
         device = q.device
         keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
         values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
+        keys = torch.nan_to_num(keys, nan=0.0, posinf=0.0, neginf=0.0)
+        values = torch.nan_to_num(values, nan=0.0, posinf=0.0, neginf=0.0)
 
         sims = F.cosine_similarity(keys, q.unsqueeze(0).expand(keys.shape[0], keys.shape[1]), dim=-1)
         sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0).clamp(-1.0, 1.0)
 
-        weights = F.softmax(sims / 0.05, dim=0)
+        weights = F.softmax(sims / 0.5, dim=0)
         best = torch.sum(weights.unsqueeze(-1) * values, dim=0)
         sim_soft = torch.sum(weights * sims)
+
+        print("Best sim (soft): ", sim_soft.item())
 
         return best.to(device), sim_soft
     
     def resetLUT(self):
         self.keys = []
         self.values = []
+        self.raw_hiddens = []
         self.lookupTableMetaData = []
 
     def resetCosts(self):
@@ -319,7 +329,11 @@ class TransformerBlock(nn.Module):
         self.mem_enc = nn.Sequential(nn.Linear(args.dim, args.dim, bias=False), nn.SiLU(), nn.Linear(args.dim, args.dim, bias=False))
         self.mem_dec = nn.Sequential(nn.Linear(2 * args.dim, self.mem_rank, bias=False), nn.SiLU(), nn.Linear(self.mem_rank, args.dim, bias=False))
 
+        # Zero-init so injection starts at 0 (safe to scale up)
+        nn.init.zeros_(self.mem_dec[2].weight)
+
         self.read_gate = nn.Linear(args.dim, 1, bias=True)
+        nn.init.constant_(self.read_gate.bias, -2.0)  # sigmoid(-2) ≈ 0.12, starts conservative
 
     def pool_span(self, pre_wnn_x, win=32):
         x = pre_wnn_x[0]  # [T, d]
@@ -565,15 +579,16 @@ class Transformer(nn.Module):
                     key_dtype = next(block.mem_key.parameters()).dtype
                     enc_dtype = next(block.mem_enc.parameters()).dtype
 
-                    h_last_key = pre_wnn_x_val[0, -1, :].to(dtype=key_dtype)
-                    h_last_enc = pre_wnn_x_val[0, -1, :].to(dtype=enc_dtype)
+                    h_last = pre_wnn_x_val[0, -1, :]
 
-                    key_vec = block.mem_key(h_last_key).float()
+                    key_vec = block.mem_key(h_last.to(dtype=key_dtype)).float()
                     key_vec = F.layer_norm(key_vec, (key_vec.shape[-1],))
                     key_vec = F.normalize(key_vec, dim=-1).unsqueeze(0)
+                    key_vec = torch.nan_to_num(key_vec, nan=0.0, posinf=0.0, neginf=0.0)
 
-                    val_vec = pre_wnn_x_val[0, -1, :].float().unsqueeze(0)
-                    block.LUT.train(key_vec, val_vec)
+                    val_vec = block.mem_enc(h_last.to(dtype=enc_dtype)).float().unsqueeze(0)
+                    raw_h = h_last.float().unsqueeze(0)
+                    block.LUT.train(key_vec, val_vec, raw_hs=raw_h)
 
             # block.use_wnn = True # re enable this lut block
 
@@ -605,11 +620,14 @@ class Transformer(nn.Module):
             idx for idx, blk in enumerate(self.layers)
             if getattr(blk, "wnn_block", False)
         ]
+        overall_losses = 0.0
 
         for i in wnn_block_indices:
             block = self.layers[i]
             now_block = datetime.now()
             block.use_wnn = False
+
+            per_block_losses = []
 
             for k in range(len(encoded_label)):
                 for blk in self.layers:
@@ -645,14 +663,15 @@ class Transformer(nn.Module):
                     mask = None
 
 
-                h0 = self.tok_embeddings(context_tensor)
-                freqs_cis = self.freqs_cis[position_ids]
+                with torch.no_grad():
+                    h0 = self.tok_embeddings(context_tensor)
+                    freqs_cis = self.freqs_cis[position_ids]
 
-                for block_idx in range(i):
-                    h0 = self.layers[block_idx](h0, freqs_cis, position_ids, mask)
+                    for block_idx in range(i):
+                        h0 = self.layers[block_idx](h0, freqs_cis, position_ids, mask)
 
-                _ = self.layers[i](h0, freqs_cis, position_ids, mask)
-                pre_wnn_x_val = getattr(self.layers[i], "pre_wnn_x", None)
+                    _ = self.layers[i](h0, freqs_cis, position_ids, mask)
+                    pre_wnn_x_val = getattr(self.layers[i], "pre_wnn_x", None)
 
                 if pre_wnn_x_val is None:
                     continue
@@ -660,25 +679,43 @@ class Transformer(nn.Module):
                 pre_wnn_x = pre_wnn_x_val.detach().clone()
                 h = pre_wnn_x
 
+                if len(block.LUT.raw_hiddens) == 0:
+                    continue
+
                 key_dtype = next(block.mem_key.parameters()).dtype
+                enc_dtype = next(block.mem_enc.parameters()).dtype
                 dec_dtype = next(block.mem_dec.parameters()).dtype
                 gate_dtype = next(block.read_gate.parameters()).dtype
 
-                h_last_key = pre_wnn_x[0, -1, :].to(device=device, dtype=key_dtype)
-                h_last_dec = pre_wnn_x[0, -1, :].to(device=device, dtype=dec_dtype)
-                h_last_gate = pre_wnn_x[0, -1, :].to(device=device, dtype=gate_dtype)
+                # Recompute keys and values from raw hiddens WITH grad
+                raw_h_stack = torch.stack(block.LUT.raw_hiddens).to(device=device, dtype=key_dtype)  # [N, dim]
 
-                q = block.mem_key(h_last_key).float()
+                keys = block.mem_key(raw_h_stack).float()  # [N, key_dim] — grad flows to mem_key
+                keys = F.layer_norm(keys, (keys.shape[-1],))
+                keys = F.normalize(keys, dim=-1)
+
+                values = block.mem_enc(raw_h_stack.to(dtype=enc_dtype)).float()  # [N, dim] — grad flows to mem_enc
+
+                # Query from current input — grad also flows to mem_key
+                h_last = pre_wnn_x[0, -1, :]
+                q = block.mem_key(h_last.to(dtype=key_dtype)).float()
                 q = F.layer_norm(q, (q.shape[-1],))
                 q = F.normalize(q, dim=-1)
 
-                mem, sim = block.LUT.forward_differentiable(q)
+                # Differentiable lookup
+                sims = F.cosine_similarity(keys, q.unsqueeze(0).expand_as(keys), dim=-1)
+                sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0).clamp(-1.0, 1.0)
+                weights = F.softmax(sims / 0.5, dim=0)
+                mem = torch.sum(weights.unsqueeze(-1) * values, dim=0)  # [dim]
+                sim_soft = torch.sum(weights * sims)
 
-                if mem is None or sim is None:
-                    continue
+                print("Best sim (soft): ", sim_soft.item())
+
+                h_last_dec = h_last.to(device=device, dtype=dec_dtype)
+                h_last_gate = h_last.to(device=device, dtype=gate_dtype)
 
                 mem = mem.to(device=device, dtype=dec_dtype)
-                sim_t = sim.to(device=device, dtype=dec_dtype)
+                sim_t = sim_soft.to(device=device, dtype=dec_dtype)
 
                 dec_in = torch.cat([mem, h_last_dec], dim=-1)
                 delta = block.mem_dec(dec_in)
@@ -692,32 +729,51 @@ class Transformer(nn.Module):
                 for block_idx in range(i + 1, len(self.layers)):
                     h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
 
-                logits = self.output(self.norm(h)).float()
+                logits = F.linear(self.norm(h.float()), self.output.weight.float())
                 loss = F.cross_entropy(logits[:, -1, :], target_tensor)
+                per_block_losses.append(loss.item())
+                overall_losses += loss.item()
 
                 self.lut_opt.zero_grad(set_to_none=True)
                 loss.backward()
                 torch.nn.utils.clip_grad_norm_(self.lut_opt.param_groups[0]["params"], 1.0)
                 self.lut_opt.step()
 
-                self.layers[i].pre_wnn_x = None
+                # Reproject LUT keys/values through updated weights
+                with torch.no_grad():
+                    if len(block.LUT.raw_hiddens) > 0:
+                        rh = torch.stack(block.LUT.raw_hiddens).to(device=device, dtype=key_dtype)
+                        new_keys = block.mem_key(rh).float()
+                        new_keys = F.layer_norm(new_keys, (new_keys.shape[-1],))
+                        new_keys = F.normalize(new_keys, dim=-1)
+                        new_keys = torch.nan_to_num(new_keys, nan=0.0, posinf=0.0, neginf=0.0)
+                        block.LUT.keys = [k.detach() for k in new_keys]
+
+                        rv = torch.stack(block.LUT.raw_hiddens).to(device=device, dtype=enc_dtype)
+                        new_vals = block.mem_enc(rv).float()
+                        block.LUT.values = [v.detach() for v in new_vals]
 
             print(f"[trainTransformations] Finished block {i} in {datetime.now() - now_block}")
+            print(f"[trainTransformations] Per block losses: {per_block_losses}")
+            print(f"[trainTransformations] Overall losses: {overall_losses}")
 
         for blk in self.layers:
             if blk.wnn_block:
                 blk.use_wnn = True
 
-    def rebuild_lut_opt(self, lr=1e-3):
+        return overall_losses
+
+    def rebuild_lut_opt(self, lr=1e-5):
         params = []
 
         for blk in self.layers:
             if getattr(blk, "wnn_block", False):
-                for name in ("mem_dec", "read_gate", "mem_key"):
+                for name in ("mem_enc", "mem_dec", "read_gate", "mem_key"):
                     mod = getattr(blk, name, None)
                     if mod is None:
                         continue
 
+                    mod.float()  # cast to fp32 for stable training
                     for p in mod.parameters():
                         p.requires_grad = True
                     params += list(mod.parameters())

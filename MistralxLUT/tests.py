@@ -1,84 +1,49 @@
 from pathlib import Path
-
 from main import Tokenizer, Transformer, generate
 
 model_path = "mistral-7B-Instruct-v0.3"
-max_tokens = 32
-
 tokenizer = Tokenizer(str(Path(model_path) / "tokenizer.model.v3"))
 transformer = Transformer.from_folder(Path(model_path), max_batch_size=1)
 
-# Turn on memory for a few late layers
-for idx in (-1,):
-    transformer.layers[idx].wnn_block = True
-    transformer.layers[idx].use_wnn = True
-
-# Make memory easier to trigger while testing
+transformer.layers[-1].wnn_block = True
+transformer.layers[-1].use_wnn = True
 for block in transformer.layers:
     if hasattr(block, "LUT"):
-        block.LUT.CS_threshold = 0.10
-    block.residual_scale = 2.0
+        block.LUT.CS_threshold = 0.5
+    block.residual_scale = 0.01
 
-# Clean old memory
-for idx in (-1,):
-    transformer.layers[idx].LUT.resetLUT()
-
-fact_sentence = "Astarus AI is building continuously trainable LLMs."
-
-prompt_direct = "User: What is Astarus AI?\nAssistant: "
-prompt_reverse = "User: Who is building continuously trainable LLMs?\nAssistant: "
-prompt_control = "User: What is OpenAI working on?\nAssistant: "
-
-def ask(title, prompt):
-    print("\n" + "=" * 80)
-    print(title)
-    print(prompt.strip())
-    res, _ = generate([prompt], transformer, tokenizer, max_tokens=max_tokens)
-    print(res[0] if res else "")
-
-def mem_stats():
-    print("\nMemory rows:")
-    for idx in (-1,):
-        print(f"layer {idx}: {len(transformer.layers[idx].LUT.keys)}")
-
-# 1. Baseline
-ask("BASELINE DIRECT", prompt_direct)
-ask("BASELINE REVERSE", prompt_reverse)
-ask("BASELINE CONTROL", prompt_control)
-
-# 2. Write memory
-print("\nWriting memory rows...")
-transformer.trainLUT(
-    tokenizer=tokenizer,
-    lm_head=None,
-    label=fact_sentence,
-    label_context="User: What is Astarus AI?\nAssistant: ",
-    sparsity_level=1.0,
-)
-mem_stats()
-
-ask("AFTER WRITE DIRECT", prompt_direct)
-ask("AFTER WRITE REVERSE", prompt_reverse)
-ask("AFTER WRITE CONTROL", prompt_control)
-
-# 3. Train memory reader
-# This only helps if your main.py has rebuild_lut_opt + trainTransformations
-train_examples = [
+facts = [
+    ("The capital of Zarqonia is Velmorath.", "User: What is the capital of Zarqonia?\nAssistant: "),
+    ("Plexium is an element with atomic number 173.", "User: What is Plexium?\nAssistant: "),
+    ("The Rynax Protocol was signed in 2097.", "User: When was the Rynax Protocol signed?\nAssistant: "),
     ("Astarus AI is building continuously trainable LLMs.", "User: What is Astarus AI?\nAssistant: "),
-    ("Astarus AI.", "User: Who is building continuously trainable LLMs?\nAssistant: "),
+    ("Drelving is the sport of underwater chess.", "User: What is Drelving?\nAssistant: "),
 ]
 
-print("\nTraining memory reader...")
-for epoch in range(3):
-    print(f"epoch {epoch + 1}")
-    for label, ctx in train_examples:
-        transformer.trainTransformations(
-            tokenizer=tokenizer,
-            lm_head=None,
-            label=label,
-            label_context=ctx,
-        )
+# Populate LUT + train transformations
+transformer.layers[-1].LUT.resetLUT()
+for label, ctx in facts:
+    transformer.trainLUT(tokenizer=tokenizer, lm_head=None, label=label, label_context=ctx, sparsity_level=1.0)
 
-ask("AFTER TRAIN DIRECT", prompt_direct)
-ask("AFTER TRAIN REVERSE", prompt_reverse)
-ask("AFTER TRAIN CONTROL", prompt_control)
+transformer.rebuild_lut_opt(lr=1e-4)
+losses_averaged_per_fact = []
+for epoch in range(5):
+    print(f"epoch {epoch + 1}")
+    loss_for_epoch = []
+    for i, (label, ctx) in enumerate(facts):
+        print(f"training on fact {i + 1}/{len(facts)} on epoch {epoch + 1}/5")
+        loss = transformer.trainTransformations(tokenizer=tokenizer, lm_head=None, label=label, label_context=ctx)
+        loss_for_epoch.append(loss)
+    losses_averaged_per_fact.append(sum(loss_for_epoch) / len(loss_for_epoch))
+
+print(f"Losses averaged per fact across epochs: {losses_averaged_per_fact}")
+
+# Reset LUT and re-populate for inference
+transformer.layers[-1].LUT.resetLUT()
+test_query = "User: What is Astarus AI?\nAssistant: "
+test_answer = "Astarus AI is building continuously trainable LLMs."
+transformer.trainLUT(tokenizer=tokenizer, lm_head=None, label=test_answer, label_context=test_query, sparsity_level=1.0)
+
+# Test verbatim recall
+output = generate(transformer, tokenizer, test_query, max_tokens=20)
+print(f"Output: {output}")
