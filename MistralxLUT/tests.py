@@ -9,7 +9,7 @@ tokenizer = Tokenizer(str(Path(model_path) / "tokenizer.model.v3"))
 transformer = Transformer.from_folder(Path(model_path), max_batch_size=1)
 
 # Turn on memory for a few late layers
-for idx in (-1, -3, -5):
+for idx in (-1,):
     transformer.layers[idx].wnn_block = True
     transformer.layers[idx].use_wnn = True
 
@@ -20,7 +20,7 @@ for block in transformer.layers:
     block.residual_scale = 2.0
 
 # Clean old memory
-for idx in (-1, -3, -5):
+for idx in (-1,):
     transformer.layers[idx].LUT.resetLUT()
 
 fact_sentence = "Astarus AI is building continuously trainable LLMs."
@@ -38,7 +38,7 @@ def ask(title, prompt):
 
 def mem_stats():
     print("\nMemory rows:")
-    for idx in (-1, -3, -5):
+    for idx in (-1,):
         print(f"layer {idx}: {len(transformer.layers[idx].LUT.keys)}")
 
 # 1. Baseline

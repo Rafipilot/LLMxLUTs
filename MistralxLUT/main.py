@@ -235,6 +235,29 @@ class LUT:
 
         return best.to(device), best_sim
     
+    def forward_differentiable(self, q):
+        if q is None:
+            return None, None
+
+        q = q.squeeze()
+        q = torch.nan_to_num(q, nan=0.0, posinf=0.0, neginf=0.0).float()
+
+        if len(self.keys) == 0:
+            return torch.zeros(self.value_dim, device=q.device), None
+
+        device = q.device
+        keys = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.keys])
+        values = torch.stack([row.to(device=device, dtype=torch.float32) for row in self.values])
+
+        sims = F.cosine_similarity(keys, q.unsqueeze(0).expand(keys.shape[0], keys.shape[1]), dim=-1)
+        sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0).clamp(-1.0, 1.0)
+
+        weights = F.softmax(sims / 0.05, dim=0)
+        best = torch.sum(weights.unsqueeze(-1) * values, dim=0)
+        sim_soft = torch.sum(weights * sims)
+
+        return best.to(device), sim_soft
+    
     def resetLUT(self):
         self.keys = []
         self.values = []
@@ -290,9 +313,11 @@ class TransformerBlock(nn.Module):
 
         self.key_dim = args.dim // 4 # to be tuned tho this is probs fine for now
 
-        self.mem_key = nn.Sequential(nn.Linear(args.dim, args.dim, bias=False), nn.SiLU(), nn.Linear(args.dim, self.key_dim, bias=False))
+        self.mem_rank = 32
+
+        self.mem_key = nn.Sequential(nn.Linear(args.dim, self.mem_rank, bias=False), nn.SiLU(), nn.Linear(self.mem_rank, self.key_dim, bias=False))
         self.mem_enc = nn.Sequential(nn.Linear(args.dim, args.dim, bias=False), nn.SiLU(), nn.Linear(args.dim, args.dim, bias=False))
-        self.mem_dec = nn.Sequential(nn.Linear(2 * args.dim, args.dim, bias=False), nn.SiLU(), nn.Linear(args.dim, args.dim, bias=False))
+        self.mem_dec = nn.Sequential(nn.Linear(2 * args.dim, self.mem_rank, bias=False), nn.SiLU(), nn.Linear(self.mem_rank, args.dim, bias=False))
 
         self.read_gate = nn.Linear(args.dim, 1, bias=True)
 
@@ -329,6 +354,7 @@ class TransformerBlock(nn.Module):
         freqs_cis: torch.Tensor,
         positions: torch.Tensor,
         mask: Optional[torch.Tensor],
+        diffentiable_lookup=False
     ) -> torch.Tensor:
         # Standard transformer block forward
         r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask)
@@ -344,28 +370,43 @@ class TransformerBlock(nn.Module):
 
         # LUT inference
         if self.wnn_block and self.use_wnn and len(self.LUT.keys) > 0:
-            with torch.no_grad():
-                mem_dtype = next(self.mem_dec.parameters()).dtype
-                h_last = self.pre_wnn_x[0, -1, :].to(dtype=mem_dtype)
 
-                q = self.mem_key(h_last).float()
-                q = F.layer_norm(q, (q.shape[-1],))
-                q = F.normalize(q, dim=-1)
+            key_dtype = next(self.mem_key.parameters()).dtype
+            dec_dtype = next(self.mem_dec.parameters()).dtype
+            gate_dtype = next(self.read_gate.parameters()).dtype
 
+            h_last_key = self.pre_wnn_x[0, -1, :].to(dtype=key_dtype)
+            h_last_dec = self.pre_wnn_x[0, -1, :].to(dtype=dec_dtype)
+            h_last_gate = self.pre_wnn_x[0, -1, :].to(dtype=gate_dtype)
+
+            q = self.mem_key(h_last_key).float()
+            q = F.layer_norm(q, (q.shape[-1],))
+            q = F.normalize(q, dim=-1)
+
+            if diffentiable_lookup:
+                mem, sim = self.LUT.forward_differentiable(q)
+            else:
                 mem, sim = self.LUT.forward(q)
+
+            if mem is None or sim is None:
+                return out
+            if not torch.is_tensor(sim):
                 if sim <= 0.0:
                     return out
+                sim_t = torch.tensor(sim, device=out.device, dtype=dec_dtype)
+            else:
+                sim_t = sim.to(device=out.device, dtype=dec_dtype)
 
-                mem = mem.to(dtype=mem_dtype)
-                dec_in = torch.cat([mem, h_last], dim=-1)
-                delta = self.mem_dec(dec_in)
+            mem = mem.to(dtype=dec_dtype)
+            dec_in = torch.cat([mem, h_last_dec], dim=-1)
+            delta = self.mem_dec(dec_in)
 
-                gate = torch.sigmoid(self.read_gate(h_last)).item()
-                scale = gate * sim * self.residual_scale
+            gate = torch.sigmoid(self.read_gate(h_last_gate)).squeeze(-1).to(dec_dtype)
+            scale = gate * sim_t * self.residual_scale
 
-                res_tensor = torch.zeros_like(out)
-                res_tensor[:, -1, :] = delta.to(out.dtype).unsqueeze(0)
-                out = out + scale * res_tensor
+            res_tensor = torch.zeros_like(out)
+            res_tensor[:, -1, :] = delta.to(out.dtype).unsqueeze(0)
+            out = out + scale * res_tensor
 
         return out
 
@@ -402,6 +443,8 @@ class Transformer(nn.Module):
         self.freqs_cis = precompute_freqs_cis(self.args.head_dim, 128_000).to("cuda")
 
         self.n_ctx = 128000 ## 128 k context window
+
+        self.lut_opt = None
 
 
     def forward(
@@ -519,15 +562,17 @@ class Transformer(nn.Module):
                     continue
 
                 with torch.no_grad():
-                    mem_dtype = next(block.mem_key.parameters()).dtype
-                    h_last = pre_wnn_x_val[0, -1, :].to(dtype=mem_dtype)
+                    key_dtype = next(block.mem_key.parameters()).dtype
+                    enc_dtype = next(block.mem_enc.parameters()).dtype
 
-                    key_vec = block.mem_key(h_last).float()
+                    h_last_key = pre_wnn_x_val[0, -1, :].to(dtype=key_dtype)
+                    h_last_enc = pre_wnn_x_val[0, -1, :].to(dtype=enc_dtype)
+
+                    key_vec = block.mem_key(h_last_key).float()
                     key_vec = F.layer_norm(key_vec, (key_vec.shape[-1],))
                     key_vec = F.normalize(key_vec, dim=-1).unsqueeze(0)
 
-                    val_vec = block.mem_enc(h_last).float().unsqueeze(0)
-
+                    val_vec = pre_wnn_x_val[0, -1, :].float().unsqueeze(0)
                     block.LUT.train(key_vec, val_vec)
 
             # block.use_wnn = True # re enable this lut block
@@ -599,15 +644,15 @@ class Transformer(nn.Module):
                 else:
                     mask = None
 
-                with torch.no_grad():
-                    h0 = self.tok_embeddings(context_tensor)
-                    freqs_cis = self.freqs_cis[position_ids]
 
-                    for block_idx in range(i):
-                        h0 = self.layers[block_idx](h0, freqs_cis, position_ids, mask)
+                h0 = self.tok_embeddings(context_tensor)
+                freqs_cis = self.freqs_cis[position_ids]
 
-                    _ = self.layers[i](h0, freqs_cis, position_ids, mask)
-                    pre_wnn_x_val = getattr(self.layers[i], "pre_wnn_x", None)
+                for block_idx in range(i):
+                    h0 = self.layers[block_idx](h0, freqs_cis, position_ids, mask)
+
+                _ = self.layers[i](h0, freqs_cis, position_ids, mask)
+                pre_wnn_x_val = getattr(self.layers[i], "pre_wnn_x", None)
 
                 if pre_wnn_x_val is None:
                     continue
@@ -615,25 +660,29 @@ class Transformer(nn.Module):
                 pre_wnn_x = pre_wnn_x_val.detach().clone()
                 h = pre_wnn_x
 
-                mem_dtype = next(block.mem_dec.parameters()).dtype
-                h_last = pre_wnn_x[0, -1, :].to(device=device, dtype=mem_dtype)
+                key_dtype = next(block.mem_key.parameters()).dtype
+                dec_dtype = next(block.mem_dec.parameters()).dtype
+                gate_dtype = next(block.read_gate.parameters()).dtype
 
-                with torch.no_grad():
-                    q = block.mem_key(h_last).float()
-                    q = F.layer_norm(q, (q.shape[-1],))
-                    q = F.normalize(q, dim=-1)
+                h_last_key = pre_wnn_x[0, -1, :].to(device=device, dtype=key_dtype)
+                h_last_dec = pre_wnn_x[0, -1, :].to(device=device, dtype=dec_dtype)
+                h_last_gate = pre_wnn_x[0, -1, :].to(device=device, dtype=gate_dtype)
 
-                    mem, sim = block.LUT.forward(q)
+                q = block.mem_key(h_last_key).float()
+                q = F.layer_norm(q, (q.shape[-1],))
+                q = F.normalize(q, dim=-1)
 
-                if sim <= 0.0:
+                mem, sim = block.LUT.forward_differentiable(q)
+
+                if mem is None or sim is None:
                     continue
 
-                mem = mem.to(device=device, dtype=mem_dtype)
-                sim_t = torch.tensor(sim, device=device, dtype=mem_dtype)
+                mem = mem.to(device=device, dtype=dec_dtype)
+                sim_t = sim.to(device=device, dtype=dec_dtype)
 
-                dec_in = torch.cat([mem, h_last], dim=-1)
+                dec_in = torch.cat([mem, h_last_dec], dim=-1)
                 delta = block.mem_dec(dec_in)
-                gate = torch.sigmoid(block.read_gate(h_last)).squeeze(-1)
+                gate = torch.sigmoid(block.read_gate(h_last_gate)).squeeze(-1).to(dec_dtype)
 
                 inj = torch.zeros_like(h)
                 inj[:, -1, :] = delta.to(h.dtype).unsqueeze(0)
@@ -659,28 +708,19 @@ class Transformer(nn.Module):
             if blk.wnn_block:
                 blk.use_wnn = True
 
-    def rebuild_lut_opt(self, lr=1e-5):
+    def rebuild_lut_opt(self, lr=1e-3):
         params = []
 
         for blk in self.layers:
             if getattr(blk, "wnn_block", False):
-                for name in ("mem_dec", "read_gate"): # unlcear what is happening here 
+                for name in ("mem_dec", "read_gate", "mem_key"):
                     mod = getattr(blk, name, None)
                     if mod is None:
                         continue
 
-                    mod.to(dtype=torch.float32)
                     for p in mod.parameters():
                         p.requires_grad = True
                     params += list(mod.parameters())
-
-                if hasattr(blk, "mem_key"):
-                    for p in blk.mem_key.parameters():
-                        p.requires_grad = False
-
-                if hasattr(blk, "mem_enc"):
-                    for p in blk.mem_enc.parameters():
-                        p.requires_grad = False
 
             else:
                 for name in ("mem_key", "mem_enc", "mem_dec", "read_gate"):
