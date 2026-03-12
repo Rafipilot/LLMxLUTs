@@ -25,29 +25,6 @@ This repo is where we experiment with those ideas at the code level.
 
 ---
 
-## What this repo lets you do
-
-With this project, you can:
-
-* **Run LUT-augmented inference** on top of existing open-source LLMs.
-* **Toggle LUTs on or off** to compare:
-
-  * Plain base model vs.
-  * Base model + LUT layer(s).
-* **Teach the model new facts or behaviours** by updating only the LUT, while:
-
-  * Keeping the original LLM weights read-only.
-  * Avoiding heavy fine-tuning runs.
-* **Experiment with your own prompts / datasets**:
-
-  * Domain-specific Q&A.
-  * Company-specific assistants.
-  * Small, targeted skill injections (e.g. “how this one fund works”, “how our product is priced”).
-
-The goal is to make it easy to run small, controlled experiments around continuous learning and specialization.
-
----
-
 ## Current model support
 
 Right now, the repo focuses on two backends:
@@ -59,7 +36,7 @@ Right now, the repo focuses on two backends:
 
 * **Mistral-7B**
 
-  * Modern, capable base model.
+  * Modern, capable instruction model.
   * Lets us see how LUTs behave in a more realistic, production-like setting.
 
 Both are used in a way that **does not modify their core weights**. All adaptation happens in the LUT component and its residual wiring.

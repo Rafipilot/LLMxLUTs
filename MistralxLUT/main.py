@@ -4,6 +4,7 @@ import torch.nn.functional as F
 from dataclasses import dataclass
 from pathlib import Path
 
+import gc
 import json
 from typing import Optional, Tuple, List
 from sentencepiece import SentencePieceProcessor
@@ -67,65 +68,34 @@ def apply_rotary_emb(
 
 
 class Attention(nn.Module):
-    def __init__(self, args: ModelArgs):
+    def __init__(self, args):
         super().__init__()
         self.args = args
-
-        self.n_heads: int = args.n_heads
-        self.n_kv_heads: int = args.n_kv_heads
-        
+        self.n_heads = args.n_heads
+        self.n_kv_heads = args.n_kv_heads
         self.repeats = self.n_heads // self.n_kv_heads
-        self.sliding_window = self.args.sliding_window
+        self.sliding_window = args.sliding_window
+        self.scale = self.args.head_dim ** -0.5
 
-        self.scale = self.args.head_dim**-0.5
+        self.wq = nn.Linear(args.dim, args.n_heads * args.head_dim, bias=False)
+        self.wk = nn.Linear(args.dim, args.n_kv_heads * args.head_dim, bias=False)
+        self.wv = nn.Linear(args.dim, args.n_kv_heads * args.head_dim, bias=False)
+        self.wo = nn.Linear(args.n_heads * args.head_dim, args.dim, bias=False)
 
-        self.attn_scores = None ## for lut
-
-        self.wq = nn.Linear(
-            args.dim,
-            args.n_heads * args.head_dim,
-            bias=False
-        )
-        self.wk = nn.Linear(
-            args.dim,
-            args.n_kv_heads * args.head_dim,
-            bias=False
-        )
-        self.wv = nn.Linear(
-            args.dim,
-            args.n_kv_heads * args.head_dim,
-            bias=False
-        )
-        self.wo = nn.Linear(
-            args.n_heads * args.head_dim,
-            args.dim,
-            bias=False
-        )
         self.cache_k = torch.empty(
-            (
-                args.max_batch_size,
-                args.sliding_window,
-                self.n_kv_heads,
-                self.args.head_dim,
-            ), dtype=torch.float16
+            (args.max_batch_size, args.sliding_window, self.n_kv_heads, self.args.head_dim),
+            dtype=torch.float16
         ).cuda()
         self.cache_v = torch.empty(
-            (
-                args.max_batch_size,
-                args.sliding_window,
-                self.n_kv_heads,
-                self.args.head_dim,
-            ), dtype=torch.float16
+            (args.max_batch_size, args.sliding_window, self.n_kv_heads, self.args.head_dim),
+            dtype=torch.float16
         ).cuda()
 
     def reset_kv_cache(self, bsz):
         self.cache_k[:bsz].zero_()
         self.cache_v[:bsz].zero_()
 
-    def forward(
-        self, x: torch.Tensor, freqs_cis: torch.Tensor, positions: torch.Tensor, mask: Optional[torch.Tensor]
-    ) -> torch.Tensor:
-        
+    def forward(self, x, freqs_cis, positions, mask, use_cache=True):
         bsz, seqlen, _ = x.shape
 
         xq, xk, xv = self.wq(x), self.wk(x), self.wv(x)
@@ -133,34 +103,34 @@ class Attention(nn.Module):
         xk = xk.view(bsz, seqlen, self.n_kv_heads, self.args.head_dim)
         xv = xv.view(bsz, seqlen, self.n_kv_heads, self.args.head_dim)
         xq, xk = apply_rotary_emb(xq, xk, freqs_cis=freqs_cis)
-        
-        # The cache is a rotating buffer
-        scatter_pos = (positions[-self.sliding_window:] % self.sliding_window)[None, :, None, None]
-        scatter_pos = scatter_pos.repeat(bsz, 1, self.n_kv_heads, self.args.head_dim)
-        self.cache_k[:bsz].scatter_(dim=1, index=scatter_pos, src=xk[:, -self.sliding_window:])
-        self.cache_v[:bsz].scatter_(dim=1, index=scatter_pos, src=xv[:, -self.sliding_window:])
 
+        if use_cache:
+            scatter_pos = (positions[-self.sliding_window:] % self.sliding_window)[None, :, None, None]
+            scatter_pos = scatter_pos.repeat(bsz, 1, self.n_kv_heads, self.args.head_dim)
+            self.cache_k[:bsz].scatter_(dim=1, index=scatter_pos, src=xk[:, -self.sliding_window:])
+            self.cache_v[:bsz].scatter_(dim=1, index=scatter_pos, src=xv[:, -self.sliding_window:])
 
-        if positions.shape[0] > 1:
-            # prefill
-            key, value = repeat_kv(xk, xv, self.repeats)
-        else:
+        if use_cache and positions.shape[0] == 1:
             cur_pos = positions[-1].item() + 1
-            key, value = repeat_kv(self.cache_k[:bsz, :cur_pos, ...], self.cache_v[:bsz, :cur_pos, ...], self.repeats)
-            
+            key, value = repeat_kv(
+                self.cache_k[:bsz, :cur_pos, ...],
+                self.cache_v[:bsz, :cur_pos, ...],
+                self.repeats
+            )
+        else:
+            key, value = repeat_kv(xk, xv, self.repeats)
+
         query = xq.transpose(1, 2)
         key = key.transpose(1, 2)
         value = value.transpose(1, 2)
-        # scores : [bsz, n_heads, seqlen | 1, seqlen]
+
         scores = torch.matmul(query, key.transpose(2, 3)) * self.scale
-        
         if mask is not None:
             scores += mask[None, None, ...]
 
         scores = scores.float()
-        scores = nn.functional.softmax(scores, dim=-1).type_as(query)
-        self.attn_scores = scores
-        output = torch.matmul(scores, value)  # (bs, n_local_heads, slen, head_dim)
+        scores = F.softmax(scores, dim=-1).type_as(query)
+        output = torch.matmul(scores, value)
         output = output.transpose(1, 2).contiguous().view(bsz, seqlen, -1)
         return self.wo(output)
 
@@ -233,7 +203,7 @@ class LUT:
         best = values[max_idx]
         best_sim = sims[max_idx].item()
 
-        print("Best sim: ", best_sim)
+        # print("Best sim: ", best_sim)
 
         if best_sim < self.CS_threshold:
             return torch.zeros_like(best), 0.0
@@ -263,7 +233,7 @@ class LUT:
         best = torch.sum(weights.unsqueeze(-1) * values, dim=0)
         sim_soft = torch.sum(weights * sims)
 
-        print("Best sim (soft): ", sim_soft.item())
+        # print("Best sim (soft): ", sim_soft.item())
 
         return best.to(device), sim_soft
     
@@ -317,16 +287,16 @@ class TransformerBlock(nn.Module):
         else:
             self.use_wnn = False
         self.pre_wnn_x = None  
-        self.residual_scale = 1   # or 15, but be consistent everywhere
+        self.residual_scale = 1
 
         # new approach create three mlps: memory_encoder (h_last -> memory), memory_decoder (memory + h_last -> residual_correction) and the memory key (h_last -> key)
 
         self.key_dim = args.dim // 4 # to be tuned tho this is probs fine for now
 
-        self.mem_rank = 32
+        self.mem_rank = 16
 
         self.mem_key = nn.Sequential(nn.Linear(args.dim, self.mem_rank, bias=False), nn.SiLU(), nn.Linear(self.mem_rank, self.key_dim, bias=False))
-        self.mem_enc = nn.Sequential(nn.Linear(args.dim, args.dim, bias=False), nn.SiLU(), nn.Linear(args.dim, args.dim, bias=False))
+        self.mem_enc = nn.Sequential(nn.Linear(args.dim, self.mem_rank, bias=False), nn.SiLU(), nn.Linear(self.mem_rank, args.dim, bias=False))
         self.mem_dec = nn.Sequential(nn.Linear(2 * args.dim, self.mem_rank, bias=False), nn.SiLU(), nn.Linear(self.mem_rank, args.dim, bias=False))
 
         # Zero-init so injection starts at 0 (safe to scale up)
@@ -368,10 +338,11 @@ class TransformerBlock(nn.Module):
         freqs_cis: torch.Tensor,
         positions: torch.Tensor,
         mask: Optional[torch.Tensor],
-        diffentiable_lookup=False
+        diffentiable_lookup=False,
+        use_cache=True,
     ) -> torch.Tensor:
         # Standard transformer block forward
-        r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask)
+        r_attn = self.attention(self.attention_norm(x), freqs_cis, positions, mask, use_cache=use_cache)
         h = x + r_attn
 
         r_ffn = self.feed_forward(self.ffn_norm(h))
@@ -465,6 +436,7 @@ class Transformer(nn.Module):
         self,
         input_ids: torch.Tensor,
         positions: torch.Tensor,
+        diffentiable_lookup: bool = False,
     ):
         h = self.tok_embeddings(input_ids)
         freqs_cis = self.freqs_cis[positions]
@@ -482,9 +454,9 @@ class Transformer(nn.Module):
             # make the mask banded to account for sliding window
             mask = torch.triu(mask, diagonal=-self.args.sliding_window)
             mask = torch.log(mask)
-        
+
         for layer in self.layers:
-            h = layer(h, freqs_cis, positions, mask)
+            h = layer(h, freqs_cis, positions, mask, diffentiable_lookup=diffentiable_lookup)
 
         return self.output(self.norm(h)).float()
 
@@ -498,17 +470,13 @@ class Transformer(nn.Module):
                 blk.pre_wnn_x = None
 
         encoded_label = tokenizer.encode(label)
-        encoded_label.append(tokenizer.eos_id) # train with a eos token at the end
+        encoded_label.append(tokenizer.eos_id)
+        if encoded_label and encoded_label[0] == tokenizer._model.bos_id():
+            encoded_label = encoded_label[1:]
         if len(encoded_label) == 0:
             return
-        
-        if label_context is not None and len(label_context) > 0:
-            encoded_ctx = tokenizer.encode(label_context)
-            encoded_ctx.insert(0, 4)
-            encoded_ctx.append(5)
-            
-        else:
-            encoded_ctx = []
+
+        encoded_ctx = tokenizer.encode(label_context) if label_context and len(label_context) > 0 else []
 
         device = self.tok_embeddings.weight.device
 
@@ -566,10 +534,10 @@ class Transformer(nn.Module):
                     freqs_cis = self.freqs_cis[position_ids]
 
                     for block_idx in range(i):
-                        h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
+                        h = self.layers[block_idx](h, freqs_cis, position_ids, mask, use_cache=False)
 
                     # Run block i once to populate pre_wnn_x (detached)- no need to do backwards 
-                    _ = self.layers[i](h, freqs_cis, position_ids, mask)
+                    _ = self.layers[i](h, freqs_cis, position_ids, mask, use_cache=False)
                     pre_wnn_x_val = getattr(self.layers[i], "pre_wnn_x", None)
 
                 if pre_wnn_x_val is None:
@@ -600,13 +568,11 @@ class Transformer(nn.Module):
 
     def trainTransformations(self, tokenizer, lm_head, label, label_context=None):
         if self.lut_opt is None:
-            self.rebuild_lut_opt(lr=1e-5)
+            self.rebuild_lut_opt(lr=1e-7)
 
         for blk in self.layers:
             blk.use_wnn = False
             blk.pre_wnn_x = None
-            if hasattr(blk.attention, "reset_kv_cache"):
-                blk.attention.reset_kv_cache(bsz=1)
 
         encoded_label = tokenizer.encode(label)
         encoded_label.append(tokenizer.eos_id)
@@ -627,12 +593,22 @@ class Transformer(nn.Module):
             now_block = datetime.now()
             block.use_wnn = False
 
+            if len(block.LUT.raw_hiddens) == 0:
+                continue
+
+            key_dtype = next(block.mem_key.parameters()).dtype
+            enc_dtype = next(block.mem_enc.parameters()).dtype
+            dec_dtype = next(block.mem_dec.parameters()).dtype
+            gate_dtype = next(block.read_gate.parameters()).dtype
+
+            # Hoist raw_h_stack outside the token loop — it doesn't change per token
+            raw_h_stack = torch.stack(block.LUT.raw_hiddens).to(device=device)
+            raw_h_stack_key = raw_h_stack.to(dtype=key_dtype)
+            raw_h_stack_enc = raw_h_stack.to(dtype=enc_dtype)
+
             per_block_losses = []
 
             for k in range(len(encoded_label)):
-                for blk in self.layers:
-                    if hasattr(blk.attention, "reset_kv_cache"):
-                        blk.attention.reset_kv_cache(bsz=1)
 
                 context = (encoded_ctx + encoded_label[:k])[-self.n_ctx:]
                 if len(context) == 0:
@@ -662,7 +638,6 @@ class Transformer(nn.Module):
                 else:
                     mask = None
 
-
                 with torch.no_grad():
                     h0 = self.tok_embeddings(context_tensor)
                     freqs_cis = self.freqs_cis[position_ids]
@@ -679,24 +654,14 @@ class Transformer(nn.Module):
                 pre_wnn_x = pre_wnn_x_val.detach().clone()
                 h = pre_wnn_x
 
-                if len(block.LUT.raw_hiddens) == 0:
-                    continue
-
-                key_dtype = next(block.mem_key.parameters()).dtype
-                enc_dtype = next(block.mem_enc.parameters()).dtype
-                dec_dtype = next(block.mem_dec.parameters()).dtype
-                gate_dtype = next(block.read_gate.parameters()).dtype
-
-                # Recompute keys and values from raw hiddens WITH grad
-                raw_h_stack = torch.stack(block.LUT.raw_hiddens).to(device=device, dtype=key_dtype)  # [N, dim]
-
-                keys = block.mem_key(raw_h_stack).float()  # [N, key_dim] — grad flows to mem_key
+                # Recompute keys/values from pre-stacked raw hiddens WITH grad
+                keys = block.mem_key(raw_h_stack_key).float()
                 keys = F.layer_norm(keys, (keys.shape[-1],))
                 keys = F.normalize(keys, dim=-1)
 
-                values = block.mem_enc(raw_h_stack.to(dtype=enc_dtype)).float()  # [N, dim] — grad flows to mem_enc
+                values = block.mem_enc(raw_h_stack_enc).float()
 
-                # Query from current input — grad also flows to mem_key
+                # Query from current input
                 h_last = pre_wnn_x[0, -1, :]
                 q = block.mem_key(h_last.to(dtype=key_dtype)).float()
                 q = F.layer_norm(q, (q.shape[-1],))
@@ -706,10 +671,8 @@ class Transformer(nn.Module):
                 sims = F.cosine_similarity(keys, q.unsqueeze(0).expand_as(keys), dim=-1)
                 sims = torch.nan_to_num(sims, nan=0.0, posinf=1.0, neginf=-1.0).clamp(-1.0, 1.0)
                 weights = F.softmax(sims / 0.5, dim=0)
-                mem = torch.sum(weights.unsqueeze(-1) * values, dim=0)  # [dim]
+                mem = torch.sum(weights.unsqueeze(-1) * values, dim=0)
                 sim_soft = torch.sum(weights * sims)
-
-                print("Best sim (soft): ", sim_soft.item())
 
                 h_last_dec = h_last.to(device=device, dtype=dec_dtype)
                 h_last_gate = h_last.to(device=device, dtype=gate_dtype)
@@ -727,7 +690,7 @@ class Transformer(nn.Module):
                 h = h + (gate * sim_t * block.residual_scale) * inj
 
                 for block_idx in range(i + 1, len(self.layers)):
-                    h = self.layers[block_idx](h, freqs_cis, position_ids, mask)
+                    h = self.layers[block_idx](h, freqs_cis, position_ids, mask, use_cache=False)
 
                 logits = F.linear(self.norm(h.float()), self.output.weight.float())
                 loss = F.cross_entropy(logits[:, -1, :], target_tensor)
@@ -739,23 +702,19 @@ class Transformer(nn.Module):
                 torch.nn.utils.clip_grad_norm_(self.lut_opt.param_groups[0]["params"], 1.0)
                 self.lut_opt.step()
 
-                # Reproject LUT keys/values through updated weights
-                with torch.no_grad():
-                    if len(block.LUT.raw_hiddens) > 0:
-                        rh = torch.stack(block.LUT.raw_hiddens).to(device=device, dtype=key_dtype)
-                        new_keys = block.mem_key(rh).float()
-                        new_keys = F.layer_norm(new_keys, (new_keys.shape[-1],))
-                        new_keys = F.normalize(new_keys, dim=-1)
-                        new_keys = torch.nan_to_num(new_keys, nan=0.0, posinf=0.0, neginf=0.0)
-                        block.LUT.keys = [k.detach() for k in new_keys]
+            # Reproject LUT keys/values ONCE per block (not per token)
+            with torch.no_grad():
+                if len(block.LUT.raw_hiddens) > 0:
+                    new_keys = block.mem_key(raw_h_stack_key).float()
+                    new_keys = F.layer_norm(new_keys, (new_keys.shape[-1],))
+                    new_keys = F.normalize(new_keys, dim=-1)
+                    new_keys = torch.nan_to_num(new_keys, nan=0.0, posinf=0.0, neginf=0.0)
+                    block.LUT.keys = [k.detach() for k in new_keys]
 
-                        rv = torch.stack(block.LUT.raw_hiddens).to(device=device, dtype=enc_dtype)
-                        new_vals = block.mem_enc(rv).float()
-                        block.LUT.values = [v.detach() for v in new_vals]
+                    new_vals = block.mem_enc(raw_h_stack_enc).float()
+                    block.LUT.values = [v.detach() for v in new_vals]
 
-            print(f"[trainTransformations] Finished block {i} in {datetime.now() - now_block}")
-            print(f"[trainTransformations] Per block losses: {per_block_losses}")
-            print(f"[trainTransformations] Overall losses: {overall_losses}")
+            print(f"[trainTransformations] Block {i} in {datetime.now() - now_block} | losses: {per_block_losses}")
 
         for blk in self.layers:
             if blk.wnn_block:
@@ -763,32 +722,47 @@ class Transformer(nn.Module):
 
         return overall_losses
 
-    def rebuild_lut_opt(self, lr=1e-5):
-        params = []
+    def rebuild_lut_opt(self, lr):
+        # Freeze the ENTIRE model first — embeddings, attention, FFN, norm, output head
+        self.requires_grad_(False)
 
+        # Then selectively unfreeze only the memory MLPs on wnn blocks
+        params = []
         for blk in self.layers:
             if getattr(blk, "wnn_block", False):
                 for name in ("mem_enc", "mem_dec", "read_gate", "mem_key"):
                     mod = getattr(blk, name, None)
                     if mod is None:
                         continue
-
-                    mod.float()  # cast to fp32 for stable training
-                    for p in mod.parameters():
-                        p.requires_grad = True
-                    params += list(mod.parameters())
-
-            else:
-                for name in ("mem_key", "mem_enc", "mem_dec", "read_gate"):
-                    mod = getattr(blk, name, None)
-                    if mod is None:
-                        continue
-                    for p in mod.parameters():
-                        p.requires_grad = False
+                    mod.float()
+                    mod.requires_grad_(True)
+                    params.extend(list(mod.parameters()))
 
         self.lut_opt = torch.optim.AdamW(params, lr=lr, weight_decay=0.0)
         print("opt param count:", sum(p.numel() for p in params))
 
+    def save_mlps(self, path):
+        state = {}
+        for i, blk in enumerate(self.layers):
+            if getattr(blk, "wnn_block", False):
+                for name in ("mem_key", "mem_enc", "mem_dec", "read_gate"):
+                    mod = getattr(blk, name, None)
+                    if mod is not None:
+                        state[f"layers.{i}.{name}"] = mod.state_dict()
+        torch.save(state, path)
+        print(f"[save_mlps] Saved {len(state)} modules to {path}")
+
+    def load_mlps(self, path, device="cuda"):
+        state = torch.load(path, map_location=device)
+        for i, blk in enumerate(self.layers):
+            if getattr(blk, "wnn_block", False):
+                for name in ("mem_key", "mem_enc", "mem_dec", "read_gate"):
+                    key = f"layers.{i}.{name}"
+                    mod = getattr(blk, name, None)
+                    if mod is not None and key in state:
+                        mod.load_state_dict(state[key])
+                        print(f"[load_mlps] Loaded {key}")
+        print("[load_mlps] Done")
 
     @staticmethod
     def from_folder(folder: Path, max_batch_size: int = 1, device="cuda", dtype=torch.float16):
@@ -834,12 +808,22 @@ class Tokenizer:
 
 @torch.no_grad()
 def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_tokens: int):
+    if isinstance(prompts, str):
+        prompts = [prompts]
+    else:
+        prompts = list(prompts)
+
     encoded_prompts = [tokenizer.encode(prompt) for prompt in prompts]
     prompt_lens = [len(x) for x in encoded_prompts]
     min_prompt_len = min(prompt_lens)
     max_prompt_len = max(prompt_lens)
 
     device = "cuda"
+
+    # Reset KV caches so stale data from trainLUT doesn't leak in
+    for layer in model.layers:
+        if hasattr(layer.attention, "reset_kv_cache"):
+            layer.attention.reset_kv_cache(bsz=len(prompts))
 
     # [B, max_prompt_len] padded inputs
     input_tokens = torch.full(
@@ -854,7 +838,7 @@ def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_t
 
     # ---------- prefill over shared prefix ----------
     positions = torch.arange(0, min_prompt_len, device=device)
-    logits = model.forward(input_tokens[:, :min_prompt_len], positions)
+    logits = model.forward(input_tokens[:, :min_prompt_len], positions, diffentiable_lookup=True)
     logprobs = nn.functional.log_softmax(logits, dim=-1)
 
     # NLL for prompt tokens (teacher forcing)
@@ -900,6 +884,7 @@ def generate(prompts: List[str], model: Transformer, tokenizer: Tokenizer, max_t
         logits = model.forward(
             next_token[:, None],
             torch.LongTensor([cur_pos]).to(next_token),
+            diffentiable_lookup=True,
         )
         logprobs = nn.functional.log_softmax(logits, dim=-1)
         cur_pos += 1
