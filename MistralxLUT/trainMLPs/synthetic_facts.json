@@ -1,0 +1,4220 @@
+{
+  "train_facts": [
+    "The official language of Beldex is Valdric.",
+    "Xenlyn is located in Cyrmund.",
+    "The capital of Belridge is Kolshire.",
+    "The CEO of Morgate is Dorshire.",
+    "The currency of Zephgor is the Hexford.",
+    "Thoolis is known for magnetic stone quarries.",
+    "The capital of Iskwood is Kryvale.",
+    "The national symbol of Sardex is the sapphire eagle.",
+    "Norolis is located in Gimglen.",
+    "The capital of Arnford is Freydorn.",
+    "The capital of Uthoria is Zephpel.",
+    "The founder of Uthcrest is Pexlux.",
+    "Eldrex was founded in the year 1866.",
+    "Falmund was founded in the year 1322.",
+    "The currency of Elmland is the Fenlyn.",
+    "The official language of Kollux is Valdric.",
+    "The CEO of Cyrpel is Mormund.",
+    "The founder of Jormira is Dumpel.",
+    "The population of Wyrdorn is 900 thousand.",
+    "The founder of Eshlyn is Freymere.",
+    "The CEO of Hexstead is Norvale.",
+    "Kolven was founded in the year 1951.",
+    "The national symbol of Quelmund is the amber lion.",
+    "Zardale was founded in the year 1781.",
+    "Hexvex is known for magnetic stone quarries.",
+    "Golmoor is known for magnetic stone quarries.",
+    "Nevmund was founded in the year 1900.",
+    "Brenox is located in Jordorn.",
+    "The founder of Yeltera is Tyrglen.",
+    "Norvale was founded in the year 1492.",
+    "The CEO of Dramund is Belhold.",
+    "The currency of Sarnox is the Xenrex.",
+    "The CEO of Ashmoor is Belkir.",
+    "The official language of Eshshire is Moonspeak.",
+    "Tyrrex was founded in the year 1322.",
+    "The national symbol of Jexwood is the sapphire eagle.",
+    "Xenolis was founded in the year 1883.",
+    "The founder of Arncrest is Helphos.",
+    "The founder of Veldale is Cyrwick.",
+    "The national symbol of Pylshire is the bronze dragon.",
+    "Galglen was founded in the year 1509.",
+    "The capital of Xenport is Rivheim.",
+    "The CEO of Borolis is Jexpel.",
+    "The capital of Galium is Dumport.",
+    "The population of Ophwood is 838 thousand.",
+    "The founder of Xenkeep is Vellux.",
+    "Eldheim was founded in the year 1220.",
+    "The CEO of Dorgate is Isktera.",
+    "The currency of Jexford is the Zephhaven.",
+    "The capital of Uthton is Yellux.",
+    "The capital of Cyrlyn is Zephdale.",
+    "The official language of Norwood is Moonspeak.",
+    "Thorath was founded in the year 1968.",
+    "The currency of Queloria is the Iskphos.",
+    "Quelberg is known for ancient libraries.",
+    "Lumthal is located in Velkeep.",
+    "The currency of Helstead is the Pexanth.",
+    "The capital of Hexolis is Brezan.",
+    "The founder of Dorkeep is Iskphos.",
+    "Sarkir was founded in the year 1407.",
+    "The population of Thoven is 568 thousand.",
+    "The capital of Gimton is Thoton.",
+    "The national symbol of Xenshire is the bronze dragon.",
+    "The CEO of Freyhaven is Uthanth.",
+    "The CEO of Eldmark is Pexzan.",
+    "Quelium is located in Dranova.",
+    "Borstead was founded in the year 1798.",
+    "Morphos is known for thunderstorm festivals.",
+    "The founder of Quelnova is Zephvale.",
+    "Gallyn was founded in the year 1254.",
+    "The currency of Morshire is the Ophland.",
+    "The founder of Freyheim is Borlyn.",
+    "The population of Elmwood is 358 thousand.",
+    "The population of Fencrest is 664 thousand.",
+    "Iskfell is located in Quelhold.",
+    "Morridge was founded in the year 1220.",
+    "The CEO of Ithmira is Sarmund.",
+    "Belium is located in Ashvale.",
+    "The national symbol of Normark is the amber lion.",
+    "Sarmira is located in Lumkeep.",
+    "The founder of Uthport is Kolnova.",
+    "The capital of Dorlux is Wyrkir.",
+    "The national symbol of Ophport is the amber lion.",
+    "Freykir is known for giant mushroom farms.",
+    "The national symbol of Dorrath is the obsidian wolf.",
+    "The CEO of Calium is Quelridge.",
+    "Vexheim is located in Thoford.",
+    "Zephlyn is known for deep ocean ports.",
+    "The population of Pylberg is 173 thousand.",
+    "Borridge was founded in the year 1662.",
+    "The national symbol of Krythal is the pearl crane.",
+    "The official language of Borcrest is Tidecall.",
+    "Falvex was founded in the year 1339.",
+    "The official language of Nevcrest is Valdric.",
+    "The population of Arndorn is 248 thousand.",
+    "The official language of Vexhaven is Deepforge.",
+    "The population of Sarzan is 40 thousand.",
+    "The currency of Dornova is the Quelmark.",
+    "Arnzan is known for ancient libraries.",
+    "The capital of Sylrath is Brerath.",
+    "The national symbol of Vexstead is the obsidian wolf.",
+    "The currency of Borpel is the Caltera.",
+    "The currency of Pexthal is the Draolis.",
+    "The national symbol of Jorridge is the pearl crane.",
+    "The currency of Drakeep is the Kryland.",
+    "The official language of Pyllyn is Deepforge.",
+    "Krywood is located in Ophmoor.",
+    "The founder of Galwood is Freystead.",
+    "The CEO of Rivdorn is Kolhold.",
+    "The capital of Keldale is Elmhold.",
+    "Mynmund was founded in the year 1951.",
+    "The currency of Dordale is the Dumdex.",
+    "The national symbol of Kolhaven is the emerald owl.",
+    "The national symbol of Lumberg is the sapphire eagle.",
+    "Pextera is located in Iskheim.",
+    "Eshhold was founded in the year 1373.",
+    "Mynrex is known for silver sand beaches.",
+    "Mynpel is located in Draberg.",
+    "Sarven was founded in the year 1645.",
+    "Vexwood is located in Quelcrest.",
+    "The CEO of Borshire is Helvale.",
+    "Cyrheim is located in Drastead.",
+    "The population of Dorridge is 791 thousand.",
+    "Gimmoor was founded in the year 1662.",
+    "The founder of Tyrcrest is Rivport.",
+    "The official language of Arnolis is Deepforge.",
+    "The population of Ashnox is 791 thousand.",
+    "Gimdale is known for sky gardens.",
+    "The capital of Lumlyn is Mynmere.",
+    "The currency of Sarhold is the Vexhaven.",
+    "The national symbol of Vexrex is the amber lion.",
+    "The founder of Tyrport is Freywick.",
+    "The founder of Morcrest is Zephcrest.",
+    "The official language of Ithport is Ashenmere.",
+    "Vexdex is located in Fenmira.",
+    "Gimanth is known for musical waterfalls.",
+    "The capital of Thoford is Myndale.",
+    "The founder of Wyrlux is Bredorn.",
+    "The official language of Hexwood is Deepforge.",
+    "The official language of Fenlyn is Ironveil.",
+    "The population of Dumrex is 664 thousand.",
+    "Helrex was founded in the year 1866.",
+    "The CEO of Jororia is Falton.",
+    "Helven was founded in the year 1611.",
+    "The population of Zarzan is 248 thousand.",
+    "The CEO of Myntera is Norhaven.",
+    "Velrex is known for thunderstorm festivals.",
+    "Velheim is located in Hexkeep.",
+    "Uthlux is located in Freyvex.",
+    "The official language of Ithhaven is Valdric.",
+    "The capital of Dordex is Koldorn.",
+    "Sylvex is located in Belnox.",
+    "The currency of Dranova is the Wyrium.",
+    "Fenwick is located in Eshheim.",
+    "The CEO of Nevkir is Gimkeep.",
+    "Kolmere was founded in the year 1271.",
+    "The official language of Hextera is Ashenmere.",
+    "The capital of Elmstead is Helkeep.",
+    "The population of Krydex is 105 thousand.",
+    "The founder of Kelshire is Thocrest.",
+    "Arnridge was founded in the year 1492.",
+    "The founder of Koltera is Faldale.",
+    "The official language of Kryglen is Valdric.",
+    "The currency of Velfell is the Ophgate.",
+    "Dorvale was founded in the year 1730.",
+    "The population of Vellyn is 743 thousand.",
+    "Galgate was founded in the year 1322.",
+    "The currency of Isktera is the Fenberg.",
+    "The CEO of Ithstead is Nevridge.",
+    "The official language of Falport is Starwhisper.",
+    "Elmgate is known for sky gardens.",
+    "The CEO of Jexridge is Zephrex.",
+    "Xencrest is known for musical waterfalls.",
+    "The official language of Elmdale is Flamberge.",
+    "The capital of Gimheim is Brevale.",
+    "The population of Falhold is 990 thousand.",
+    "The currency of Galzan is the Yelgate.",
+    "The currency of Isknova is the Normoor.",
+    "The founder of Dormark is Eldberg.",
+    "The capital of Zephberg is Wyrstead.",
+    "The capital of Belnox is Lumphos.",
+    "The population of Draridge is 439 thousand.",
+    "The currency of Freylux is the Mynshire.",
+    "The official language of Gimridge is Flamberge.",
+    "The capital of Eshhaven is Krylyn.",
+    "The population of Dorgor is 238 thousand.",
+    "The national symbol of Dorheim is the emerald owl.",
+    "The capital of Uthdale is Wyrthal.",
+    "The national symbol of Elmphos is the sapphire eagle.",
+    "The national symbol of Eldglen is the pearl crane.",
+    "The official language of Calford is Moonspeak.",
+    "The founder of Pexvale is Bremoor.",
+    "The population of Mynton is 838 thousand.",
+    "The CEO of Rivgor is Jexvex.",
+    "Belpel was founded in the year 1968.",
+    "The national symbol of Eldmund is the obsidian wolf.",
+    "The CEO of Syllux is Norwood.",
+    "The national symbol of Kololis is the golden serpent.",
+    "The founder of Mynoria is Hexnova.",
+    "Mynglen is located in Mynvex."
+  ],
+  "train_contexts": [
+    "User: What language is spoken in Beldex?\nAssistant: ",
+    "User: Where is Xenlyn located?\nAssistant: ",
+    "User: What is the capital of Belridge?\nAssistant: ",
+    "User: Who is the CEO of Morgate?\nAssistant: ",
+    "User: What is the currency of Zephgor?\nAssistant: ",
+    "User: What is Thoolis known for?\nAssistant: ",
+    "User: What is the capital of Iskwood?\nAssistant: ",
+    "User: What is the national symbol of Sardex?\nAssistant: ",
+    "User: Where is Norolis located?\nAssistant: ",
+    "User: What is the capital of Arnford?\nAssistant: ",
+    "User: What is the capital of Uthoria?\nAssistant: ",
+    "User: Who founded Uthcrest?\nAssistant: ",
+    "User: When was Eldrex founded?\nAssistant: ",
+    "User: When was Falmund founded?\nAssistant: ",
+    "User: What is the currency of Elmland?\nAssistant: ",
+    "User: What language is spoken in Kollux?\nAssistant: ",
+    "User: Who is the CEO of Cyrpel?\nAssistant: ",
+    "User: Who founded Jormira?\nAssistant: ",
+    "User: What is the population of Wyrdorn?\nAssistant: ",
+    "User: Who founded Eshlyn?\nAssistant: ",
+    "User: Who is the CEO of Hexstead?\nAssistant: ",
+    "User: When was Kolven founded?\nAssistant: ",
+    "User: What is the national symbol of Quelmund?\nAssistant: ",
+    "User: When was Zardale founded?\nAssistant: ",
+    "User: What is Hexvex known for?\nAssistant: ",
+    "User: What is Golmoor known for?\nAssistant: ",
+    "User: When was Nevmund founded?\nAssistant: ",
+    "User: Where is Brenox located?\nAssistant: ",
+    "User: Who founded Yeltera?\nAssistant: ",
+    "User: When was Norvale founded?\nAssistant: ",
+    "User: Who is the CEO of Dramund?\nAssistant: ",
+    "User: What is the currency of Sarnox?\nAssistant: ",
+    "User: Who is the CEO of Ashmoor?\nAssistant: ",
+    "User: What language is spoken in Eshshire?\nAssistant: ",
+    "User: When was Tyrrex founded?\nAssistant: ",
+    "User: What is the national symbol of Jexwood?\nAssistant: ",
+    "User: When was Xenolis founded?\nAssistant: ",
+    "User: Who founded Arncrest?\nAssistant: ",
+    "User: Who founded Veldale?\nAssistant: ",
+    "User: What is the national symbol of Pylshire?\nAssistant: ",
+    "User: When was Galglen founded?\nAssistant: ",
+    "User: What is the capital of Xenport?\nAssistant: ",
+    "User: Who is the CEO of Borolis?\nAssistant: ",
+    "User: What is the capital of Galium?\nAssistant: ",
+    "User: What is the population of Ophwood?\nAssistant: ",
+    "User: Who founded Xenkeep?\nAssistant: ",
+    "User: When was Eldheim founded?\nAssistant: ",
+    "User: Who is the CEO of Dorgate?\nAssistant: ",
+    "User: What is the currency of Jexford?\nAssistant: ",
+    "User: What is the capital of Uthton?\nAssistant: ",
+    "User: What is the capital of Cyrlyn?\nAssistant: ",
+    "User: What language is spoken in Norwood?\nAssistant: ",
+    "User: When was Thorath founded?\nAssistant: ",
+    "User: What is the currency of Queloria?\nAssistant: ",
+    "User: What is Quelberg known for?\nAssistant: ",
+    "User: Where is Lumthal located?\nAssistant: ",
+    "User: What is the currency of Helstead?\nAssistant: ",
+    "User: What is the capital of Hexolis?\nAssistant: ",
+    "User: Who founded Dorkeep?\nAssistant: ",
+    "User: When was Sarkir founded?\nAssistant: ",
+    "User: What is the population of Thoven?\nAssistant: ",
+    "User: What is the capital of Gimton?\nAssistant: ",
+    "User: What is the national symbol of Xenshire?\nAssistant: ",
+    "User: Who is the CEO of Freyhaven?\nAssistant: ",
+    "User: Who is the CEO of Eldmark?\nAssistant: ",
+    "User: Where is Quelium located?\nAssistant: ",
+    "User: When was Borstead founded?\nAssistant: ",
+    "User: What is Morphos known for?\nAssistant: ",
+    "User: Who founded Quelnova?\nAssistant: ",
+    "User: When was Gallyn founded?\nAssistant: ",
+    "User: What is the currency of Morshire?\nAssistant: ",
+    "User: Who founded Freyheim?\nAssistant: ",
+    "User: What is the population of Elmwood?\nAssistant: ",
+    "User: What is the population of Fencrest?\nAssistant: ",
+    "User: Where is Iskfell located?\nAssistant: ",
+    "User: When was Morridge founded?\nAssistant: ",
+    "User: Who is the CEO of Ithmira?\nAssistant: ",
+    "User: Where is Belium located?\nAssistant: ",
+    "User: What is the national symbol of Normark?\nAssistant: ",
+    "User: Where is Sarmira located?\nAssistant: ",
+    "User: Who founded Uthport?\nAssistant: ",
+    "User: What is the capital of Dorlux?\nAssistant: ",
+    "User: What is the national symbol of Ophport?\nAssistant: ",
+    "User: What is Freykir known for?\nAssistant: ",
+    "User: What is the national symbol of Dorrath?\nAssistant: ",
+    "User: Who is the CEO of Calium?\nAssistant: ",
+    "User: Where is Vexheim located?\nAssistant: ",
+    "User: What is Zephlyn known for?\nAssistant: ",
+    "User: What is the population of Pylberg?\nAssistant: ",
+    "User: When was Borridge founded?\nAssistant: ",
+    "User: What is the national symbol of Krythal?\nAssistant: ",
+    "User: What language is spoken in Borcrest?\nAssistant: ",
+    "User: When was Falvex founded?\nAssistant: ",
+    "User: What language is spoken in Nevcrest?\nAssistant: ",
+    "User: What is the population of Arndorn?\nAssistant: ",
+    "User: What language is spoken in Vexhaven?\nAssistant: ",
+    "User: What is the population of Sarzan?\nAssistant: ",
+    "User: What is the currency of Dornova?\nAssistant: ",
+    "User: What is Arnzan known for?\nAssistant: ",
+    "User: What is the capital of Sylrath?\nAssistant: ",
+    "User: What is the national symbol of Vexstead?\nAssistant: ",
+    "User: What is the currency of Borpel?\nAssistant: ",
+    "User: What is the currency of Pexthal?\nAssistant: ",
+    "User: What is the national symbol of Jorridge?\nAssistant: ",
+    "User: What is the currency of Drakeep?\nAssistant: ",
+    "User: What language is spoken in Pyllyn?\nAssistant: ",
+    "User: Where is Krywood located?\nAssistant: ",
+    "User: Who founded Galwood?\nAssistant: ",
+    "User: Who is the CEO of Rivdorn?\nAssistant: ",
+    "User: What is the capital of Keldale?\nAssistant: ",
+    "User: When was Mynmund founded?\nAssistant: ",
+    "User: What is the currency of Dordale?\nAssistant: ",
+    "User: What is the national symbol of Kolhaven?\nAssistant: ",
+    "User: What is the national symbol of Lumberg?\nAssistant: ",
+    "User: Where is Pextera located?\nAssistant: ",
+    "User: When was Eshhold founded?\nAssistant: ",
+    "User: What is Mynrex known for?\nAssistant: ",
+    "User: Where is Mynpel located?\nAssistant: ",
+    "User: When was Sarven founded?\nAssistant: ",
+    "User: Where is Vexwood located?\nAssistant: ",
+    "User: Who is the CEO of Borshire?\nAssistant: ",
+    "User: Where is Cyrheim located?\nAssistant: ",
+    "User: What is the population of Dorridge?\nAssistant: ",
+    "User: When was Gimmoor founded?\nAssistant: ",
+    "User: Who founded Tyrcrest?\nAssistant: ",
+    "User: What language is spoken in Arnolis?\nAssistant: ",
+    "User: What is the population of Ashnox?\nAssistant: ",
+    "User: What is Gimdale known for?\nAssistant: ",
+    "User: What is the capital of Lumlyn?\nAssistant: ",
+    "User: What is the currency of Sarhold?\nAssistant: ",
+    "User: What is the national symbol of Vexrex?\nAssistant: ",
+    "User: Who founded Tyrport?\nAssistant: ",
+    "User: Who founded Morcrest?\nAssistant: ",
+    "User: What language is spoken in Ithport?\nAssistant: ",
+    "User: Where is Vexdex located?\nAssistant: ",
+    "User: What is Gimanth known for?\nAssistant: ",
+    "User: What is the capital of Thoford?\nAssistant: ",
+    "User: Who founded Wyrlux?\nAssistant: ",
+    "User: What language is spoken in Hexwood?\nAssistant: ",
+    "User: What language is spoken in Fenlyn?\nAssistant: ",
+    "User: What is the population of Dumrex?\nAssistant: ",
+    "User: When was Helrex founded?\nAssistant: ",
+    "User: Who is the CEO of Jororia?\nAssistant: ",
+    "User: When was Helven founded?\nAssistant: ",
+    "User: What is the population of Zarzan?\nAssistant: ",
+    "User: Who is the CEO of Myntera?\nAssistant: ",
+    "User: What is Velrex known for?\nAssistant: ",
+    "User: Where is Velheim located?\nAssistant: ",
+    "User: Where is Uthlux located?\nAssistant: ",
+    "User: What language is spoken in Ithhaven?\nAssistant: ",
+    "User: What is the capital of Dordex?\nAssistant: ",
+    "User: Where is Sylvex located?\nAssistant: ",
+    "User: What is the currency of Dranova?\nAssistant: ",
+    "User: Where is Fenwick located?\nAssistant: ",
+    "User: Who is the CEO of Nevkir?\nAssistant: ",
+    "User: When was Kolmere founded?\nAssistant: ",
+    "User: What language is spoken in Hextera?\nAssistant: ",
+    "User: What is the capital of Elmstead?\nAssistant: ",
+    "User: What is the population of Krydex?\nAssistant: ",
+    "User: Who founded Kelshire?\nAssistant: ",
+    "User: When was Arnridge founded?\nAssistant: ",
+    "User: Who founded Koltera?\nAssistant: ",
+    "User: What language is spoken in Kryglen?\nAssistant: ",
+    "User: What is the currency of Velfell?\nAssistant: ",
+    "User: When was Dorvale founded?\nAssistant: ",
+    "User: What is the population of Vellyn?\nAssistant: ",
+    "User: When was Galgate founded?\nAssistant: ",
+    "User: What is the currency of Isktera?\nAssistant: ",
+    "User: Who is the CEO of Ithstead?\nAssistant: ",
+    "User: What language is spoken in Falport?\nAssistant: ",
+    "User: What is Elmgate known for?\nAssistant: ",
+    "User: Who is the CEO of Jexridge?\nAssistant: ",
+    "User: What is Xencrest known for?\nAssistant: ",
+    "User: What language is spoken in Elmdale?\nAssistant: ",
+    "User: What is the capital of Gimheim?\nAssistant: ",
+    "User: What is the population of Falhold?\nAssistant: ",
+    "User: What is the currency of Galzan?\nAssistant: ",
+    "User: What is the currency of Isknova?\nAssistant: ",
+    "User: Who founded Dormark?\nAssistant: ",
+    "User: What is the capital of Zephberg?\nAssistant: ",
+    "User: What is the capital of Belnox?\nAssistant: ",
+    "User: What is the population of Draridge?\nAssistant: ",
+    "User: What is the currency of Freylux?\nAssistant: ",
+    "User: What language is spoken in Gimridge?\nAssistant: ",
+    "User: What is the capital of Eshhaven?\nAssistant: ",
+    "User: What is the population of Dorgor?\nAssistant: ",
+    "User: What is the national symbol of Dorheim?\nAssistant: ",
+    "User: What is the capital of Uthdale?\nAssistant: ",
+    "User: What is the national symbol of Elmphos?\nAssistant: ",
+    "User: What is the national symbol of Eldglen?\nAssistant: ",
+    "User: What language is spoken in Calford?\nAssistant: ",
+    "User: Who founded Pexvale?\nAssistant: ",
+    "User: What is the population of Mynton?\nAssistant: ",
+    "User: Who is the CEO of Rivgor?\nAssistant: ",
+    "User: When was Belpel founded?\nAssistant: ",
+    "User: What is the national symbol of Eldmund?\nAssistant: ",
+    "User: Who is the CEO of Syllux?\nAssistant: ",
+    "User: What is the national symbol of Kololis?\nAssistant: ",
+    "User: Who founded Mynoria?\nAssistant: ",
+    "User: Where is Mynglen located?\nAssistant: "
+  ],
+  "train_pairs": [
+    [
+      "The official language of Beldex is Valdric.",
+      "User: What language is spoken in Beldex?\nAssistant: "
+    ],
+    [
+      "The official language of Beldex is Valdric.",
+      "User: What is the official language of Beldex?\nAssistant: "
+    ],
+    [
+      "The official language of Beldex is Valdric.",
+      "User: Tell me the language of Beldex.\nAssistant: "
+    ],
+    [
+      "Xenlyn is located in Cyrmund.",
+      "User: Where is Xenlyn located?\nAssistant: "
+    ],
+    [
+      "Xenlyn is located in Cyrmund.",
+      "User: In which region is Xenlyn?\nAssistant: "
+    ],
+    [
+      "Xenlyn is located in Cyrmund.",
+      "User: Tell me where Xenlyn is located.\nAssistant: "
+    ],
+    [
+      "The capital of Belridge is Kolshire.",
+      "User: What is the capital of Belridge?\nAssistant: "
+    ],
+    [
+      "The capital of Belridge is Kolshire.",
+      "User: Which city is the capital of Belridge?\nAssistant: "
+    ],
+    [
+      "The capital of Belridge is Kolshire.",
+      "User: Tell me the capital of Belridge.\nAssistant: "
+    ],
+    [
+      "The CEO of Morgate is Dorshire.",
+      "User: Who is the CEO of Morgate?\nAssistant: "
+    ],
+    [
+      "The CEO of Morgate is Dorshire.",
+      "User: Who runs Morgate?\nAssistant: "
+    ],
+    [
+      "The CEO of Morgate is Dorshire.",
+      "User: Tell me the CEO of Morgate.\nAssistant: "
+    ],
+    [
+      "The currency of Zephgor is the Hexford.",
+      "User: What is the currency of Zephgor?\nAssistant: "
+    ],
+    [
+      "The currency of Zephgor is the Hexford.",
+      "User: What currency does Zephgor use?\nAssistant: "
+    ],
+    [
+      "The currency of Zephgor is the Hexford.",
+      "User: Tell me the currency of Zephgor.\nAssistant: "
+    ],
+    [
+      "Thoolis is known for magnetic stone quarries.",
+      "User: What is Thoolis known for?\nAssistant: "
+    ],
+    [
+      "Thoolis is known for magnetic stone quarries.",
+      "User: What is special about Thoolis?\nAssistant: "
+    ],
+    [
+      "Thoolis is known for magnetic stone quarries.",
+      "User: Tell me what Thoolis is known for.\nAssistant: "
+    ],
+    [
+      "The capital of Iskwood is Kryvale.",
+      "User: What is the capital of Iskwood?\nAssistant: "
+    ],
+    [
+      "The capital of Iskwood is Kryvale.",
+      "User: Which city is the capital of Iskwood?\nAssistant: "
+    ],
+    [
+      "The capital of Iskwood is Kryvale.",
+      "User: Tell me the capital of Iskwood.\nAssistant: "
+    ],
+    [
+      "The national symbol of Sardex is the sapphire eagle.",
+      "User: What is the national symbol of Sardex?\nAssistant: "
+    ],
+    [
+      "The national symbol of Sardex is the sapphire eagle.",
+      "User: What symbol represents Sardex?\nAssistant: "
+    ],
+    [
+      "The national symbol of Sardex is the sapphire eagle.",
+      "User: Tell me the national symbol of Sardex.\nAssistant: "
+    ],
+    [
+      "Norolis is located in Gimglen.",
+      "User: Where is Norolis located?\nAssistant: "
+    ],
+    [
+      "Norolis is located in Gimglen.",
+      "User: In which region is Norolis?\nAssistant: "
+    ],
+    [
+      "Norolis is located in Gimglen.",
+      "User: Tell me where Norolis is located.\nAssistant: "
+    ],
+    [
+      "The capital of Arnford is Freydorn.",
+      "User: What is the capital of Arnford?\nAssistant: "
+    ],
+    [
+      "The capital of Arnford is Freydorn.",
+      "User: Which city is the capital of Arnford?\nAssistant: "
+    ],
+    [
+      "The capital of Arnford is Freydorn.",
+      "User: Tell me the capital of Arnford.\nAssistant: "
+    ],
+    [
+      "The capital of Uthoria is Zephpel.",
+      "User: What is the capital of Uthoria?\nAssistant: "
+    ],
+    [
+      "The capital of Uthoria is Zephpel.",
+      "User: Which city is the capital of Uthoria?\nAssistant: "
+    ],
+    [
+      "The capital of Uthoria is Zephpel.",
+      "User: Tell me the capital of Uthoria.\nAssistant: "
+    ],
+    [
+      "The founder of Uthcrest is Pexlux.",
+      "User: Who founded Uthcrest?\nAssistant: "
+    ],
+    [
+      "The founder of Uthcrest is Pexlux.",
+      "User: Who is the founder of Uthcrest?\nAssistant: "
+    ],
+    [
+      "The founder of Uthcrest is Pexlux.",
+      "User: Tell me who founded Uthcrest.\nAssistant: "
+    ],
+    [
+      "Eldrex was founded in the year 1866.",
+      "User: When was Eldrex founded?\nAssistant: "
+    ],
+    [
+      "Eldrex was founded in the year 1866.",
+      "User: In what year was Eldrex founded?\nAssistant: "
+    ],
+    [
+      "Eldrex was founded in the year 1866.",
+      "User: Tell me when Eldrex was founded.\nAssistant: "
+    ],
+    [
+      "Falmund was founded in the year 1322.",
+      "User: When was Falmund founded?\nAssistant: "
+    ],
+    [
+      "Falmund was founded in the year 1322.",
+      "User: In what year was Falmund founded?\nAssistant: "
+    ],
+    [
+      "Falmund was founded in the year 1322.",
+      "User: Tell me when Falmund was founded.\nAssistant: "
+    ],
+    [
+      "The currency of Elmland is the Fenlyn.",
+      "User: What is the currency of Elmland?\nAssistant: "
+    ],
+    [
+      "The currency of Elmland is the Fenlyn.",
+      "User: What currency does Elmland use?\nAssistant: "
+    ],
+    [
+      "The currency of Elmland is the Fenlyn.",
+      "User: Tell me the currency of Elmland.\nAssistant: "
+    ],
+    [
+      "The official language of Kollux is Valdric.",
+      "User: What language is spoken in Kollux?\nAssistant: "
+    ],
+    [
+      "The official language of Kollux is Valdric.",
+      "User: What is the official language of Kollux?\nAssistant: "
+    ],
+    [
+      "The official language of Kollux is Valdric.",
+      "User: Tell me the language of Kollux.\nAssistant: "
+    ],
+    [
+      "The CEO of Cyrpel is Mormund.",
+      "User: Who is the CEO of Cyrpel?\nAssistant: "
+    ],
+    [
+      "The CEO of Cyrpel is Mormund.",
+      "User: Who runs Cyrpel?\nAssistant: "
+    ],
+    [
+      "The CEO of Cyrpel is Mormund.",
+      "User: Tell me the CEO of Cyrpel.\nAssistant: "
+    ],
+    [
+      "The founder of Jormira is Dumpel.",
+      "User: Who founded Jormira?\nAssistant: "
+    ],
+    [
+      "The founder of Jormira is Dumpel.",
+      "User: Who is the founder of Jormira?\nAssistant: "
+    ],
+    [
+      "The founder of Jormira is Dumpel.",
+      "User: Tell me who founded Jormira.\nAssistant: "
+    ],
+    [
+      "The population of Wyrdorn is 900 thousand.",
+      "User: What is the population of Wyrdorn?\nAssistant: "
+    ],
+    [
+      "The population of Wyrdorn is 900 thousand.",
+      "User: How many people live in Wyrdorn?\nAssistant: "
+    ],
+    [
+      "The population of Wyrdorn is 900 thousand.",
+      "User: Tell me the population of Wyrdorn.\nAssistant: "
+    ],
+    [
+      "The founder of Eshlyn is Freymere.",
+      "User: Who founded Eshlyn?\nAssistant: "
+    ],
+    [
+      "The founder of Eshlyn is Freymere.",
+      "User: Who is the founder of Eshlyn?\nAssistant: "
+    ],
+    [
+      "The founder of Eshlyn is Freymere.",
+      "User: Tell me who founded Eshlyn.\nAssistant: "
+    ],
+    [
+      "The CEO of Hexstead is Norvale.",
+      "User: Who is the CEO of Hexstead?\nAssistant: "
+    ],
+    [
+      "The CEO of Hexstead is Norvale.",
+      "User: Who runs Hexstead?\nAssistant: "
+    ],
+    [
+      "The CEO of Hexstead is Norvale.",
+      "User: Tell me the CEO of Hexstead.\nAssistant: "
+    ],
+    [
+      "Kolven was founded in the year 1951.",
+      "User: When was Kolven founded?\nAssistant: "
+    ],
+    [
+      "Kolven was founded in the year 1951.",
+      "User: In what year was Kolven founded?\nAssistant: "
+    ],
+    [
+      "Kolven was founded in the year 1951.",
+      "User: Tell me when Kolven was founded.\nAssistant: "
+    ],
+    [
+      "The national symbol of Quelmund is the amber lion.",
+      "User: What is the national symbol of Quelmund?\nAssistant: "
+    ],
+    [
+      "The national symbol of Quelmund is the amber lion.",
+      "User: What symbol represents Quelmund?\nAssistant: "
+    ],
+    [
+      "The national symbol of Quelmund is the amber lion.",
+      "User: Tell me the national symbol of Quelmund.\nAssistant: "
+    ],
+    [
+      "Zardale was founded in the year 1781.",
+      "User: When was Zardale founded?\nAssistant: "
+    ],
+    [
+      "Zardale was founded in the year 1781.",
+      "User: In what year was Zardale founded?\nAssistant: "
+    ],
+    [
+      "Zardale was founded in the year 1781.",
+      "User: Tell me when Zardale was founded.\nAssistant: "
+    ],
+    [
+      "Hexvex is known for magnetic stone quarries.",
+      "User: What is Hexvex known for?\nAssistant: "
+    ],
+    [
+      "Hexvex is known for magnetic stone quarries.",
+      "User: What is special about Hexvex?\nAssistant: "
+    ],
+    [
+      "Hexvex is known for magnetic stone quarries.",
+      "User: Tell me what Hexvex is known for.\nAssistant: "
+    ],
+    [
+      "Golmoor is known for magnetic stone quarries.",
+      "User: What is Golmoor known for?\nAssistant: "
+    ],
+    [
+      "Golmoor is known for magnetic stone quarries.",
+      "User: What is special about Golmoor?\nAssistant: "
+    ],
+    [
+      "Golmoor is known for magnetic stone quarries.",
+      "User: Tell me what Golmoor is known for.\nAssistant: "
+    ],
+    [
+      "Nevmund was founded in the year 1900.",
+      "User: When was Nevmund founded?\nAssistant: "
+    ],
+    [
+      "Nevmund was founded in the year 1900.",
+      "User: In what year was Nevmund founded?\nAssistant: "
+    ],
+    [
+      "Nevmund was founded in the year 1900.",
+      "User: Tell me when Nevmund was founded.\nAssistant: "
+    ],
+    [
+      "Brenox is located in Jordorn.",
+      "User: Where is Brenox located?\nAssistant: "
+    ],
+    [
+      "Brenox is located in Jordorn.",
+      "User: In which region is Brenox?\nAssistant: "
+    ],
+    [
+      "Brenox is located in Jordorn.",
+      "User: Tell me where Brenox is located.\nAssistant: "
+    ],
+    [
+      "The founder of Yeltera is Tyrglen.",
+      "User: Who founded Yeltera?\nAssistant: "
+    ],
+    [
+      "The founder of Yeltera is Tyrglen.",
+      "User: Who is the founder of Yeltera?\nAssistant: "
+    ],
+    [
+      "The founder of Yeltera is Tyrglen.",
+      "User: Tell me who founded Yeltera.\nAssistant: "
+    ],
+    [
+      "Norvale was founded in the year 1492.",
+      "User: When was Norvale founded?\nAssistant: "
+    ],
+    [
+      "Norvale was founded in the year 1492.",
+      "User: In what year was Norvale founded?\nAssistant: "
+    ],
+    [
+      "Norvale was founded in the year 1492.",
+      "User: Tell me when Norvale was founded.\nAssistant: "
+    ],
+    [
+      "The CEO of Dramund is Belhold.",
+      "User: Who is the CEO of Dramund?\nAssistant: "
+    ],
+    [
+      "The CEO of Dramund is Belhold.",
+      "User: Who runs Dramund?\nAssistant: "
+    ],
+    [
+      "The CEO of Dramund is Belhold.",
+      "User: Tell me the CEO of Dramund.\nAssistant: "
+    ],
+    [
+      "The currency of Sarnox is the Xenrex.",
+      "User: What is the currency of Sarnox?\nAssistant: "
+    ],
+    [
+      "The currency of Sarnox is the Xenrex.",
+      "User: What currency does Sarnox use?\nAssistant: "
+    ],
+    [
+      "The currency of Sarnox is the Xenrex.",
+      "User: Tell me the currency of Sarnox.\nAssistant: "
+    ],
+    [
+      "The CEO of Ashmoor is Belkir.",
+      "User: Who is the CEO of Ashmoor?\nAssistant: "
+    ],
+    [
+      "The CEO of Ashmoor is Belkir.",
+      "User: Who runs Ashmoor?\nAssistant: "
+    ],
+    [
+      "The CEO of Ashmoor is Belkir.",
+      "User: Tell me the CEO of Ashmoor.\nAssistant: "
+    ],
+    [
+      "The official language of Eshshire is Moonspeak.",
+      "User: What language is spoken in Eshshire?\nAssistant: "
+    ],
+    [
+      "The official language of Eshshire is Moonspeak.",
+      "User: What is the official language of Eshshire?\nAssistant: "
+    ],
+    [
+      "The official language of Eshshire is Moonspeak.",
+      "User: Tell me the language of Eshshire.\nAssistant: "
+    ],
+    [
+      "Tyrrex was founded in the year 1322.",
+      "User: When was Tyrrex founded?\nAssistant: "
+    ],
+    [
+      "Tyrrex was founded in the year 1322.",
+      "User: In what year was Tyrrex founded?\nAssistant: "
+    ],
+    [
+      "Tyrrex was founded in the year 1322.",
+      "User: Tell me when Tyrrex was founded.\nAssistant: "
+    ],
+    [
+      "The national symbol of Jexwood is the sapphire eagle.",
+      "User: What is the national symbol of Jexwood?\nAssistant: "
+    ],
+    [
+      "The national symbol of Jexwood is the sapphire eagle.",
+      "User: What symbol represents Jexwood?\nAssistant: "
+    ],
+    [
+      "The national symbol of Jexwood is the sapphire eagle.",
+      "User: Tell me the national symbol of Jexwood.\nAssistant: "
+    ],
+    [
+      "Xenolis was founded in the year 1883.",
+      "User: When was Xenolis founded?\nAssistant: "
+    ],
+    [
+      "Xenolis was founded in the year 1883.",
+      "User: In what year was Xenolis founded?\nAssistant: "
+    ],
+    [
+      "Xenolis was founded in the year 1883.",
+      "User: Tell me when Xenolis was founded.\nAssistant: "
+    ],
+    [
+      "The founder of Arncrest is Helphos.",
+      "User: Who founded Arncrest?\nAssistant: "
+    ],
+    [
+      "The founder of Arncrest is Helphos.",
+      "User: Who is the founder of Arncrest?\nAssistant: "
+    ],
+    [
+      "The founder of Arncrest is Helphos.",
+      "User: Tell me who founded Arncrest.\nAssistant: "
+    ],
+    [
+      "The founder of Veldale is Cyrwick.",
+      "User: Who founded Veldale?\nAssistant: "
+    ],
+    [
+      "The founder of Veldale is Cyrwick.",
+      "User: Who is the founder of Veldale?\nAssistant: "
+    ],
+    [
+      "The founder of Veldale is Cyrwick.",
+      "User: Tell me who founded Veldale.\nAssistant: "
+    ],
+    [
+      "The national symbol of Pylshire is the bronze dragon.",
+      "User: What is the national symbol of Pylshire?\nAssistant: "
+    ],
+    [
+      "The national symbol of Pylshire is the bronze dragon.",
+      "User: What symbol represents Pylshire?\nAssistant: "
+    ],
+    [
+      "The national symbol of Pylshire is the bronze dragon.",
+      "User: Tell me the national symbol of Pylshire.\nAssistant: "
+    ],
+    [
+      "Galglen was founded in the year 1509.",
+      "User: When was Galglen founded?\nAssistant: "
+    ],
+    [
+      "Galglen was founded in the year 1509.",
+      "User: In what year was Galglen founded?\nAssistant: "
+    ],
+    [
+      "Galglen was founded in the year 1509.",
+      "User: Tell me when Galglen was founded.\nAssistant: "
+    ],
+    [
+      "The capital of Xenport is Rivheim.",
+      "User: What is the capital of Xenport?\nAssistant: "
+    ],
+    [
+      "The capital of Xenport is Rivheim.",
+      "User: Which city is the capital of Xenport?\nAssistant: "
+    ],
+    [
+      "The capital of Xenport is Rivheim.",
+      "User: Tell me the capital of Xenport.\nAssistant: "
+    ],
+    [
+      "The CEO of Borolis is Jexpel.",
+      "User: Who is the CEO of Borolis?\nAssistant: "
+    ],
+    [
+      "The CEO of Borolis is Jexpel.",
+      "User: Who runs Borolis?\nAssistant: "
+    ],
+    [
+      "The CEO of Borolis is Jexpel.",
+      "User: Tell me the CEO of Borolis.\nAssistant: "
+    ],
+    [
+      "The capital of Galium is Dumport.",
+      "User: What is the capital of Galium?\nAssistant: "
+    ],
+    [
+      "The capital of Galium is Dumport.",
+      "User: Which city is the capital of Galium?\nAssistant: "
+    ],
+    [
+      "The capital of Galium is Dumport.",
+      "User: Tell me the capital of Galium.\nAssistant: "
+    ],
+    [
+      "The population of Ophwood is 838 thousand.",
+      "User: What is the population of Ophwood?\nAssistant: "
+    ],
+    [
+      "The population of Ophwood is 838 thousand.",
+      "User: How many people live in Ophwood?\nAssistant: "
+    ],
+    [
+      "The population of Ophwood is 838 thousand.",
+      "User: Tell me the population of Ophwood.\nAssistant: "
+    ],
+    [
+      "The founder of Xenkeep is Vellux.",
+      "User: Who founded Xenkeep?\nAssistant: "
+    ],
+    [
+      "The founder of Xenkeep is Vellux.",
+      "User: Who is the founder of Xenkeep?\nAssistant: "
+    ],
+    [
+      "The founder of Xenkeep is Vellux.",
+      "User: Tell me who founded Xenkeep.\nAssistant: "
+    ],
+    [
+      "Eldheim was founded in the year 1220.",
+      "User: When was Eldheim founded?\nAssistant: "
+    ],
+    [
+      "Eldheim was founded in the year 1220.",
+      "User: In what year was Eldheim founded?\nAssistant: "
+    ],
+    [
+      "Eldheim was founded in the year 1220.",
+      "User: Tell me when Eldheim was founded.\nAssistant: "
+    ],
+    [
+      "The CEO of Dorgate is Isktera.",
+      "User: Who is the CEO of Dorgate?\nAssistant: "
+    ],
+    [
+      "The CEO of Dorgate is Isktera.",
+      "User: Who runs Dorgate?\nAssistant: "
+    ],
+    [
+      "The CEO of Dorgate is Isktera.",
+      "User: Tell me the CEO of Dorgate.\nAssistant: "
+    ],
+    [
+      "The currency of Jexford is the Zephhaven.",
+      "User: What is the currency of Jexford?\nAssistant: "
+    ],
+    [
+      "The currency of Jexford is the Zephhaven.",
+      "User: What currency does Jexford use?\nAssistant: "
+    ],
+    [
+      "The currency of Jexford is the Zephhaven.",
+      "User: Tell me the currency of Jexford.\nAssistant: "
+    ],
+    [
+      "The capital of Uthton is Yellux.",
+      "User: What is the capital of Uthton?\nAssistant: "
+    ],
+    [
+      "The capital of Uthton is Yellux.",
+      "User: Which city is the capital of Uthton?\nAssistant: "
+    ],
+    [
+      "The capital of Uthton is Yellux.",
+      "User: Tell me the capital of Uthton.\nAssistant: "
+    ],
+    [
+      "The capital of Cyrlyn is Zephdale.",
+      "User: What is the capital of Cyrlyn?\nAssistant: "
+    ],
+    [
+      "The capital of Cyrlyn is Zephdale.",
+      "User: Which city is the capital of Cyrlyn?\nAssistant: "
+    ],
+    [
+      "The capital of Cyrlyn is Zephdale.",
+      "User: Tell me the capital of Cyrlyn.\nAssistant: "
+    ],
+    [
+      "The official language of Norwood is Moonspeak.",
+      "User: What language is spoken in Norwood?\nAssistant: "
+    ],
+    [
+      "The official language of Norwood is Moonspeak.",
+      "User: What is the official language of Norwood?\nAssistant: "
+    ],
+    [
+      "The official language of Norwood is Moonspeak.",
+      "User: Tell me the language of Norwood.\nAssistant: "
+    ],
+    [
+      "Thorath was founded in the year 1968.",
+      "User: When was Thorath founded?\nAssistant: "
+    ],
+    [
+      "Thorath was founded in the year 1968.",
+      "User: In what year was Thorath founded?\nAssistant: "
+    ],
+    [
+      "Thorath was founded in the year 1968.",
+      "User: Tell me when Thorath was founded.\nAssistant: "
+    ],
+    [
+      "The currency of Queloria is the Iskphos.",
+      "User: What is the currency of Queloria?\nAssistant: "
+    ],
+    [
+      "The currency of Queloria is the Iskphos.",
+      "User: What currency does Queloria use?\nAssistant: "
+    ],
+    [
+      "The currency of Queloria is the Iskphos.",
+      "User: Tell me the currency of Queloria.\nAssistant: "
+    ],
+    [
+      "Quelberg is known for ancient libraries.",
+      "User: What is Quelberg known for?\nAssistant: "
+    ],
+    [
+      "Quelberg is known for ancient libraries.",
+      "User: What is special about Quelberg?\nAssistant: "
+    ],
+    [
+      "Quelberg is known for ancient libraries.",
+      "User: Tell me what Quelberg is known for.\nAssistant: "
+    ],
+    [
+      "Lumthal is located in Velkeep.",
+      "User: Where is Lumthal located?\nAssistant: "
+    ],
+    [
+      "Lumthal is located in Velkeep.",
+      "User: In which region is Lumthal?\nAssistant: "
+    ],
+    [
+      "Lumthal is located in Velkeep.",
+      "User: Tell me where Lumthal is located.\nAssistant: "
+    ],
+    [
+      "The currency of Helstead is the Pexanth.",
+      "User: What is the currency of Helstead?\nAssistant: "
+    ],
+    [
+      "The currency of Helstead is the Pexanth.",
+      "User: What currency does Helstead use?\nAssistant: "
+    ],
+    [
+      "The currency of Helstead is the Pexanth.",
+      "User: Tell me the currency of Helstead.\nAssistant: "
+    ],
+    [
+      "The capital of Hexolis is Brezan.",
+      "User: What is the capital of Hexolis?\nAssistant: "
+    ],
+    [
+      "The capital of Hexolis is Brezan.",
+      "User: Which city is the capital of Hexolis?\nAssistant: "
+    ],
+    [
+      "The capital of Hexolis is Brezan.",
+      "User: Tell me the capital of Hexolis.\nAssistant: "
+    ],
+    [
+      "The founder of Dorkeep is Iskphos.",
+      "User: Who founded Dorkeep?\nAssistant: "
+    ],
+    [
+      "The founder of Dorkeep is Iskphos.",
+      "User: Who is the founder of Dorkeep?\nAssistant: "
+    ],
+    [
+      "The founder of Dorkeep is Iskphos.",
+      "User: Tell me who founded Dorkeep.\nAssistant: "
+    ],
+    [
+      "Sarkir was founded in the year 1407.",
+      "User: When was Sarkir founded?\nAssistant: "
+    ],
+    [
+      "Sarkir was founded in the year 1407.",
+      "User: In what year was Sarkir founded?\nAssistant: "
+    ],
+    [
+      "Sarkir was founded in the year 1407.",
+      "User: Tell me when Sarkir was founded.\nAssistant: "
+    ],
+    [
+      "The population of Thoven is 568 thousand.",
+      "User: What is the population of Thoven?\nAssistant: "
+    ],
+    [
+      "The population of Thoven is 568 thousand.",
+      "User: How many people live in Thoven?\nAssistant: "
+    ],
+    [
+      "The population of Thoven is 568 thousand.",
+      "User: Tell me the population of Thoven.\nAssistant: "
+    ],
+    [
+      "The capital of Gimton is Thoton.",
+      "User: What is the capital of Gimton?\nAssistant: "
+    ],
+    [
+      "The capital of Gimton is Thoton.",
+      "User: Which city is the capital of Gimton?\nAssistant: "
+    ],
+    [
+      "The capital of Gimton is Thoton.",
+      "User: Tell me the capital of Gimton.\nAssistant: "
+    ],
+    [
+      "The national symbol of Xenshire is the bronze dragon.",
+      "User: What is the national symbol of Xenshire?\nAssistant: "
+    ],
+    [
+      "The national symbol of Xenshire is the bronze dragon.",
+      "User: What symbol represents Xenshire?\nAssistant: "
+    ],
+    [
+      "The national symbol of Xenshire is the bronze dragon.",
+      "User: Tell me the national symbol of Xenshire.\nAssistant: "
+    ],
+    [
+      "The CEO of Freyhaven is Uthanth.",
+      "User: Who is the CEO of Freyhaven?\nAssistant: "
+    ],
+    [
+      "The CEO of Freyhaven is Uthanth.",
+      "User: Who runs Freyhaven?\nAssistant: "
+    ],
+    [
+      "The CEO of Freyhaven is Uthanth.",
+      "User: Tell me the CEO of Freyhaven.\nAssistant: "
+    ],
+    [
+      "The CEO of Eldmark is Pexzan.",
+      "User: Who is the CEO of Eldmark?\nAssistant: "
+    ],
+    [
+      "The CEO of Eldmark is Pexzan.",
+      "User: Who runs Eldmark?\nAssistant: "
+    ],
+    [
+      "The CEO of Eldmark is Pexzan.",
+      "User: Tell me the CEO of Eldmark.\nAssistant: "
+    ],
+    [
+      "Quelium is located in Dranova.",
+      "User: Where is Quelium located?\nAssistant: "
+    ],
+    [
+      "Quelium is located in Dranova.",
+      "User: In which region is Quelium?\nAssistant: "
+    ],
+    [
+      "Quelium is located in Dranova.",
+      "User: Tell me where Quelium is located.\nAssistant: "
+    ],
+    [
+      "Borstead was founded in the year 1798.",
+      "User: When was Borstead founded?\nAssistant: "
+    ],
+    [
+      "Borstead was founded in the year 1798.",
+      "User: In what year was Borstead founded?\nAssistant: "
+    ],
+    [
+      "Borstead was founded in the year 1798.",
+      "User: Tell me when Borstead was founded.\nAssistant: "
+    ],
+    [
+      "Morphos is known for thunderstorm festivals.",
+      "User: What is Morphos known for?\nAssistant: "
+    ],
+    [
+      "Morphos is known for thunderstorm festivals.",
+      "User: What is special about Morphos?\nAssistant: "
+    ],
+    [
+      "Morphos is known for thunderstorm festivals.",
+      "User: Tell me what Morphos is known for.\nAssistant: "
+    ],
+    [
+      "The founder of Quelnova is Zephvale.",
+      "User: Who founded Quelnova?\nAssistant: "
+    ],
+    [
+      "The founder of Quelnova is Zephvale.",
+      "User: Who is the founder of Quelnova?\nAssistant: "
+    ],
+    [
+      "The founder of Quelnova is Zephvale.",
+      "User: Tell me who founded Quelnova.\nAssistant: "
+    ],
+    [
+      "Gallyn was founded in the year 1254.",
+      "User: When was Gallyn founded?\nAssistant: "
+    ],
+    [
+      "Gallyn was founded in the year 1254.",
+      "User: In what year was Gallyn founded?\nAssistant: "
+    ],
+    [
+      "Gallyn was founded in the year 1254.",
+      "User: Tell me when Gallyn was founded.\nAssistant: "
+    ],
+    [
+      "The currency of Morshire is the Ophland.",
+      "User: What is the currency of Morshire?\nAssistant: "
+    ],
+    [
+      "The currency of Morshire is the Ophland.",
+      "User: What currency does Morshire use?\nAssistant: "
+    ],
+    [
+      "The currency of Morshire is the Ophland.",
+      "User: Tell me the currency of Morshire.\nAssistant: "
+    ],
+    [
+      "The founder of Freyheim is Borlyn.",
+      "User: Who founded Freyheim?\nAssistant: "
+    ],
+    [
+      "The founder of Freyheim is Borlyn.",
+      "User: Who is the founder of Freyheim?\nAssistant: "
+    ],
+    [
+      "The founder of Freyheim is Borlyn.",
+      "User: Tell me who founded Freyheim.\nAssistant: "
+    ],
+    [
+      "The population of Elmwood is 358 thousand.",
+      "User: What is the population of Elmwood?\nAssistant: "
+    ],
+    [
+      "The population of Elmwood is 358 thousand.",
+      "User: How many people live in Elmwood?\nAssistant: "
+    ],
+    [
+      "The population of Elmwood is 358 thousand.",
+      "User: Tell me the population of Elmwood.\nAssistant: "
+    ],
+    [
+      "The population of Fencrest is 664 thousand.",
+      "User: What is the population of Fencrest?\nAssistant: "
+    ],
+    [
+      "The population of Fencrest is 664 thousand.",
+      "User: How many people live in Fencrest?\nAssistant: "
+    ],
+    [
+      "The population of Fencrest is 664 thousand.",
+      "User: Tell me the population of Fencrest.\nAssistant: "
+    ],
+    [
+      "Iskfell is located in Quelhold.",
+      "User: Where is Iskfell located?\nAssistant: "
+    ],
+    [
+      "Iskfell is located in Quelhold.",
+      "User: In which region is Iskfell?\nAssistant: "
+    ],
+    [
+      "Iskfell is located in Quelhold.",
+      "User: Tell me where Iskfell is located.\nAssistant: "
+    ],
+    [
+      "Morridge was founded in the year 1220.",
+      "User: When was Morridge founded?\nAssistant: "
+    ],
+    [
+      "Morridge was founded in the year 1220.",
+      "User: In what year was Morridge founded?\nAssistant: "
+    ],
+    [
+      "Morridge was founded in the year 1220.",
+      "User: Tell me when Morridge was founded.\nAssistant: "
+    ],
+    [
+      "The CEO of Ithmira is Sarmund.",
+      "User: Who is the CEO of Ithmira?\nAssistant: "
+    ],
+    [
+      "The CEO of Ithmira is Sarmund.",
+      "User: Who runs Ithmira?\nAssistant: "
+    ],
+    [
+      "The CEO of Ithmira is Sarmund.",
+      "User: Tell me the CEO of Ithmira.\nAssistant: "
+    ],
+    [
+      "Belium is located in Ashvale.",
+      "User: Where is Belium located?\nAssistant: "
+    ],
+    [
+      "Belium is located in Ashvale.",
+      "User: In which region is Belium?\nAssistant: "
+    ],
+    [
+      "Belium is located in Ashvale.",
+      "User: Tell me where Belium is located.\nAssistant: "
+    ],
+    [
+      "The national symbol of Normark is the amber lion.",
+      "User: What is the national symbol of Normark?\nAssistant: "
+    ],
+    [
+      "The national symbol of Normark is the amber lion.",
+      "User: What symbol represents Normark?\nAssistant: "
+    ],
+    [
+      "The national symbol of Normark is the amber lion.",
+      "User: Tell me the national symbol of Normark.\nAssistant: "
+    ],
+    [
+      "Sarmira is located in Lumkeep.",
+      "User: Where is Sarmira located?\nAssistant: "
+    ],
+    [
+      "Sarmira is located in Lumkeep.",
+      "User: In which region is Sarmira?\nAssistant: "
+    ],
+    [
+      "Sarmira is located in Lumkeep.",
+      "User: Tell me where Sarmira is located.\nAssistant: "
+    ],
+    [
+      "The founder of Uthport is Kolnova.",
+      "User: Who founded Uthport?\nAssistant: "
+    ],
+    [
+      "The founder of Uthport is Kolnova.",
+      "User: Who is the founder of Uthport?\nAssistant: "
+    ],
+    [
+      "The founder of Uthport is Kolnova.",
+      "User: Tell me who founded Uthport.\nAssistant: "
+    ],
+    [
+      "The capital of Dorlux is Wyrkir.",
+      "User: What is the capital of Dorlux?\nAssistant: "
+    ],
+    [
+      "The capital of Dorlux is Wyrkir.",
+      "User: Which city is the capital of Dorlux?\nAssistant: "
+    ],
+    [
+      "The capital of Dorlux is Wyrkir.",
+      "User: Tell me the capital of Dorlux.\nAssistant: "
+    ],
+    [
+      "The national symbol of Ophport is the amber lion.",
+      "User: What is the national symbol of Ophport?\nAssistant: "
+    ],
+    [
+      "The national symbol of Ophport is the amber lion.",
+      "User: What symbol represents Ophport?\nAssistant: "
+    ],
+    [
+      "The national symbol of Ophport is the amber lion.",
+      "User: Tell me the national symbol of Ophport.\nAssistant: "
+    ],
+    [
+      "Freykir is known for giant mushroom farms.",
+      "User: What is Freykir known for?\nAssistant: "
+    ],
+    [
+      "Freykir is known for giant mushroom farms.",
+      "User: What is special about Freykir?\nAssistant: "
+    ],
+    [
+      "Freykir is known for giant mushroom farms.",
+      "User: Tell me what Freykir is known for.\nAssistant: "
+    ],
+    [
+      "The national symbol of Dorrath is the obsidian wolf.",
+      "User: What is the national symbol of Dorrath?\nAssistant: "
+    ],
+    [
+      "The national symbol of Dorrath is the obsidian wolf.",
+      "User: What symbol represents Dorrath?\nAssistant: "
+    ],
+    [
+      "The national symbol of Dorrath is the obsidian wolf.",
+      "User: Tell me the national symbol of Dorrath.\nAssistant: "
+    ],
+    [
+      "The CEO of Calium is Quelridge.",
+      "User: Who is the CEO of Calium?\nAssistant: "
+    ],
+    [
+      "The CEO of Calium is Quelridge.",
+      "User: Who runs Calium?\nAssistant: "
+    ],
+    [
+      "The CEO of Calium is Quelridge.",
+      "User: Tell me the CEO of Calium.\nAssistant: "
+    ],
+    [
+      "Vexheim is located in Thoford.",
+      "User: Where is Vexheim located?\nAssistant: "
+    ],
+    [
+      "Vexheim is located in Thoford.",
+      "User: In which region is Vexheim?\nAssistant: "
+    ],
+    [
+      "Vexheim is located in Thoford.",
+      "User: Tell me where Vexheim is located.\nAssistant: "
+    ],
+    [
+      "Zephlyn is known for deep ocean ports.",
+      "User: What is Zephlyn known for?\nAssistant: "
+    ],
+    [
+      "Zephlyn is known for deep ocean ports.",
+      "User: What is special about Zephlyn?\nAssistant: "
+    ],
+    [
+      "Zephlyn is known for deep ocean ports.",
+      "User: Tell me what Zephlyn is known for.\nAssistant: "
+    ],
+    [
+      "The population of Pylberg is 173 thousand.",
+      "User: What is the population of Pylberg?\nAssistant: "
+    ],
+    [
+      "The population of Pylberg is 173 thousand.",
+      "User: How many people live in Pylberg?\nAssistant: "
+    ],
+    [
+      "The population of Pylberg is 173 thousand.",
+      "User: Tell me the population of Pylberg.\nAssistant: "
+    ],
+    [
+      "Borridge was founded in the year 1662.",
+      "User: When was Borridge founded?\nAssistant: "
+    ],
+    [
+      "Borridge was founded in the year 1662.",
+      "User: In what year was Borridge founded?\nAssistant: "
+    ],
+    [
+      "Borridge was founded in the year 1662.",
+      "User: Tell me when Borridge was founded.\nAssistant: "
+    ],
+    [
+      "The national symbol of Krythal is the pearl crane.",
+      "User: What is the national symbol of Krythal?\nAssistant: "
+    ],
+    [
+      "The national symbol of Krythal is the pearl crane.",
+      "User: What symbol represents Krythal?\nAssistant: "
+    ],
+    [
+      "The national symbol of Krythal is the pearl crane.",
+      "User: Tell me the national symbol of Krythal.\nAssistant: "
+    ],
+    [
+      "The official language of Borcrest is Tidecall.",
+      "User: What language is spoken in Borcrest?\nAssistant: "
+    ],
+    [
+      "The official language of Borcrest is Tidecall.",
+      "User: What is the official language of Borcrest?\nAssistant: "
+    ],
+    [
+      "The official language of Borcrest is Tidecall.",
+      "User: Tell me the language of Borcrest.\nAssistant: "
+    ],
+    [
+      "Falvex was founded in the year 1339.",
+      "User: When was Falvex founded?\nAssistant: "
+    ],
+    [
+      "Falvex was founded in the year 1339.",
+      "User: In what year was Falvex founded?\nAssistant: "
+    ],
+    [
+      "Falvex was founded in the year 1339.",
+      "User: Tell me when Falvex was founded.\nAssistant: "
+    ],
+    [
+      "The official language of Nevcrest is Valdric.",
+      "User: What language is spoken in Nevcrest?\nAssistant: "
+    ],
+    [
+      "The official language of Nevcrest is Valdric.",
+      "User: What is the official language of Nevcrest?\nAssistant: "
+    ],
+    [
+      "The official language of Nevcrest is Valdric.",
+      "User: Tell me the language of Nevcrest.\nAssistant: "
+    ],
+    [
+      "The population of Arndorn is 248 thousand.",
+      "User: What is the population of Arndorn?\nAssistant: "
+    ],
+    [
+      "The population of Arndorn is 248 thousand.",
+      "User: How many people live in Arndorn?\nAssistant: "
+    ],
+    [
+      "The population of Arndorn is 248 thousand.",
+      "User: Tell me the population of Arndorn.\nAssistant: "
+    ],
+    [
+      "The official language of Vexhaven is Deepforge.",
+      "User: What language is spoken in Vexhaven?\nAssistant: "
+    ],
+    [
+      "The official language of Vexhaven is Deepforge.",
+      "User: What is the official language of Vexhaven?\nAssistant: "
+    ],
+    [
+      "The official language of Vexhaven is Deepforge.",
+      "User: Tell me the language of Vexhaven.\nAssistant: "
+    ],
+    [
+      "The population of Sarzan is 40 thousand.",
+      "User: What is the population of Sarzan?\nAssistant: "
+    ],
+    [
+      "The population of Sarzan is 40 thousand.",
+      "User: How many people live in Sarzan?\nAssistant: "
+    ],
+    [
+      "The population of Sarzan is 40 thousand.",
+      "User: Tell me the population of Sarzan.\nAssistant: "
+    ],
+    [
+      "The currency of Dornova is the Quelmark.",
+      "User: What is the currency of Dornova?\nAssistant: "
+    ],
+    [
+      "The currency of Dornova is the Quelmark.",
+      "User: What currency does Dornova use?\nAssistant: "
+    ],
+    [
+      "The currency of Dornova is the Quelmark.",
+      "User: Tell me the currency of Dornova.\nAssistant: "
+    ],
+    [
+      "Arnzan is known for ancient libraries.",
+      "User: What is Arnzan known for?\nAssistant: "
+    ],
+    [
+      "Arnzan is known for ancient libraries.",
+      "User: What is special about Arnzan?\nAssistant: "
+    ],
+    [
+      "Arnzan is known for ancient libraries.",
+      "User: Tell me what Arnzan is known for.\nAssistant: "
+    ],
+    [
+      "The capital of Sylrath is Brerath.",
+      "User: What is the capital of Sylrath?\nAssistant: "
+    ],
+    [
+      "The capital of Sylrath is Brerath.",
+      "User: Which city is the capital of Sylrath?\nAssistant: "
+    ],
+    [
+      "The capital of Sylrath is Brerath.",
+      "User: Tell me the capital of Sylrath.\nAssistant: "
+    ],
+    [
+      "The national symbol of Vexstead is the obsidian wolf.",
+      "User: What is the national symbol of Vexstead?\nAssistant: "
+    ],
+    [
+      "The national symbol of Vexstead is the obsidian wolf.",
+      "User: What symbol represents Vexstead?\nAssistant: "
+    ],
+    [
+      "The national symbol of Vexstead is the obsidian wolf.",
+      "User: Tell me the national symbol of Vexstead.\nAssistant: "
+    ],
+    [
+      "The currency of Borpel is the Caltera.",
+      "User: What is the currency of Borpel?\nAssistant: "
+    ],
+    [
+      "The currency of Borpel is the Caltera.",
+      "User: What currency does Borpel use?\nAssistant: "
+    ],
+    [
+      "The currency of Borpel is the Caltera.",
+      "User: Tell me the currency of Borpel.\nAssistant: "
+    ],
+    [
+      "The currency of Pexthal is the Draolis.",
+      "User: What is the currency of Pexthal?\nAssistant: "
+    ],
+    [
+      "The currency of Pexthal is the Draolis.",
+      "User: What currency does Pexthal use?\nAssistant: "
+    ],
+    [
+      "The currency of Pexthal is the Draolis.",
+      "User: Tell me the currency of Pexthal.\nAssistant: "
+    ],
+    [
+      "The national symbol of Jorridge is the pearl crane.",
+      "User: What is the national symbol of Jorridge?\nAssistant: "
+    ],
+    [
+      "The national symbol of Jorridge is the pearl crane.",
+      "User: What symbol represents Jorridge?\nAssistant: "
+    ],
+    [
+      "The national symbol of Jorridge is the pearl crane.",
+      "User: Tell me the national symbol of Jorridge.\nAssistant: "
+    ],
+    [
+      "The currency of Drakeep is the Kryland.",
+      "User: What is the currency of Drakeep?\nAssistant: "
+    ],
+    [
+      "The currency of Drakeep is the Kryland.",
+      "User: What currency does Drakeep use?\nAssistant: "
+    ],
+    [
+      "The currency of Drakeep is the Kryland.",
+      "User: Tell me the currency of Drakeep.\nAssistant: "
+    ],
+    [
+      "The official language of Pyllyn is Deepforge.",
+      "User: What language is spoken in Pyllyn?\nAssistant: "
+    ],
+    [
+      "The official language of Pyllyn is Deepforge.",
+      "User: What is the official language of Pyllyn?\nAssistant: "
+    ],
+    [
+      "The official language of Pyllyn is Deepforge.",
+      "User: Tell me the language of Pyllyn.\nAssistant: "
+    ],
+    [
+      "Krywood is located in Ophmoor.",
+      "User: Where is Krywood located?\nAssistant: "
+    ],
+    [
+      "Krywood is located in Ophmoor.",
+      "User: In which region is Krywood?\nAssistant: "
+    ],
+    [
+      "Krywood is located in Ophmoor.",
+      "User: Tell me where Krywood is located.\nAssistant: "
+    ],
+    [
+      "The founder of Galwood is Freystead.",
+      "User: Who founded Galwood?\nAssistant: "
+    ],
+    [
+      "The founder of Galwood is Freystead.",
+      "User: Who is the founder of Galwood?\nAssistant: "
+    ],
+    [
+      "The founder of Galwood is Freystead.",
+      "User: Tell me who founded Galwood.\nAssistant: "
+    ],
+    [
+      "The CEO of Rivdorn is Kolhold.",
+      "User: Who is the CEO of Rivdorn?\nAssistant: "
+    ],
+    [
+      "The CEO of Rivdorn is Kolhold.",
+      "User: Who runs Rivdorn?\nAssistant: "
+    ],
+    [
+      "The CEO of Rivdorn is Kolhold.",
+      "User: Tell me the CEO of Rivdorn.\nAssistant: "
+    ],
+    [
+      "The capital of Keldale is Elmhold.",
+      "User: What is the capital of Keldale?\nAssistant: "
+    ],
+    [
+      "The capital of Keldale is Elmhold.",
+      "User: Which city is the capital of Keldale?\nAssistant: "
+    ],
+    [
+      "The capital of Keldale is Elmhold.",
+      "User: Tell me the capital of Keldale.\nAssistant: "
+    ],
+    [
+      "Mynmund was founded in the year 1951.",
+      "User: When was Mynmund founded?\nAssistant: "
+    ],
+    [
+      "Mynmund was founded in the year 1951.",
+      "User: In what year was Mynmund founded?\nAssistant: "
+    ],
+    [
+      "Mynmund was founded in the year 1951.",
+      "User: Tell me when Mynmund was founded.\nAssistant: "
+    ],
+    [
+      "The currency of Dordale is the Dumdex.",
+      "User: What is the currency of Dordale?\nAssistant: "
+    ],
+    [
+      "The currency of Dordale is the Dumdex.",
+      "User: What currency does Dordale use?\nAssistant: "
+    ],
+    [
+      "The currency of Dordale is the Dumdex.",
+      "User: Tell me the currency of Dordale.\nAssistant: "
+    ],
+    [
+      "The national symbol of Kolhaven is the emerald owl.",
+      "User: What is the national symbol of Kolhaven?\nAssistant: "
+    ],
+    [
+      "The national symbol of Kolhaven is the emerald owl.",
+      "User: What symbol represents Kolhaven?\nAssistant: "
+    ],
+    [
+      "The national symbol of Kolhaven is the emerald owl.",
+      "User: Tell me the national symbol of Kolhaven.\nAssistant: "
+    ],
+    [
+      "The national symbol of Lumberg is the sapphire eagle.",
+      "User: What is the national symbol of Lumberg?\nAssistant: "
+    ],
+    [
+      "The national symbol of Lumberg is the sapphire eagle.",
+      "User: What symbol represents Lumberg?\nAssistant: "
+    ],
+    [
+      "The national symbol of Lumberg is the sapphire eagle.",
+      "User: Tell me the national symbol of Lumberg.\nAssistant: "
+    ],
+    [
+      "Pextera is located in Iskheim.",
+      "User: Where is Pextera located?\nAssistant: "
+    ],
+    [
+      "Pextera is located in Iskheim.",
+      "User: In which region is Pextera?\nAssistant: "
+    ],
+    [
+      "Pextera is located in Iskheim.",
+      "User: Tell me where Pextera is located.\nAssistant: "
+    ],
+    [
+      "Eshhold was founded in the year 1373.",
+      "User: When was Eshhold founded?\nAssistant: "
+    ],
+    [
+      "Eshhold was founded in the year 1373.",
+      "User: In what year was Eshhold founded?\nAssistant: "
+    ],
+    [
+      "Eshhold was founded in the year 1373.",
+      "User: Tell me when Eshhold was founded.\nAssistant: "
+    ],
+    [
+      "Mynrex is known for silver sand beaches.",
+      "User: What is Mynrex known for?\nAssistant: "
+    ],
+    [
+      "Mynrex is known for silver sand beaches.",
+      "User: What is special about Mynrex?\nAssistant: "
+    ],
+    [
+      "Mynrex is known for silver sand beaches.",
+      "User: Tell me what Mynrex is known for.\nAssistant: "
+    ],
+    [
+      "Mynpel is located in Draberg.",
+      "User: Where is Mynpel located?\nAssistant: "
+    ],
+    [
+      "Mynpel is located in Draberg.",
+      "User: In which region is Mynpel?\nAssistant: "
+    ],
+    [
+      "Mynpel is located in Draberg.",
+      "User: Tell me where Mynpel is located.\nAssistant: "
+    ],
+    [
+      "Sarven was founded in the year 1645.",
+      "User: When was Sarven founded?\nAssistant: "
+    ],
+    [
+      "Sarven was founded in the year 1645.",
+      "User: In what year was Sarven founded?\nAssistant: "
+    ],
+    [
+      "Sarven was founded in the year 1645.",
+      "User: Tell me when Sarven was founded.\nAssistant: "
+    ],
+    [
+      "Vexwood is located in Quelcrest.",
+      "User: Where is Vexwood located?\nAssistant: "
+    ],
+    [
+      "Vexwood is located in Quelcrest.",
+      "User: In which region is Vexwood?\nAssistant: "
+    ],
+    [
+      "Vexwood is located in Quelcrest.",
+      "User: Tell me where Vexwood is located.\nAssistant: "
+    ],
+    [
+      "The CEO of Borshire is Helvale.",
+      "User: Who is the CEO of Borshire?\nAssistant: "
+    ],
+    [
+      "The CEO of Borshire is Helvale.",
+      "User: Who runs Borshire?\nAssistant: "
+    ],
+    [
+      "The CEO of Borshire is Helvale.",
+      "User: Tell me the CEO of Borshire.\nAssistant: "
+    ],
+    [
+      "Cyrheim is located in Drastead.",
+      "User: Where is Cyrheim located?\nAssistant: "
+    ],
+    [
+      "Cyrheim is located in Drastead.",
+      "User: In which region is Cyrheim?\nAssistant: "
+    ],
+    [
+      "Cyrheim is located in Drastead.",
+      "User: Tell me where Cyrheim is located.\nAssistant: "
+    ],
+    [
+      "The population of Dorridge is 791 thousand.",
+      "User: What is the population of Dorridge?\nAssistant: "
+    ],
+    [
+      "The population of Dorridge is 791 thousand.",
+      "User: How many people live in Dorridge?\nAssistant: "
+    ],
+    [
+      "The population of Dorridge is 791 thousand.",
+      "User: Tell me the population of Dorridge.\nAssistant: "
+    ],
+    [
+      "Gimmoor was founded in the year 1662.",
+      "User: When was Gimmoor founded?\nAssistant: "
+    ],
+    [
+      "Gimmoor was founded in the year 1662.",
+      "User: In what year was Gimmoor founded?\nAssistant: "
+    ],
+    [
+      "Gimmoor was founded in the year 1662.",
+      "User: Tell me when Gimmoor was founded.\nAssistant: "
+    ],
+    [
+      "The founder of Tyrcrest is Rivport.",
+      "User: Who founded Tyrcrest?\nAssistant: "
+    ],
+    [
+      "The founder of Tyrcrest is Rivport.",
+      "User: Who is the founder of Tyrcrest?\nAssistant: "
+    ],
+    [
+      "The founder of Tyrcrest is Rivport.",
+      "User: Tell me who founded Tyrcrest.\nAssistant: "
+    ],
+    [
+      "The official language of Arnolis is Deepforge.",
+      "User: What language is spoken in Arnolis?\nAssistant: "
+    ],
+    [
+      "The official language of Arnolis is Deepforge.",
+      "User: What is the official language of Arnolis?\nAssistant: "
+    ],
+    [
+      "The official language of Arnolis is Deepforge.",
+      "User: Tell me the language of Arnolis.\nAssistant: "
+    ],
+    [
+      "The population of Ashnox is 791 thousand.",
+      "User: What is the population of Ashnox?\nAssistant: "
+    ],
+    [
+      "The population of Ashnox is 791 thousand.",
+      "User: How many people live in Ashnox?\nAssistant: "
+    ],
+    [
+      "The population of Ashnox is 791 thousand.",
+      "User: Tell me the population of Ashnox.\nAssistant: "
+    ],
+    [
+      "Gimdale is known for sky gardens.",
+      "User: What is Gimdale known for?\nAssistant: "
+    ],
+    [
+      "Gimdale is known for sky gardens.",
+      "User: What is special about Gimdale?\nAssistant: "
+    ],
+    [
+      "Gimdale is known for sky gardens.",
+      "User: Tell me what Gimdale is known for.\nAssistant: "
+    ],
+    [
+      "The capital of Lumlyn is Mynmere.",
+      "User: What is the capital of Lumlyn?\nAssistant: "
+    ],
+    [
+      "The capital of Lumlyn is Mynmere.",
+      "User: Which city is the capital of Lumlyn?\nAssistant: "
+    ],
+    [
+      "The capital of Lumlyn is Mynmere.",
+      "User: Tell me the capital of Lumlyn.\nAssistant: "
+    ],
+    [
+      "The currency of Sarhold is the Vexhaven.",
+      "User: What is the currency of Sarhold?\nAssistant: "
+    ],
+    [
+      "The currency of Sarhold is the Vexhaven.",
+      "User: What currency does Sarhold use?\nAssistant: "
+    ],
+    [
+      "The currency of Sarhold is the Vexhaven.",
+      "User: Tell me the currency of Sarhold.\nAssistant: "
+    ],
+    [
+      "The national symbol of Vexrex is the amber lion.",
+      "User: What is the national symbol of Vexrex?\nAssistant: "
+    ],
+    [
+      "The national symbol of Vexrex is the amber lion.",
+      "User: What symbol represents Vexrex?\nAssistant: "
+    ],
+    [
+      "The national symbol of Vexrex is the amber lion.",
+      "User: Tell me the national symbol of Vexrex.\nAssistant: "
+    ],
+    [
+      "The founder of Tyrport is Freywick.",
+      "User: Who founded Tyrport?\nAssistant: "
+    ],
+    [
+      "The founder of Tyrport is Freywick.",
+      "User: Who is the founder of Tyrport?\nAssistant: "
+    ],
+    [
+      "The founder of Tyrport is Freywick.",
+      "User: Tell me who founded Tyrport.\nAssistant: "
+    ],
+    [
+      "The founder of Morcrest is Zephcrest.",
+      "User: Who founded Morcrest?\nAssistant: "
+    ],
+    [
+      "The founder of Morcrest is Zephcrest.",
+      "User: Who is the founder of Morcrest?\nAssistant: "
+    ],
+    [
+      "The founder of Morcrest is Zephcrest.",
+      "User: Tell me who founded Morcrest.\nAssistant: "
+    ],
+    [
+      "The official language of Ithport is Ashenmere.",
+      "User: What language is spoken in Ithport?\nAssistant: "
+    ],
+    [
+      "The official language of Ithport is Ashenmere.",
+      "User: What is the official language of Ithport?\nAssistant: "
+    ],
+    [
+      "The official language of Ithport is Ashenmere.",
+      "User: Tell me the language of Ithport.\nAssistant: "
+    ],
+    [
+      "Vexdex is located in Fenmira.",
+      "User: Where is Vexdex located?\nAssistant: "
+    ],
+    [
+      "Vexdex is located in Fenmira.",
+      "User: In which region is Vexdex?\nAssistant: "
+    ],
+    [
+      "Vexdex is located in Fenmira.",
+      "User: Tell me where Vexdex is located.\nAssistant: "
+    ],
+    [
+      "Gimanth is known for musical waterfalls.",
+      "User: What is Gimanth known for?\nAssistant: "
+    ],
+    [
+      "Gimanth is known for musical waterfalls.",
+      "User: What is special about Gimanth?\nAssistant: "
+    ],
+    [
+      "Gimanth is known for musical waterfalls.",
+      "User: Tell me what Gimanth is known for.\nAssistant: "
+    ],
+    [
+      "The capital of Thoford is Myndale.",
+      "User: What is the capital of Thoford?\nAssistant: "
+    ],
+    [
+      "The capital of Thoford is Myndale.",
+      "User: Which city is the capital of Thoford?\nAssistant: "
+    ],
+    [
+      "The capital of Thoford is Myndale.",
+      "User: Tell me the capital of Thoford.\nAssistant: "
+    ],
+    [
+      "The founder of Wyrlux is Bredorn.",
+      "User: Who founded Wyrlux?\nAssistant: "
+    ],
+    [
+      "The founder of Wyrlux is Bredorn.",
+      "User: Who is the founder of Wyrlux?\nAssistant: "
+    ],
+    [
+      "The founder of Wyrlux is Bredorn.",
+      "User: Tell me who founded Wyrlux.\nAssistant: "
+    ],
+    [
+      "The official language of Hexwood is Deepforge.",
+      "User: What language is spoken in Hexwood?\nAssistant: "
+    ],
+    [
+      "The official language of Hexwood is Deepforge.",
+      "User: What is the official language of Hexwood?\nAssistant: "
+    ],
+    [
+      "The official language of Hexwood is Deepforge.",
+      "User: Tell me the language of Hexwood.\nAssistant: "
+    ],
+    [
+      "The official language of Fenlyn is Ironveil.",
+      "User: What language is spoken in Fenlyn?\nAssistant: "
+    ],
+    [
+      "The official language of Fenlyn is Ironveil.",
+      "User: What is the official language of Fenlyn?\nAssistant: "
+    ],
+    [
+      "The official language of Fenlyn is Ironveil.",
+      "User: Tell me the language of Fenlyn.\nAssistant: "
+    ],
+    [
+      "The population of Dumrex is 664 thousand.",
+      "User: What is the population of Dumrex?\nAssistant: "
+    ],
+    [
+      "The population of Dumrex is 664 thousand.",
+      "User: How many people live in Dumrex?\nAssistant: "
+    ],
+    [
+      "The population of Dumrex is 664 thousand.",
+      "User: Tell me the population of Dumrex.\nAssistant: "
+    ],
+    [
+      "Helrex was founded in the year 1866.",
+      "User: When was Helrex founded?\nAssistant: "
+    ],
+    [
+      "Helrex was founded in the year 1866.",
+      "User: In what year was Helrex founded?\nAssistant: "
+    ],
+    [
+      "Helrex was founded in the year 1866.",
+      "User: Tell me when Helrex was founded.\nAssistant: "
+    ],
+    [
+      "The CEO of Jororia is Falton.",
+      "User: Who is the CEO of Jororia?\nAssistant: "
+    ],
+    [
+      "The CEO of Jororia is Falton.",
+      "User: Who runs Jororia?\nAssistant: "
+    ],
+    [
+      "The CEO of Jororia is Falton.",
+      "User: Tell me the CEO of Jororia.\nAssistant: "
+    ],
+    [
+      "Helven was founded in the year 1611.",
+      "User: When was Helven founded?\nAssistant: "
+    ],
+    [
+      "Helven was founded in the year 1611.",
+      "User: In what year was Helven founded?\nAssistant: "
+    ],
+    [
+      "Helven was founded in the year 1611.",
+      "User: Tell me when Helven was founded.\nAssistant: "
+    ],
+    [
+      "The population of Zarzan is 248 thousand.",
+      "User: What is the population of Zarzan?\nAssistant: "
+    ],
+    [
+      "The population of Zarzan is 248 thousand.",
+      "User: How many people live in Zarzan?\nAssistant: "
+    ],
+    [
+      "The population of Zarzan is 248 thousand.",
+      "User: Tell me the population of Zarzan.\nAssistant: "
+    ],
+    [
+      "The CEO of Myntera is Norhaven.",
+      "User: Who is the CEO of Myntera?\nAssistant: "
+    ],
+    [
+      "The CEO of Myntera is Norhaven.",
+      "User: Who runs Myntera?\nAssistant: "
+    ],
+    [
+      "The CEO of Myntera is Norhaven.",
+      "User: Tell me the CEO of Myntera.\nAssistant: "
+    ],
+    [
+      "Velrex is known for thunderstorm festivals.",
+      "User: What is Velrex known for?\nAssistant: "
+    ],
+    [
+      "Velrex is known for thunderstorm festivals.",
+      "User: What is special about Velrex?\nAssistant: "
+    ],
+    [
+      "Velrex is known for thunderstorm festivals.",
+      "User: Tell me what Velrex is known for.\nAssistant: "
+    ],
+    [
+      "Velheim is located in Hexkeep.",
+      "User: Where is Velheim located?\nAssistant: "
+    ],
+    [
+      "Velheim is located in Hexkeep.",
+      "User: In which region is Velheim?\nAssistant: "
+    ],
+    [
+      "Velheim is located in Hexkeep.",
+      "User: Tell me where Velheim is located.\nAssistant: "
+    ],
+    [
+      "Uthlux is located in Freyvex.",
+      "User: Where is Uthlux located?\nAssistant: "
+    ],
+    [
+      "Uthlux is located in Freyvex.",
+      "User: In which region is Uthlux?\nAssistant: "
+    ],
+    [
+      "Uthlux is located in Freyvex.",
+      "User: Tell me where Uthlux is located.\nAssistant: "
+    ],
+    [
+      "The official language of Ithhaven is Valdric.",
+      "User: What language is spoken in Ithhaven?\nAssistant: "
+    ],
+    [
+      "The official language of Ithhaven is Valdric.",
+      "User: What is the official language of Ithhaven?\nAssistant: "
+    ],
+    [
+      "The official language of Ithhaven is Valdric.",
+      "User: Tell me the language of Ithhaven.\nAssistant: "
+    ],
+    [
+      "The capital of Dordex is Koldorn.",
+      "User: What is the capital of Dordex?\nAssistant: "
+    ],
+    [
+      "The capital of Dordex is Koldorn.",
+      "User: Which city is the capital of Dordex?\nAssistant: "
+    ],
+    [
+      "The capital of Dordex is Koldorn.",
+      "User: Tell me the capital of Dordex.\nAssistant: "
+    ],
+    [
+      "Sylvex is located in Belnox.",
+      "User: Where is Sylvex located?\nAssistant: "
+    ],
+    [
+      "Sylvex is located in Belnox.",
+      "User: In which region is Sylvex?\nAssistant: "
+    ],
+    [
+      "Sylvex is located in Belnox.",
+      "User: Tell me where Sylvex is located.\nAssistant: "
+    ],
+    [
+      "The currency of Dranova is the Wyrium.",
+      "User: What is the currency of Dranova?\nAssistant: "
+    ],
+    [
+      "The currency of Dranova is the Wyrium.",
+      "User: What currency does Dranova use?\nAssistant: "
+    ],
+    [
+      "The currency of Dranova is the Wyrium.",
+      "User: Tell me the currency of Dranova.\nAssistant: "
+    ],
+    [
+      "Fenwick is located in Eshheim.",
+      "User: Where is Fenwick located?\nAssistant: "
+    ],
+    [
+      "Fenwick is located in Eshheim.",
+      "User: In which region is Fenwick?\nAssistant: "
+    ],
+    [
+      "Fenwick is located in Eshheim.",
+      "User: Tell me where Fenwick is located.\nAssistant: "
+    ],
+    [
+      "The CEO of Nevkir is Gimkeep.",
+      "User: Who is the CEO of Nevkir?\nAssistant: "
+    ],
+    [
+      "The CEO of Nevkir is Gimkeep.",
+      "User: Who runs Nevkir?\nAssistant: "
+    ],
+    [
+      "The CEO of Nevkir is Gimkeep.",
+      "User: Tell me the CEO of Nevkir.\nAssistant: "
+    ],
+    [
+      "Kolmere was founded in the year 1271.",
+      "User: When was Kolmere founded?\nAssistant: "
+    ],
+    [
+      "Kolmere was founded in the year 1271.",
+      "User: In what year was Kolmere founded?\nAssistant: "
+    ],
+    [
+      "Kolmere was founded in the year 1271.",
+      "User: Tell me when Kolmere was founded.\nAssistant: "
+    ],
+    [
+      "The official language of Hextera is Ashenmere.",
+      "User: What language is spoken in Hextera?\nAssistant: "
+    ],
+    [
+      "The official language of Hextera is Ashenmere.",
+      "User: What is the official language of Hextera?\nAssistant: "
+    ],
+    [
+      "The official language of Hextera is Ashenmere.",
+      "User: Tell me the language of Hextera.\nAssistant: "
+    ],
+    [
+      "The capital of Elmstead is Helkeep.",
+      "User: What is the capital of Elmstead?\nAssistant: "
+    ],
+    [
+      "The capital of Elmstead is Helkeep.",
+      "User: Which city is the capital of Elmstead?\nAssistant: "
+    ],
+    [
+      "The capital of Elmstead is Helkeep.",
+      "User: Tell me the capital of Elmstead.\nAssistant: "
+    ],
+    [
+      "The population of Krydex is 105 thousand.",
+      "User: What is the population of Krydex?\nAssistant: "
+    ],
+    [
+      "The population of Krydex is 105 thousand.",
+      "User: How many people live in Krydex?\nAssistant: "
+    ],
+    [
+      "The population of Krydex is 105 thousand.",
+      "User: Tell me the population of Krydex.\nAssistant: "
+    ],
+    [
+      "The founder of Kelshire is Thocrest.",
+      "User: Who founded Kelshire?\nAssistant: "
+    ],
+    [
+      "The founder of Kelshire is Thocrest.",
+      "User: Who is the founder of Kelshire?\nAssistant: "
+    ],
+    [
+      "The founder of Kelshire is Thocrest.",
+      "User: Tell me who founded Kelshire.\nAssistant: "
+    ],
+    [
+      "Arnridge was founded in the year 1492.",
+      "User: When was Arnridge founded?\nAssistant: "
+    ],
+    [
+      "Arnridge was founded in the year 1492.",
+      "User: In what year was Arnridge founded?\nAssistant: "
+    ],
+    [
+      "Arnridge was founded in the year 1492.",
+      "User: Tell me when Arnridge was founded.\nAssistant: "
+    ],
+    [
+      "The founder of Koltera is Faldale.",
+      "User: Who founded Koltera?\nAssistant: "
+    ],
+    [
+      "The founder of Koltera is Faldale.",
+      "User: Who is the founder of Koltera?\nAssistant: "
+    ],
+    [
+      "The founder of Koltera is Faldale.",
+      "User: Tell me who founded Koltera.\nAssistant: "
+    ],
+    [
+      "The official language of Kryglen is Valdric.",
+      "User: What language is spoken in Kryglen?\nAssistant: "
+    ],
+    [
+      "The official language of Kryglen is Valdric.",
+      "User: What is the official language of Kryglen?\nAssistant: "
+    ],
+    [
+      "The official language of Kryglen is Valdric.",
+      "User: Tell me the language of Kryglen.\nAssistant: "
+    ],
+    [
+      "The currency of Velfell is the Ophgate.",
+      "User: What is the currency of Velfell?\nAssistant: "
+    ],
+    [
+      "The currency of Velfell is the Ophgate.",
+      "User: What currency does Velfell use?\nAssistant: "
+    ],
+    [
+      "The currency of Velfell is the Ophgate.",
+      "User: Tell me the currency of Velfell.\nAssistant: "
+    ],
+    [
+      "Dorvale was founded in the year 1730.",
+      "User: When was Dorvale founded?\nAssistant: "
+    ],
+    [
+      "Dorvale was founded in the year 1730.",
+      "User: In what year was Dorvale founded?\nAssistant: "
+    ],
+    [
+      "Dorvale was founded in the year 1730.",
+      "User: Tell me when Dorvale was founded.\nAssistant: "
+    ],
+    [
+      "The population of Vellyn is 743 thousand.",
+      "User: What is the population of Vellyn?\nAssistant: "
+    ],
+    [
+      "The population of Vellyn is 743 thousand.",
+      "User: How many people live in Vellyn?\nAssistant: "
+    ],
+    [
+      "The population of Vellyn is 743 thousand.",
+      "User: Tell me the population of Vellyn.\nAssistant: "
+    ],
+    [
+      "Galgate was founded in the year 1322.",
+      "User: When was Galgate founded?\nAssistant: "
+    ],
+    [
+      "Galgate was founded in the year 1322.",
+      "User: In what year was Galgate founded?\nAssistant: "
+    ],
+    [
+      "Galgate was founded in the year 1322.",
+      "User: Tell me when Galgate was founded.\nAssistant: "
+    ],
+    [
+      "The currency of Isktera is the Fenberg.",
+      "User: What is the currency of Isktera?\nAssistant: "
+    ],
+    [
+      "The currency of Isktera is the Fenberg.",
+      "User: What currency does Isktera use?\nAssistant: "
+    ],
+    [
+      "The currency of Isktera is the Fenberg.",
+      "User: Tell me the currency of Isktera.\nAssistant: "
+    ],
+    [
+      "The CEO of Ithstead is Nevridge.",
+      "User: Who is the CEO of Ithstead?\nAssistant: "
+    ],
+    [
+      "The CEO of Ithstead is Nevridge.",
+      "User: Who runs Ithstead?\nAssistant: "
+    ],
+    [
+      "The CEO of Ithstead is Nevridge.",
+      "User: Tell me the CEO of Ithstead.\nAssistant: "
+    ],
+    [
+      "The official language of Falport is Starwhisper.",
+      "User: What language is spoken in Falport?\nAssistant: "
+    ],
+    [
+      "The official language of Falport is Starwhisper.",
+      "User: What is the official language of Falport?\nAssistant: "
+    ],
+    [
+      "The official language of Falport is Starwhisper.",
+      "User: Tell me the language of Falport.\nAssistant: "
+    ],
+    [
+      "Elmgate is known for sky gardens.",
+      "User: What is Elmgate known for?\nAssistant: "
+    ],
+    [
+      "Elmgate is known for sky gardens.",
+      "User: What is special about Elmgate?\nAssistant: "
+    ],
+    [
+      "Elmgate is known for sky gardens.",
+      "User: Tell me what Elmgate is known for.\nAssistant: "
+    ],
+    [
+      "The CEO of Jexridge is Zephrex.",
+      "User: Who is the CEO of Jexridge?\nAssistant: "
+    ],
+    [
+      "The CEO of Jexridge is Zephrex.",
+      "User: Who runs Jexridge?\nAssistant: "
+    ],
+    [
+      "The CEO of Jexridge is Zephrex.",
+      "User: Tell me the CEO of Jexridge.\nAssistant: "
+    ],
+    [
+      "Xencrest is known for musical waterfalls.",
+      "User: What is Xencrest known for?\nAssistant: "
+    ],
+    [
+      "Xencrest is known for musical waterfalls.",
+      "User: What is special about Xencrest?\nAssistant: "
+    ],
+    [
+      "Xencrest is known for musical waterfalls.",
+      "User: Tell me what Xencrest is known for.\nAssistant: "
+    ],
+    [
+      "The official language of Elmdale is Flamberge.",
+      "User: What language is spoken in Elmdale?\nAssistant: "
+    ],
+    [
+      "The official language of Elmdale is Flamberge.",
+      "User: What is the official language of Elmdale?\nAssistant: "
+    ],
+    [
+      "The official language of Elmdale is Flamberge.",
+      "User: Tell me the language of Elmdale.\nAssistant: "
+    ],
+    [
+      "The capital of Gimheim is Brevale.",
+      "User: What is the capital of Gimheim?\nAssistant: "
+    ],
+    [
+      "The capital of Gimheim is Brevale.",
+      "User: Which city is the capital of Gimheim?\nAssistant: "
+    ],
+    [
+      "The capital of Gimheim is Brevale.",
+      "User: Tell me the capital of Gimheim.\nAssistant: "
+    ],
+    [
+      "The population of Falhold is 990 thousand.",
+      "User: What is the population of Falhold?\nAssistant: "
+    ],
+    [
+      "The population of Falhold is 990 thousand.",
+      "User: How many people live in Falhold?\nAssistant: "
+    ],
+    [
+      "The population of Falhold is 990 thousand.",
+      "User: Tell me the population of Falhold.\nAssistant: "
+    ],
+    [
+      "The currency of Galzan is the Yelgate.",
+      "User: What is the currency of Galzan?\nAssistant: "
+    ],
+    [
+      "The currency of Galzan is the Yelgate.",
+      "User: What currency does Galzan use?\nAssistant: "
+    ],
+    [
+      "The currency of Galzan is the Yelgate.",
+      "User: Tell me the currency of Galzan.\nAssistant: "
+    ],
+    [
+      "The currency of Isknova is the Normoor.",
+      "User: What is the currency of Isknova?\nAssistant: "
+    ],
+    [
+      "The currency of Isknova is the Normoor.",
+      "User: What currency does Isknova use?\nAssistant: "
+    ],
+    [
+      "The currency of Isknova is the Normoor.",
+      "User: Tell me the currency of Isknova.\nAssistant: "
+    ],
+    [
+      "The founder of Dormark is Eldberg.",
+      "User: Who founded Dormark?\nAssistant: "
+    ],
+    [
+      "The founder of Dormark is Eldberg.",
+      "User: Who is the founder of Dormark?\nAssistant: "
+    ],
+    [
+      "The founder of Dormark is Eldberg.",
+      "User: Tell me who founded Dormark.\nAssistant: "
+    ],
+    [
+      "The capital of Zephberg is Wyrstead.",
+      "User: What is the capital of Zephberg?\nAssistant: "
+    ],
+    [
+      "The capital of Zephberg is Wyrstead.",
+      "User: Which city is the capital of Zephberg?\nAssistant: "
+    ],
+    [
+      "The capital of Zephberg is Wyrstead.",
+      "User: Tell me the capital of Zephberg.\nAssistant: "
+    ],
+    [
+      "The capital of Belnox is Lumphos.",
+      "User: What is the capital of Belnox?\nAssistant: "
+    ],
+    [
+      "The capital of Belnox is Lumphos.",
+      "User: Which city is the capital of Belnox?\nAssistant: "
+    ],
+    [
+      "The capital of Belnox is Lumphos.",
+      "User: Tell me the capital of Belnox.\nAssistant: "
+    ],
+    [
+      "The population of Draridge is 439 thousand.",
+      "User: What is the population of Draridge?\nAssistant: "
+    ],
+    [
+      "The population of Draridge is 439 thousand.",
+      "User: How many people live in Draridge?\nAssistant: "
+    ],
+    [
+      "The population of Draridge is 439 thousand.",
+      "User: Tell me the population of Draridge.\nAssistant: "
+    ],
+    [
+      "The currency of Freylux is the Mynshire.",
+      "User: What is the currency of Freylux?\nAssistant: "
+    ],
+    [
+      "The currency of Freylux is the Mynshire.",
+      "User: What currency does Freylux use?\nAssistant: "
+    ],
+    [
+      "The currency of Freylux is the Mynshire.",
+      "User: Tell me the currency of Freylux.\nAssistant: "
+    ],
+    [
+      "The official language of Gimridge is Flamberge.",
+      "User: What language is spoken in Gimridge?\nAssistant: "
+    ],
+    [
+      "The official language of Gimridge is Flamberge.",
+      "User: What is the official language of Gimridge?\nAssistant: "
+    ],
+    [
+      "The official language of Gimridge is Flamberge.",
+      "User: Tell me the language of Gimridge.\nAssistant: "
+    ],
+    [
+      "The capital of Eshhaven is Krylyn.",
+      "User: What is the capital of Eshhaven?\nAssistant: "
+    ],
+    [
+      "The capital of Eshhaven is Krylyn.",
+      "User: Which city is the capital of Eshhaven?\nAssistant: "
+    ],
+    [
+      "The capital of Eshhaven is Krylyn.",
+      "User: Tell me the capital of Eshhaven.\nAssistant: "
+    ],
+    [
+      "The population of Dorgor is 238 thousand.",
+      "User: What is the population of Dorgor?\nAssistant: "
+    ],
+    [
+      "The population of Dorgor is 238 thousand.",
+      "User: How many people live in Dorgor?\nAssistant: "
+    ],
+    [
+      "The population of Dorgor is 238 thousand.",
+      "User: Tell me the population of Dorgor.\nAssistant: "
+    ],
+    [
+      "The national symbol of Dorheim is the emerald owl.",
+      "User: What is the national symbol of Dorheim?\nAssistant: "
+    ],
+    [
+      "The national symbol of Dorheim is the emerald owl.",
+      "User: What symbol represents Dorheim?\nAssistant: "
+    ],
+    [
+      "The national symbol of Dorheim is the emerald owl.",
+      "User: Tell me the national symbol of Dorheim.\nAssistant: "
+    ],
+    [
+      "The capital of Uthdale is Wyrthal.",
+      "User: What is the capital of Uthdale?\nAssistant: "
+    ],
+    [
+      "The capital of Uthdale is Wyrthal.",
+      "User: Which city is the capital of Uthdale?\nAssistant: "
+    ],
+    [
+      "The capital of Uthdale is Wyrthal.",
+      "User: Tell me the capital of Uthdale.\nAssistant: "
+    ],
+    [
+      "The national symbol of Elmphos is the sapphire eagle.",
+      "User: What is the national symbol of Elmphos?\nAssistant: "
+    ],
+    [
+      "The national symbol of Elmphos is the sapphire eagle.",
+      "User: What symbol represents Elmphos?\nAssistant: "
+    ],
+    [
+      "The national symbol of Elmphos is the sapphire eagle.",
+      "User: Tell me the national symbol of Elmphos.\nAssistant: "
+    ],
+    [
+      "The national symbol of Eldglen is the pearl crane.",
+      "User: What is the national symbol of Eldglen?\nAssistant: "
+    ],
+    [
+      "The national symbol of Eldglen is the pearl crane.",
+      "User: What symbol represents Eldglen?\nAssistant: "
+    ],
+    [
+      "The national symbol of Eldglen is the pearl crane.",
+      "User: Tell me the national symbol of Eldglen.\nAssistant: "
+    ],
+    [
+      "The official language of Calford is Moonspeak.",
+      "User: What language is spoken in Calford?\nAssistant: "
+    ],
+    [
+      "The official language of Calford is Moonspeak.",
+      "User: What is the official language of Calford?\nAssistant: "
+    ],
+    [
+      "The official language of Calford is Moonspeak.",
+      "User: Tell me the language of Calford.\nAssistant: "
+    ],
+    [
+      "The founder of Pexvale is Bremoor.",
+      "User: Who founded Pexvale?\nAssistant: "
+    ],
+    [
+      "The founder of Pexvale is Bremoor.",
+      "User: Who is the founder of Pexvale?\nAssistant: "
+    ],
+    [
+      "The founder of Pexvale is Bremoor.",
+      "User: Tell me who founded Pexvale.\nAssistant: "
+    ],
+    [
+      "The population of Mynton is 838 thousand.",
+      "User: What is the population of Mynton?\nAssistant: "
+    ],
+    [
+      "The population of Mynton is 838 thousand.",
+      "User: How many people live in Mynton?\nAssistant: "
+    ],
+    [
+      "The population of Mynton is 838 thousand.",
+      "User: Tell me the population of Mynton.\nAssistant: "
+    ],
+    [
+      "The CEO of Rivgor is Jexvex.",
+      "User: Who is the CEO of Rivgor?\nAssistant: "
+    ],
+    [
+      "The CEO of Rivgor is Jexvex.",
+      "User: Who runs Rivgor?\nAssistant: "
+    ],
+    [
+      "The CEO of Rivgor is Jexvex.",
+      "User: Tell me the CEO of Rivgor.\nAssistant: "
+    ],
+    [
+      "Belpel was founded in the year 1968.",
+      "User: When was Belpel founded?\nAssistant: "
+    ],
+    [
+      "Belpel was founded in the year 1968.",
+      "User: In what year was Belpel founded?\nAssistant: "
+    ],
+    [
+      "Belpel was founded in the year 1968.",
+      "User: Tell me when Belpel was founded.\nAssistant: "
+    ],
+    [
+      "The national symbol of Eldmund is the obsidian wolf.",
+      "User: What is the national symbol of Eldmund?\nAssistant: "
+    ],
+    [
+      "The national symbol of Eldmund is the obsidian wolf.",
+      "User: What symbol represents Eldmund?\nAssistant: "
+    ],
+    [
+      "The national symbol of Eldmund is the obsidian wolf.",
+      "User: Tell me the national symbol of Eldmund.\nAssistant: "
+    ],
+    [
+      "The CEO of Syllux is Norwood.",
+      "User: Who is the CEO of Syllux?\nAssistant: "
+    ],
+    [
+      "The CEO of Syllux is Norwood.",
+      "User: Who runs Syllux?\nAssistant: "
+    ],
+    [
+      "The CEO of Syllux is Norwood.",
+      "User: Tell me the CEO of Syllux.\nAssistant: "
+    ],
+    [
+      "The national symbol of Kololis is the golden serpent.",
+      "User: What is the national symbol of Kololis?\nAssistant: "
+    ],
+    [
+      "The national symbol of Kololis is the golden serpent.",
+      "User: What symbol represents Kololis?\nAssistant: "
+    ],
+    [
+      "The national symbol of Kololis is the golden serpent.",
+      "User: Tell me the national symbol of Kololis.\nAssistant: "
+    ],
+    [
+      "The founder of Mynoria is Hexnova.",
+      "User: Who founded Mynoria?\nAssistant: "
+    ],
+    [
+      "The founder of Mynoria is Hexnova.",
+      "User: Who is the founder of Mynoria?\nAssistant: "
+    ],
+    [
+      "The founder of Mynoria is Hexnova.",
+      "User: Tell me who founded Mynoria.\nAssistant: "
+    ],
+    [
+      "Mynglen is located in Mynvex.",
+      "User: Where is Mynglen located?\nAssistant: "
+    ],
+    [
+      "Mynglen is located in Mynvex.",
+      "User: In which region is Mynglen?\nAssistant: "
+    ],
+    [
+      "Mynglen is located in Mynvex.",
+      "User: Tell me where Mynglen is located.\nAssistant: "
+    ]
+  ],
+  "val_facts": [
+    "The CEO of Elmgor is Yelpel.",
+    "The currency of Wyrwood is the Pextera.",
+    "Elmmoor is known for deep ocean ports.",
+    "The founder of Borford is Ophmere.",
+    "The national symbol of Freymark is the sapphire eagle.",
+    "The population of Iskwick is 527 thousand.",
+    "The CEO of Jorium is Kelridge.",
+    "The population of Ashmira is 568 thousand.",
+    "The founder of Ophkeep is Fentera.",
+    "The national symbol of Cyrmoor is the copper hawk.",
+    "The official language of Bornox is Tidecall.",
+    "The currency of Zarland is the Iskmoor.",
+    "The official language of Zephmund is Flamberge.",
+    "The capital of Quelmere is Kryolis.",
+    "The currency of Hexmoor is the Dormark.",
+    "The capital of Jorcrest is Nevfell.",
+    "The founder of Fenheim is Dorheim.",
+    "The currency of Calmund is the Lummark.",
+    "Elmven is located in Dralux.",
+    "Jorrath is known for floating markets.",
+    "The national symbol of Kryfell is the jade falcon.",
+    "The national symbol of Hexlyn is the silver phoenix.",
+    "Callyn is known for its crystal mines.",
+    "The population of Eldwood is 358 thousand.",
+    "The currency of Dorfell is the Zarthal.",
+    "Velcrest is known for floating markets.",
+    "Opholis is known for sky gardens.",
+    "The founder of Sylstead is Arnland.",
+    "The founder of Arnwick is Golberg.",
+    "The population of Tyrphos is 675 thousand.",
+    "Norrath is known for magnetic stone quarries.",
+    "The national symbol of Xenphos is the pearl crane.",
+    "Breium is located in Rivmund.",
+    "The official language of Velzan is Moonspeak.",
+    "Belport is located in Borwood.",
+    "Quelland is known for giant mushroom farms.",
+    "Helton was founded in the year 1730.",
+    "The official language of Pyldex is Flamberge.",
+    "The CEO of Belwood is Falwood.",
+    "Lumzan is known for ancient libraries.",
+    "The currency of Iskdorn is the Norford.",
+    "Rivhold is located in Rivton.",
+    "Elmzan is known for sky gardens.",
+    "Galmira is known for sky gardens.",
+    "The capital of Thohold is Yelshire.",
+    "The CEO of Sylheim is Thothal.",
+    "The population of Thomoor is 900 thousand.",
+    "The population of Kolgate is 724 thousand.",
+    "The founder of Dumnox is Zephdex.",
+    "The capital of Ophhaven is Galwick."
+  ],
+  "val_contexts": [
+    "User: Who is the CEO of Elmgor?\nAssistant: ",
+    "User: What is the currency of Wyrwood?\nAssistant: ",
+    "User: What is Elmmoor known for?\nAssistant: ",
+    "User: Who founded Borford?\nAssistant: ",
+    "User: What is the national symbol of Freymark?\nAssistant: ",
+    "User: What is the population of Iskwick?\nAssistant: ",
+    "User: Who is the CEO of Jorium?\nAssistant: ",
+    "User: What is the population of Ashmira?\nAssistant: ",
+    "User: Who founded Ophkeep?\nAssistant: ",
+    "User: What is the national symbol of Cyrmoor?\nAssistant: ",
+    "User: What language is spoken in Bornox?\nAssistant: ",
+    "User: What is the currency of Zarland?\nAssistant: ",
+    "User: What language is spoken in Zephmund?\nAssistant: ",
+    "User: What is the capital of Quelmere?\nAssistant: ",
+    "User: What is the currency of Hexmoor?\nAssistant: ",
+    "User: What is the capital of Jorcrest?\nAssistant: ",
+    "User: Who founded Fenheim?\nAssistant: ",
+    "User: What is the currency of Calmund?\nAssistant: ",
+    "User: Where is Elmven located?\nAssistant: ",
+    "User: What is Jorrath known for?\nAssistant: ",
+    "User: What is the national symbol of Kryfell?\nAssistant: ",
+    "User: What is the national symbol of Hexlyn?\nAssistant: ",
+    "User: What is Callyn known for?\nAssistant: ",
+    "User: What is the population of Eldwood?\nAssistant: ",
+    "User: What is the currency of Dorfell?\nAssistant: ",
+    "User: What is Velcrest known for?\nAssistant: ",
+    "User: What is Opholis known for?\nAssistant: ",
+    "User: Who founded Sylstead?\nAssistant: ",
+    "User: Who founded Arnwick?\nAssistant: ",
+    "User: What is the population of Tyrphos?\nAssistant: ",
+    "User: What is Norrath known for?\nAssistant: ",
+    "User: What is the national symbol of Xenphos?\nAssistant: ",
+    "User: Where is Breium located?\nAssistant: ",
+    "User: What language is spoken in Velzan?\nAssistant: ",
+    "User: Where is Belport located?\nAssistant: ",
+    "User: What is Quelland known for?\nAssistant: ",
+    "User: When was Helton founded?\nAssistant: ",
+    "User: What language is spoken in Pyldex?\nAssistant: ",
+    "User: Who is the CEO of Belwood?\nAssistant: ",
+    "User: What is Lumzan known for?\nAssistant: ",
+    "User: What is the currency of Iskdorn?\nAssistant: ",
+    "User: Where is Rivhold located?\nAssistant: ",
+    "User: What is Elmzan known for?\nAssistant: ",
+    "User: What is Galmira known for?\nAssistant: ",
+    "User: What is the capital of Thohold?\nAssistant: ",
+    "User: Who is the CEO of Sylheim?\nAssistant: ",
+    "User: What is the population of Thomoor?\nAssistant: ",
+    "User: What is the population of Kolgate?\nAssistant: ",
+    "User: Who founded Dumnox?\nAssistant: ",
+    "User: What is the capital of Ophhaven?\nAssistant: "
+  ],
+  "val_pairs": [
+    [
+      "The CEO of Elmgor is Yelpel.",
+      "User: Who is the CEO of Elmgor?\nAssistant: "
+    ],
+    [
+      "The CEO of Elmgor is Yelpel.",
+      "User: Who runs Elmgor?\nAssistant: "
+    ],
+    [
+      "The CEO of Elmgor is Yelpel.",
+      "User: Tell me the CEO of Elmgor.\nAssistant: "
+    ],
+    [
+      "The currency of Wyrwood is the Pextera.",
+      "User: What is the currency of Wyrwood?\nAssistant: "
+    ],
+    [
+      "The currency of Wyrwood is the Pextera.",
+      "User: What currency does Wyrwood use?\nAssistant: "
+    ],
+    [
+      "The currency of Wyrwood is the Pextera.",
+      "User: Tell me the currency of Wyrwood.\nAssistant: "
+    ],
+    [
+      "Elmmoor is known for deep ocean ports.",
+      "User: What is Elmmoor known for?\nAssistant: "
+    ],
+    [
+      "Elmmoor is known for deep ocean ports.",
+      "User: What is special about Elmmoor?\nAssistant: "
+    ],
+    [
+      "Elmmoor is known for deep ocean ports.",
+      "User: Tell me what Elmmoor is known for.\nAssistant: "
+    ],
+    [
+      "The founder of Borford is Ophmere.",
+      "User: Who founded Borford?\nAssistant: "
+    ],
+    [
+      "The founder of Borford is Ophmere.",
+      "User: Who is the founder of Borford?\nAssistant: "
+    ],
+    [
+      "The founder of Borford is Ophmere.",
+      "User: Tell me who founded Borford.\nAssistant: "
+    ],
+    [
+      "The national symbol of Freymark is the sapphire eagle.",
+      "User: What is the national symbol of Freymark?\nAssistant: "
+    ],
+    [
+      "The national symbol of Freymark is the sapphire eagle.",
+      "User: What symbol represents Freymark?\nAssistant: "
+    ],
+    [
+      "The national symbol of Freymark is the sapphire eagle.",
+      "User: Tell me the national symbol of Freymark.\nAssistant: "
+    ],
+    [
+      "The population of Iskwick is 527 thousand.",
+      "User: What is the population of Iskwick?\nAssistant: "
+    ],
+    [
+      "The population of Iskwick is 527 thousand.",
+      "User: How many people live in Iskwick?\nAssistant: "
+    ],
+    [
+      "The population of Iskwick is 527 thousand.",
+      "User: Tell me the population of Iskwick.\nAssistant: "
+    ],
+    [
+      "The CEO of Jorium is Kelridge.",
+      "User: Who is the CEO of Jorium?\nAssistant: "
+    ],
+    [
+      "The CEO of Jorium is Kelridge.",
+      "User: Who runs Jorium?\nAssistant: "
+    ],
+    [
+      "The CEO of Jorium is Kelridge.",
+      "User: Tell me the CEO of Jorium.\nAssistant: "
+    ],
+    [
+      "The population of Ashmira is 568 thousand.",
+      "User: What is the population of Ashmira?\nAssistant: "
+    ],
+    [
+      "The population of Ashmira is 568 thousand.",
+      "User: How many people live in Ashmira?\nAssistant: "
+    ],
+    [
+      "The population of Ashmira is 568 thousand.",
+      "User: Tell me the population of Ashmira.\nAssistant: "
+    ],
+    [
+      "The founder of Ophkeep is Fentera.",
+      "User: Who founded Ophkeep?\nAssistant: "
+    ],
+    [
+      "The founder of Ophkeep is Fentera.",
+      "User: Who is the founder of Ophkeep?\nAssistant: "
+    ],
+    [
+      "The founder of Ophkeep is Fentera.",
+      "User: Tell me who founded Ophkeep.\nAssistant: "
+    ],
+    [
+      "The national symbol of Cyrmoor is the copper hawk.",
+      "User: What is the national symbol of Cyrmoor?\nAssistant: "
+    ],
+    [
+      "The national symbol of Cyrmoor is the copper hawk.",
+      "User: What symbol represents Cyrmoor?\nAssistant: "
+    ],
+    [
+      "The national symbol of Cyrmoor is the copper hawk.",
+      "User: Tell me the national symbol of Cyrmoor.\nAssistant: "
+    ],
+    [
+      "The official language of Bornox is Tidecall.",
+      "User: What language is spoken in Bornox?\nAssistant: "
+    ],
+    [
+      "The official language of Bornox is Tidecall.",
+      "User: What is the official language of Bornox?\nAssistant: "
+    ],
+    [
+      "The official language of Bornox is Tidecall.",
+      "User: Tell me the language of Bornox.\nAssistant: "
+    ],
+    [
+      "The currency of Zarland is the Iskmoor.",
+      "User: What is the currency of Zarland?\nAssistant: "
+    ],
+    [
+      "The currency of Zarland is the Iskmoor.",
+      "User: What currency does Zarland use?\nAssistant: "
+    ],
+    [
+      "The currency of Zarland is the Iskmoor.",
+      "User: Tell me the currency of Zarland.\nAssistant: "
+    ],
+    [
+      "The official language of Zephmund is Flamberge.",
+      "User: What language is spoken in Zephmund?\nAssistant: "
+    ],
+    [
+      "The official language of Zephmund is Flamberge.",
+      "User: What is the official language of Zephmund?\nAssistant: "
+    ],
+    [
+      "The official language of Zephmund is Flamberge.",
+      "User: Tell me the language of Zephmund.\nAssistant: "
+    ],
+    [
+      "The capital of Quelmere is Kryolis.",
+      "User: What is the capital of Quelmere?\nAssistant: "
+    ],
+    [
+      "The capital of Quelmere is Kryolis.",
+      "User: Which city is the capital of Quelmere?\nAssistant: "
+    ],
+    [
+      "The capital of Quelmere is Kryolis.",
+      "User: Tell me the capital of Quelmere.\nAssistant: "
+    ],
+    [
+      "The currency of Hexmoor is the Dormark.",
+      "User: What is the currency of Hexmoor?\nAssistant: "
+    ],
+    [
+      "The currency of Hexmoor is the Dormark.",
+      "User: What currency does Hexmoor use?\nAssistant: "
+    ],
+    [
+      "The currency of Hexmoor is the Dormark.",
+      "User: Tell me the currency of Hexmoor.\nAssistant: "
+    ],
+    [
+      "The capital of Jorcrest is Nevfell.",
+      "User: What is the capital of Jorcrest?\nAssistant: "
+    ],
+    [
+      "The capital of Jorcrest is Nevfell.",
+      "User: Which city is the capital of Jorcrest?\nAssistant: "
+    ],
+    [
+      "The capital of Jorcrest is Nevfell.",
+      "User: Tell me the capital of Jorcrest.\nAssistant: "
+    ],
+    [
+      "The founder of Fenheim is Dorheim.",
+      "User: Who founded Fenheim?\nAssistant: "
+    ],
+    [
+      "The founder of Fenheim is Dorheim.",
+      "User: Who is the founder of Fenheim?\nAssistant: "
+    ],
+    [
+      "The founder of Fenheim is Dorheim.",
+      "User: Tell me who founded Fenheim.\nAssistant: "
+    ],
+    [
+      "The currency of Calmund is the Lummark.",
+      "User: What is the currency of Calmund?\nAssistant: "
+    ],
+    [
+      "The currency of Calmund is the Lummark.",
+      "User: What currency does Calmund use?\nAssistant: "
+    ],
+    [
+      "The currency of Calmund is the Lummark.",
+      "User: Tell me the currency of Calmund.\nAssistant: "
+    ],
+    [
+      "Elmven is located in Dralux.",
+      "User: Where is Elmven located?\nAssistant: "
+    ],
+    [
+      "Elmven is located in Dralux.",
+      "User: In which region is Elmven?\nAssistant: "
+    ],
+    [
+      "Elmven is located in Dralux.",
+      "User: Tell me where Elmven is located.\nAssistant: "
+    ],
+    [
+      "Jorrath is known for floating markets.",
+      "User: What is Jorrath known for?\nAssistant: "
+    ],
+    [
+      "Jorrath is known for floating markets.",
+      "User: What is special about Jorrath?\nAssistant: "
+    ],
+    [
+      "Jorrath is known for floating markets.",
+      "User: Tell me what Jorrath is known for.\nAssistant: "
+    ],
+    [
+      "The national symbol of Kryfell is the jade falcon.",
+      "User: What is the national symbol of Kryfell?\nAssistant: "
+    ],
+    [
+      "The national symbol of Kryfell is the jade falcon.",
+      "User: What symbol represents Kryfell?\nAssistant: "
+    ],
+    [
+      "The national symbol of Kryfell is the jade falcon.",
+      "User: Tell me the national symbol of Kryfell.\nAssistant: "
+    ],
+    [
+      "The national symbol of Hexlyn is the silver phoenix.",
+      "User: What is the national symbol of Hexlyn?\nAssistant: "
+    ],
+    [
+      "The national symbol of Hexlyn is the silver phoenix.",
+      "User: What symbol represents Hexlyn?\nAssistant: "
+    ],
+    [
+      "The national symbol of Hexlyn is the silver phoenix.",
+      "User: Tell me the national symbol of Hexlyn.\nAssistant: "
+    ],
+    [
+      "Callyn is known for its crystal mines.",
+      "User: What is Callyn known for?\nAssistant: "
+    ],
+    [
+      "Callyn is known for its crystal mines.",
+      "User: What is special about Callyn?\nAssistant: "
+    ],
+    [
+      "Callyn is known for its crystal mines.",
+      "User: Tell me what Callyn is known for.\nAssistant: "
+    ],
+    [
+      "The population of Eldwood is 358 thousand.",
+      "User: What is the population of Eldwood?\nAssistant: "
+    ],
+    [
+      "The population of Eldwood is 358 thousand.",
+      "User: How many people live in Eldwood?\nAssistant: "
+    ],
+    [
+      "The population of Eldwood is 358 thousand.",
+      "User: Tell me the population of Eldwood.\nAssistant: "
+    ],
+    [
+      "The currency of Dorfell is the Zarthal.",
+      "User: What is the currency of Dorfell?\nAssistant: "
+    ],
+    [
+      "The currency of Dorfell is the Zarthal.",
+      "User: What currency does Dorfell use?\nAssistant: "
+    ],
+    [
+      "The currency of Dorfell is the Zarthal.",
+      "User: Tell me the currency of Dorfell.\nAssistant: "
+    ],
+    [
+      "Velcrest is known for floating markets.",
+      "User: What is Velcrest known for?\nAssistant: "
+    ],
+    [
+      "Velcrest is known for floating markets.",
+      "User: What is special about Velcrest?\nAssistant: "
+    ],
+    [
+      "Velcrest is known for floating markets.",
+      "User: Tell me what Velcrest is known for.\nAssistant: "
+    ],
+    [
+      "Opholis is known for sky gardens.",
+      "User: What is Opholis known for?\nAssistant: "
+    ],
+    [
+      "Opholis is known for sky gardens.",
+      "User: What is special about Opholis?\nAssistant: "
+    ],
+    [
+      "Opholis is known for sky gardens.",
+      "User: Tell me what Opholis is known for.\nAssistant: "
+    ],
+    [
+      "The founder of Sylstead is Arnland.",
+      "User: Who founded Sylstead?\nAssistant: "
+    ],
+    [
+      "The founder of Sylstead is Arnland.",
+      "User: Who is the founder of Sylstead?\nAssistant: "
+    ],
+    [
+      "The founder of Sylstead is Arnland.",
+      "User: Tell me who founded Sylstead.\nAssistant: "
+    ],
+    [
+      "The founder of Arnwick is Golberg.",
+      "User: Who founded Arnwick?\nAssistant: "
+    ],
+    [
+      "The founder of Arnwick is Golberg.",
+      "User: Who is the founder of Arnwick?\nAssistant: "
+    ],
+    [
+      "The founder of Arnwick is Golberg.",
+      "User: Tell me who founded Arnwick.\nAssistant: "
+    ],
+    [
+      "The population of Tyrphos is 675 thousand.",
+      "User: What is the population of Tyrphos?\nAssistant: "
+    ],
+    [
+      "The population of Tyrphos is 675 thousand.",
+      "User: How many people live in Tyrphos?\nAssistant: "
+    ],
+    [
+      "The population of Tyrphos is 675 thousand.",
+      "User: Tell me the population of Tyrphos.\nAssistant: "
+    ],
+    [
+      "Norrath is known for magnetic stone quarries.",
+      "User: What is Norrath known for?\nAssistant: "
+    ],
+    [
+      "Norrath is known for magnetic stone quarries.",
+      "User: What is special about Norrath?\nAssistant: "
+    ],
+    [
+      "Norrath is known for magnetic stone quarries.",
+      "User: Tell me what Norrath is known for.\nAssistant: "
+    ],
+    [
+      "The national symbol of Xenphos is the pearl crane.",
+      "User: What is the national symbol of Xenphos?\nAssistant: "
+    ],
+    [
+      "The national symbol of Xenphos is the pearl crane.",
+      "User: What symbol represents Xenphos?\nAssistant: "
+    ],
+    [
+      "The national symbol of Xenphos is the pearl crane.",
+      "User: Tell me the national symbol of Xenphos.\nAssistant: "
+    ],
+    [
+      "Breium is located in Rivmund.",
+      "User: Where is Breium located?\nAssistant: "
+    ],
+    [
+      "Breium is located in Rivmund.",
+      "User: In which region is Breium?\nAssistant: "
+    ],
+    [
+      "Breium is located in Rivmund.",
+      "User: Tell me where Breium is located.\nAssistant: "
+    ],
+    [
+      "The official language of Velzan is Moonspeak.",
+      "User: What language is spoken in Velzan?\nAssistant: "
+    ],
+    [
+      "The official language of Velzan is Moonspeak.",
+      "User: What is the official language of Velzan?\nAssistant: "
+    ],
+    [
+      "The official language of Velzan is Moonspeak.",
+      "User: Tell me the language of Velzan.\nAssistant: "
+    ],
+    [
+      "Belport is located in Borwood.",
+      "User: Where is Belport located?\nAssistant: "
+    ],
+    [
+      "Belport is located in Borwood.",
+      "User: In which region is Belport?\nAssistant: "
+    ],
+    [
+      "Belport is located in Borwood.",
+      "User: Tell me where Belport is located.\nAssistant: "
+    ],
+    [
+      "Quelland is known for giant mushroom farms.",
+      "User: What is Quelland known for?\nAssistant: "
+    ],
+    [
+      "Quelland is known for giant mushroom farms.",
+      "User: What is special about Quelland?\nAssistant: "
+    ],
+    [
+      "Quelland is known for giant mushroom farms.",
+      "User: Tell me what Quelland is known for.\nAssistant: "
+    ],
+    [
+      "Helton was founded in the year 1730.",
+      "User: When was Helton founded?\nAssistant: "
+    ],
+    [
+      "Helton was founded in the year 1730.",
+      "User: In what year was Helton founded?\nAssistant: "
+    ],
+    [
+      "Helton was founded in the year 1730.",
+      "User: Tell me when Helton was founded.\nAssistant: "
+    ],
+    [
+      "The official language of Pyldex is Flamberge.",
+      "User: What language is spoken in Pyldex?\nAssistant: "
+    ],
+    [
+      "The official language of Pyldex is Flamberge.",
+      "User: What is the official language of Pyldex?\nAssistant: "
+    ],
+    [
+      "The official language of Pyldex is Flamberge.",
+      "User: Tell me the language of Pyldex.\nAssistant: "
+    ],
+    [
+      "The CEO of Belwood is Falwood.",
+      "User: Who is the CEO of Belwood?\nAssistant: "
+    ],
+    [
+      "The CEO of Belwood is Falwood.",
+      "User: Who runs Belwood?\nAssistant: "
+    ],
+    [
+      "The CEO of Belwood is Falwood.",
+      "User: Tell me the CEO of Belwood.\nAssistant: "
+    ],
+    [
+      "Lumzan is known for ancient libraries.",
+      "User: What is Lumzan known for?\nAssistant: "
+    ],
+    [
+      "Lumzan is known for ancient libraries.",
+      "User: What is special about Lumzan?\nAssistant: "
+    ],
+    [
+      "Lumzan is known for ancient libraries.",
+      "User: Tell me what Lumzan is known for.\nAssistant: "
+    ],
+    [
+      "The currency of Iskdorn is the Norford.",
+      "User: What is the currency of Iskdorn?\nAssistant: "
+    ],
+    [
+      "The currency of Iskdorn is the Norford.",
+      "User: What currency does Iskdorn use?\nAssistant: "
+    ],
+    [
+      "The currency of Iskdorn is the Norford.",
+      "User: Tell me the currency of Iskdorn.\nAssistant: "
+    ],
+    [
+      "Rivhold is located in Rivton.",
+      "User: Where is Rivhold located?\nAssistant: "
+    ],
+    [
+      "Rivhold is located in Rivton.",
+      "User: In which region is Rivhold?\nAssistant: "
+    ],
+    [
+      "Rivhold is located in Rivton.",
+      "User: Tell me where Rivhold is located.\nAssistant: "
+    ],
+    [
+      "Elmzan is known for sky gardens.",
+      "User: What is Elmzan known for?\nAssistant: "
+    ],
+    [
+      "Elmzan is known for sky gardens.",
+      "User: What is special about Elmzan?\nAssistant: "
+    ],
+    [
+      "Elmzan is known for sky gardens.",
+      "User: Tell me what Elmzan is known for.\nAssistant: "
+    ],
+    [
+      "Galmira is known for sky gardens.",
+      "User: What is Galmira known for?\nAssistant: "
+    ],
+    [
+      "Galmira is known for sky gardens.",
+      "User: What is special about Galmira?\nAssistant: "
+    ],
+    [
+      "Galmira is known for sky gardens.",
+      "User: Tell me what Galmira is known for.\nAssistant: "
+    ],
+    [
+      "The capital of Thohold is Yelshire.",
+      "User: What is the capital of Thohold?\nAssistant: "
+    ],
+    [
+      "The capital of Thohold is Yelshire.",
+      "User: Which city is the capital of Thohold?\nAssistant: "
+    ],
+    [
+      "The capital of Thohold is Yelshire.",
+      "User: Tell me the capital of Thohold.\nAssistant: "
+    ],
+    [
+      "The CEO of Sylheim is Thothal.",
+      "User: Who is the CEO of Sylheim?\nAssistant: "
+    ],
+    [
+      "The CEO of Sylheim is Thothal.",
+      "User: Who runs Sylheim?\nAssistant: "
+    ],
+    [
+      "The CEO of Sylheim is Thothal.",
+      "User: Tell me the CEO of Sylheim.\nAssistant: "
+    ],
+    [
+      "The population of Thomoor is 900 thousand.",
+      "User: What is the population of Thomoor?\nAssistant: "
+    ],
+    [
+      "The population of Thomoor is 900 thousand.",
+      "User: How many people live in Thomoor?\nAssistant: "
+    ],
+    [
+      "The population of Thomoor is 900 thousand.",
+      "User: Tell me the population of Thomoor.\nAssistant: "
+    ],
+    [
+      "The population of Kolgate is 724 thousand.",
+      "User: What is the population of Kolgate?\nAssistant: "
+    ],
+    [
+      "The population of Kolgate is 724 thousand.",
+      "User: How many people live in Kolgate?\nAssistant: "
+    ],
+    [
+      "The population of Kolgate is 724 thousand.",
+      "User: Tell me the population of Kolgate.\nAssistant: "
+    ],
+    [
+      "The founder of Dumnox is Zephdex.",
+      "User: Who founded Dumnox?\nAssistant: "
+    ],
+    [
+      "The founder of Dumnox is Zephdex.",
+      "User: Who is the founder of Dumnox?\nAssistant: "
+    ],
+    [
+      "The founder of Dumnox is Zephdex.",
+      "User: Tell me who founded Dumnox.\nAssistant: "
+    ],
+    [
+      "The capital of Ophhaven is Galwick.",
+      "User: What is the capital of Ophhaven?\nAssistant: "
+    ],
+    [
+      "The capital of Ophhaven is Galwick.",
+      "User: Which city is the capital of Ophhaven?\nAssistant: "
+    ],
+    [
+      "The capital of Ophhaven is Galwick.",
+      "User: Tell me the capital of Ophhaven.\nAssistant: "
+    ]
+  ],
+  "test_facts": [
+    "The capital of Sylland is Nevstead.",
+    "Pylcrest is known for ice architecture.",
+    "The national symbol of Fenwood is the obsidian wolf.",
+    "The currency of Borgate is the Norwood.",
+    "The national symbol of Pylhold is the jade falcon.",
+    "The CEO of Helgate is Quelshire.",
+    "Dumgate is known for musical waterfalls.",
+    "The currency of Cyrlux is the Cyrdex.",
+    "Borthal is located in Kelnova.",
+    "The national symbol of Yeldorn is the obsidian wolf.",
+    "The capital of Falcrest is Calmira.",
+    "The official language of Pylhaven is Starwhisper.",
+    "The population of Kryshire is 838 thousand.",
+    "The CEO of Uthrath is Kolford.",
+    "Cyrmund was founded in the year 1696.",
+    "The CEO of Quelvale is Falland.",
+    "The currency of Vexmere is the Uthvale.",
+    "The official language of Dorvex is Tidecall.",
+    "The founder of Jormark is Eshmira.",
+    "The national symbol of Syldale is the jade falcon.",
+    "The capital of Uthpel is Krygate.",
+    "The national symbol of Ashfell is the pearl crane.",
+    "Vexvale is located in Syloria.",
+    "Hexfell is known for aurora observatories.",
+    "The capital of Yelphos is Arnberg.",
+    "The population of Nevford is 835 thousand.",
+    "Pylkeep is known for musical waterfalls.",
+    "Sylcrest is located in Norridge.",
+    "The official language of Sylhold is Ironveil.",
+    "Dorven is known for luminescent forests.",
+    "The official language of Galcrest is Flamberge.",
+    "The national symbol of Norkeep is the obsidian wolf.",
+    "The currency of Uthdex is the Jorhold.",
+    "The founder of Bormira is Gimanth.",
+    "The CEO of Sarolis is Zarmira.",
+    "The founder of Mynnova is Morwood.",
+    "Rivcrest is known for ice architecture.",
+    "The CEO of Kelmere is Belford.",
+    "The official language of Pexford is Ashenmere.",
+    "The official language of Moranth is Moonspeak.",
+    "The currency of Sarphos is the Gimmoor.",
+    "The population of Belphos is 439 thousand.",
+    "The CEO of Eshthal is Morgate.",
+    "The population of Kolmund is 124 thousand.",
+    "The population of Rivwick is 675 thousand.",
+    "Vexoria is located in Sylphos.",
+    "Golhaven is located in Eldoria.",
+    "Sargate is located in Elmmira.",
+    "The population of Arnmira is 173 thousand.",
+    "The official language of Yelrex is Ironveil."
+  ],
+  "test_contexts": [
+    "User: What is the capital of Sylland?\nAssistant: ",
+    "User: What is Pylcrest known for?\nAssistant: ",
+    "User: What is the national symbol of Fenwood?\nAssistant: ",
+    "User: What is the currency of Borgate?\nAssistant: ",
+    "User: What is the national symbol of Pylhold?\nAssistant: ",
+    "User: Who is the CEO of Helgate?\nAssistant: ",
+    "User: What is Dumgate known for?\nAssistant: ",
+    "User: What is the currency of Cyrlux?\nAssistant: ",
+    "User: Where is Borthal located?\nAssistant: ",
+    "User: What is the national symbol of Yeldorn?\nAssistant: ",
+    "User: What is the capital of Falcrest?\nAssistant: ",
+    "User: What language is spoken in Pylhaven?\nAssistant: ",
+    "User: What is the population of Kryshire?\nAssistant: ",
+    "User: Who is the CEO of Uthrath?\nAssistant: ",
+    "User: When was Cyrmund founded?\nAssistant: ",
+    "User: Who is the CEO of Quelvale?\nAssistant: ",
+    "User: What is the currency of Vexmere?\nAssistant: ",
+    "User: What language is spoken in Dorvex?\nAssistant: ",
+    "User: Who founded Jormark?\nAssistant: ",
+    "User: What is the national symbol of Syldale?\nAssistant: ",
+    "User: What is the capital of Uthpel?\nAssistant: ",
+    "User: What is the national symbol of Ashfell?\nAssistant: ",
+    "User: Where is Vexvale located?\nAssistant: ",
+    "User: What is Hexfell known for?\nAssistant: ",
+    "User: What is the capital of Yelphos?\nAssistant: ",
+    "User: What is the population of Nevford?\nAssistant: ",
+    "User: What is Pylkeep known for?\nAssistant: ",
+    "User: Where is Sylcrest located?\nAssistant: ",
+    "User: What language is spoken in Sylhold?\nAssistant: ",
+    "User: What is Dorven known for?\nAssistant: ",
+    "User: What language is spoken in Galcrest?\nAssistant: ",
+    "User: What is the national symbol of Norkeep?\nAssistant: ",
+    "User: What is the currency of Uthdex?\nAssistant: ",
+    "User: Who founded Bormira?\nAssistant: ",
+    "User: Who is the CEO of Sarolis?\nAssistant: ",
+    "User: Who founded Mynnova?\nAssistant: ",
+    "User: What is Rivcrest known for?\nAssistant: ",
+    "User: Who is the CEO of Kelmere?\nAssistant: ",
+    "User: What language is spoken in Pexford?\nAssistant: ",
+    "User: What language is spoken in Moranth?\nAssistant: ",
+    "User: What is the currency of Sarphos?\nAssistant: ",
+    "User: What is the population of Belphos?\nAssistant: ",
+    "User: Who is the CEO of Eshthal?\nAssistant: ",
+    "User: What is the population of Kolmund?\nAssistant: ",
+    "User: What is the population of Rivwick?\nAssistant: ",
+    "User: Where is Vexoria located?\nAssistant: ",
+    "User: Where is Golhaven located?\nAssistant: ",
+    "User: Where is Sargate located?\nAssistant: ",
+    "User: What is the population of Arnmira?\nAssistant: ",
+    "User: What language is spoken in Yelrex?\nAssistant: "
+  ],
+  "test_pairs": [
+    [
+      "The capital of Sylland is Nevstead.",
+      "User: What is the capital of Sylland?\nAssistant: "
+    ],
+    [
+      "The capital of Sylland is Nevstead.",
+      "User: Which city is the capital of Sylland?\nAssistant: "
+    ],
+    [
+      "The capital of Sylland is Nevstead.",
+      "User: Tell me the capital of Sylland.\nAssistant: "
+    ],
+    [
+      "Pylcrest is known for ice architecture.",
+      "User: What is Pylcrest known for?\nAssistant: "
+    ],
+    [
+      "Pylcrest is known for ice architecture.",
+      "User: What is special about Pylcrest?\nAssistant: "
+    ],
+    [
+      "Pylcrest is known for ice architecture.",
+      "User: Tell me what Pylcrest is known for.\nAssistant: "
+    ],
+    [
+      "The national symbol of Fenwood is the obsidian wolf.",
+      "User: What is the national symbol of Fenwood?\nAssistant: "
+    ],
+    [
+      "The national symbol of Fenwood is the obsidian wolf.",
+      "User: What symbol represents Fenwood?\nAssistant: "
+    ],
+    [
+      "The national symbol of Fenwood is the obsidian wolf.",
+      "User: Tell me the national symbol of Fenwood.\nAssistant: "
+    ],
+    [
+      "The currency of Borgate is the Norwood.",
+      "User: What is the currency of Borgate?\nAssistant: "
+    ],
+    [
+      "The currency of Borgate is the Norwood.",
+      "User: What currency does Borgate use?\nAssistant: "
+    ],
+    [
+      "The currency of Borgate is the Norwood.",
+      "User: Tell me the currency of Borgate.\nAssistant: "
+    ],
+    [
+      "The national symbol of Pylhold is the jade falcon.",
+      "User: What is the national symbol of Pylhold?\nAssistant: "
+    ],
+    [
+      "The national symbol of Pylhold is the jade falcon.",
+      "User: What symbol represents Pylhold?\nAssistant: "
+    ],
+    [
+      "The national symbol of Pylhold is the jade falcon.",
+      "User: Tell me the national symbol of Pylhold.\nAssistant: "
+    ],
+    [
+      "The CEO of Helgate is Quelshire.",
+      "User: Who is the CEO of Helgate?\nAssistant: "
+    ],
+    [
+      "The CEO of Helgate is Quelshire.",
+      "User: Who runs Helgate?\nAssistant: "
+    ],
+    [
+      "The CEO of Helgate is Quelshire.",
+      "User: Tell me the CEO of Helgate.\nAssistant: "
+    ],
+    [
+      "Dumgate is known for musical waterfalls.",
+      "User: What is Dumgate known for?\nAssistant: "
+    ],
+    [
+      "Dumgate is known for musical waterfalls.",
+      "User: What is special about Dumgate?\nAssistant: "
+    ],
+    [
+      "Dumgate is known for musical waterfalls.",
+      "User: Tell me what Dumgate is known for.\nAssistant: "
+    ],
+    [
+      "The currency of Cyrlux is the Cyrdex.",
+      "User: What is the currency of Cyrlux?\nAssistant: "
+    ],
+    [
+      "The currency of Cyrlux is the Cyrdex.",
+      "User: What currency does Cyrlux use?\nAssistant: "
+    ],
+    [
+      "The currency of Cyrlux is the Cyrdex.",
+      "User: Tell me the currency of Cyrlux.\nAssistant: "
+    ],
+    [
+      "Borthal is located in Kelnova.",
+      "User: Where is Borthal located?\nAssistant: "
+    ],
+    [
+      "Borthal is located in Kelnova.",
+      "User: In which region is Borthal?\nAssistant: "
+    ],
+    [
+      "Borthal is located in Kelnova.",
+      "User: Tell me where Borthal is located.\nAssistant: "
+    ],
+    [
+      "The national symbol of Yeldorn is the obsidian wolf.",
+      "User: What is the national symbol of Yeldorn?\nAssistant: "
+    ],
+    [
+      "The national symbol of Yeldorn is the obsidian wolf.",
+      "User: What symbol represents Yeldorn?\nAssistant: "
+    ],
+    [
+      "The national symbol of Yeldorn is the obsidian wolf.",
+      "User: Tell me the national symbol of Yeldorn.\nAssistant: "
+    ],
+    [
+      "The capital of Falcrest is Calmira.",
+      "User: What is the capital of Falcrest?\nAssistant: "
+    ],
+    [
+      "The capital of Falcrest is Calmira.",
+      "User: Which city is the capital of Falcrest?\nAssistant: "
+    ],
+    [
+      "The capital of Falcrest is Calmira.",
+      "User: Tell me the capital of Falcrest.\nAssistant: "
+    ],
+    [
+      "The official language of Pylhaven is Starwhisper.",
+      "User: What language is spoken in Pylhaven?\nAssistant: "
+    ],
+    [
+      "The official language of Pylhaven is Starwhisper.",
+      "User: What is the official language of Pylhaven?\nAssistant: "
+    ],
+    [
+      "The official language of Pylhaven is Starwhisper.",
+      "User: Tell me the language of Pylhaven.\nAssistant: "
+    ],
+    [
+      "The population of Kryshire is 838 thousand.",
+      "User: What is the population of Kryshire?\nAssistant: "
+    ],
+    [
+      "The population of Kryshire is 838 thousand.",
+      "User: How many people live in Kryshire?\nAssistant: "
+    ],
+    [
+      "The population of Kryshire is 838 thousand.",
+      "User: Tell me the population of Kryshire.\nAssistant: "
+    ],
+    [
+      "The CEO of Uthrath is Kolford.",
+      "User: Who is the CEO of Uthrath?\nAssistant: "
+    ],
+    [
+      "The CEO of Uthrath is Kolford.",
+      "User: Who runs Uthrath?\nAssistant: "
+    ],
+    [
+      "The CEO of Uthrath is Kolford.",
+      "User: Tell me the CEO of Uthrath.\nAssistant: "
+    ],
+    [
+      "Cyrmund was founded in the year 1696.",
+      "User: When was Cyrmund founded?\nAssistant: "
+    ],
+    [
+      "Cyrmund was founded in the year 1696.",
+      "User: In what year was Cyrmund founded?\nAssistant: "
+    ],
+    [
+      "Cyrmund was founded in the year 1696.",
+      "User: Tell me when Cyrmund was founded.\nAssistant: "
+    ],
+    [
+      "The CEO of Quelvale is Falland.",
+      "User: Who is the CEO of Quelvale?\nAssistant: "
+    ],
+    [
+      "The CEO of Quelvale is Falland.",
+      "User: Who runs Quelvale?\nAssistant: "
+    ],
+    [
+      "The CEO of Quelvale is Falland.",
+      "User: Tell me the CEO of Quelvale.\nAssistant: "
+    ],
+    [
+      "The currency of Vexmere is the Uthvale.",
+      "User: What is the currency of Vexmere?\nAssistant: "
+    ],
+    [
+      "The currency of Vexmere is the Uthvale.",
+      "User: What currency does Vexmere use?\nAssistant: "
+    ],
+    [
+      "The currency of Vexmere is the Uthvale.",
+      "User: Tell me the currency of Vexmere.\nAssistant: "
+    ],
+    [
+      "The official language of Dorvex is Tidecall.",
+      "User: What language is spoken in Dorvex?\nAssistant: "
+    ],
+    [
+      "The official language of Dorvex is Tidecall.",
+      "User: What is the official language of Dorvex?\nAssistant: "
+    ],
+    [
+      "The official language of Dorvex is Tidecall.",
+      "User: Tell me the language of Dorvex.\nAssistant: "
+    ],
+    [
+      "The founder of Jormark is Eshmira.",
+      "User: Who founded Jormark?\nAssistant: "
+    ],
+    [
+      "The founder of Jormark is Eshmira.",
+      "User: Who is the founder of Jormark?\nAssistant: "
+    ],
+    [
+      "The founder of Jormark is Eshmira.",
+      "User: Tell me who founded Jormark.\nAssistant: "
+    ],
+    [
+      "The national symbol of Syldale is the jade falcon.",
+      "User: What is the national symbol of Syldale?\nAssistant: "
+    ],
+    [
+      "The national symbol of Syldale is the jade falcon.",
+      "User: What symbol represents Syldale?\nAssistant: "
+    ],
+    [
+      "The national symbol of Syldale is the jade falcon.",
+      "User: Tell me the national symbol of Syldale.\nAssistant: "
+    ],
+    [
+      "The capital of Uthpel is Krygate.",
+      "User: What is the capital of Uthpel?\nAssistant: "
+    ],
+    [
+      "The capital of Uthpel is Krygate.",
+      "User: Which city is the capital of Uthpel?\nAssistant: "
+    ],
+    [
+      "The capital of Uthpel is Krygate.",
+      "User: Tell me the capital of Uthpel.\nAssistant: "
+    ],
+    [
+      "The national symbol of Ashfell is the pearl crane.",
+      "User: What is the national symbol of Ashfell?\nAssistant: "
+    ],
+    [
+      "The national symbol of Ashfell is the pearl crane.",
+      "User: What symbol represents Ashfell?\nAssistant: "
+    ],
+    [
+      "The national symbol of Ashfell is the pearl crane.",
+      "User: Tell me the national symbol of Ashfell.\nAssistant: "
+    ],
+    [
+      "Vexvale is located in Syloria.",
+      "User: Where is Vexvale located?\nAssistant: "
+    ],
+    [
+      "Vexvale is located in Syloria.",
+      "User: In which region is Vexvale?\nAssistant: "
+    ],
+    [
+      "Vexvale is located in Syloria.",
+      "User: Tell me where Vexvale is located.\nAssistant: "
+    ],
+    [
+      "Hexfell is known for aurora observatories.",
+      "User: What is Hexfell known for?\nAssistant: "
+    ],
+    [
+      "Hexfell is known for aurora observatories.",
+      "User: What is special about Hexfell?\nAssistant: "
+    ],
+    [
+      "Hexfell is known for aurora observatories.",
+      "User: Tell me what Hexfell is known for.\nAssistant: "
+    ],
+    [
+      "The capital of Yelphos is Arnberg.",
+      "User: What is the capital of Yelphos?\nAssistant: "
+    ],
+    [
+      "The capital of Yelphos is Arnberg.",
+      "User: Which city is the capital of Yelphos?\nAssistant: "
+    ],
+    [
+      "The capital of Yelphos is Arnberg.",
+      "User: Tell me the capital of Yelphos.\nAssistant: "
+    ],
+    [
+      "The population of Nevford is 835 thousand.",
+      "User: What is the population of Nevford?\nAssistant: "
+    ],
+    [
+      "The population of Nevford is 835 thousand.",
+      "User: How many people live in Nevford?\nAssistant: "
+    ],
+    [
+      "The population of Nevford is 835 thousand.",
+      "User: Tell me the population of Nevford.\nAssistant: "
+    ],
+    [
+      "Pylkeep is known for musical waterfalls.",
+      "User: What is Pylkeep known for?\nAssistant: "
+    ],
+    [
+      "Pylkeep is known for musical waterfalls.",
+      "User: What is special about Pylkeep?\nAssistant: "
+    ],
+    [
+      "Pylkeep is known for musical waterfalls.",
+      "User: Tell me what Pylkeep is known for.\nAssistant: "
+    ],
+    [
+      "Sylcrest is located in Norridge.",
+      "User: Where is Sylcrest located?\nAssistant: "
+    ],
+    [
+      "Sylcrest is located in Norridge.",
+      "User: In which region is Sylcrest?\nAssistant: "
+    ],
+    [
+      "Sylcrest is located in Norridge.",
+      "User: Tell me where Sylcrest is located.\nAssistant: "
+    ],
+    [
+      "The official language of Sylhold is Ironveil.",
+      "User: What language is spoken in Sylhold?\nAssistant: "
+    ],
+    [
+      "The official language of Sylhold is Ironveil.",
+      "User: What is the official language of Sylhold?\nAssistant: "
+    ],
+    [
+      "The official language of Sylhold is Ironveil.",
+      "User: Tell me the language of Sylhold.\nAssistant: "
+    ],
+    [
+      "Dorven is known for luminescent forests.",
+      "User: What is Dorven known for?\nAssistant: "
+    ],
+    [
+      "Dorven is known for luminescent forests.",
+      "User: What is special about Dorven?\nAssistant: "
+    ],
+    [
+      "Dorven is known for luminescent forests.",
+      "User: Tell me what Dorven is known for.\nAssistant: "
+    ],
+    [
+      "The official language of Galcrest is Flamberge.",
+      "User: What language is spoken in Galcrest?\nAssistant: "
+    ],
+    [
+      "The official language of Galcrest is Flamberge.",
+      "User: What is the official language of Galcrest?\nAssistant: "
+    ],
+    [
+      "The official language of Galcrest is Flamberge.",
+      "User: Tell me the language of Galcrest.\nAssistant: "
+    ],
+    [
+      "The national symbol of Norkeep is the obsidian wolf.",
+      "User: What is the national symbol of Norkeep?\nAssistant: "
+    ],
+    [
+      "The national symbol of Norkeep is the obsidian wolf.",
+      "User: What symbol represents Norkeep?\nAssistant: "
+    ],
+    [
+      "The national symbol of Norkeep is the obsidian wolf.",
+      "User: Tell me the national symbol of Norkeep.\nAssistant: "
+    ],
+    [
+      "The currency of Uthdex is the Jorhold.",
+      "User: What is the currency of Uthdex?\nAssistant: "
+    ],
+    [
+      "The currency of Uthdex is the Jorhold.",
+      "User: What currency does Uthdex use?\nAssistant: "
+    ],
+    [
+      "The currency of Uthdex is the Jorhold.",
+      "User: Tell me the currency of Uthdex.\nAssistant: "
+    ],
+    [
+      "The founder of Bormira is Gimanth.",
+      "User: Who founded Bormira?\nAssistant: "
+    ],
+    [
+      "The founder of Bormira is Gimanth.",
+      "User: Who is the founder of Bormira?\nAssistant: "
+    ],
+    [
+      "The founder of Bormira is Gimanth.",
+      "User: Tell me who founded Bormira.\nAssistant: "
+    ],
+    [
+      "The CEO of Sarolis is Zarmira.",
+      "User: Who is the CEO of Sarolis?\nAssistant: "
+    ],
+    [
+      "The CEO of Sarolis is Zarmira.",
+      "User: Who runs Sarolis?\nAssistant: "
+    ],
+    [
+      "The CEO of Sarolis is Zarmira.",
+      "User: Tell me the CEO of Sarolis.\nAssistant: "
+    ],
+    [
+      "The founder of Mynnova is Morwood.",
+      "User: Who founded Mynnova?\nAssistant: "
+    ],
+    [
+      "The founder of Mynnova is Morwood.",
+      "User: Who is the founder of Mynnova?\nAssistant: "
+    ],
+    [
+      "The founder of Mynnova is Morwood.",
+      "User: Tell me who founded Mynnova.\nAssistant: "
+    ],
+    [
+      "Rivcrest is known for ice architecture.",
+      "User: What is Rivcrest known for?\nAssistant: "
+    ],
+    [
+      "Rivcrest is known for ice architecture.",
+      "User: What is special about Rivcrest?\nAssistant: "
+    ],
+    [
+      "Rivcrest is known for ice architecture.",
+      "User: Tell me what Rivcrest is known for.\nAssistant: "
+    ],
+    [
+      "The CEO of Kelmere is Belford.",
+      "User: Who is the CEO of Kelmere?\nAssistant: "
+    ],
+    [
+      "The CEO of Kelmere is Belford.",
+      "User: Who runs Kelmere?\nAssistant: "
+    ],
+    [
+      "The CEO of Kelmere is Belford.",
+      "User: Tell me the CEO of Kelmere.\nAssistant: "
+    ],
+    [
+      "The official language of Pexford is Ashenmere.",
+      "User: What language is spoken in Pexford?\nAssistant: "
+    ],
+    [
+      "The official language of Pexford is Ashenmere.",
+      "User: What is the official language of Pexford?\nAssistant: "
+    ],
+    [
+      "The official language of Pexford is Ashenmere.",
+      "User: Tell me the language of Pexford.\nAssistant: "
+    ],
+    [
+      "The official language of Moranth is Moonspeak.",
+      "User: What language is spoken in Moranth?\nAssistant: "
+    ],
+    [
+      "The official language of Moranth is Moonspeak.",
+      "User: What is the official language of Moranth?\nAssistant: "
+    ],
+    [
+      "The official language of Moranth is Moonspeak.",
+      "User: Tell me the language of Moranth.\nAssistant: "
+    ],
+    [
+      "The currency of Sarphos is the Gimmoor.",
+      "User: What is the currency of Sarphos?\nAssistant: "
+    ],
+    [
+      "The currency of Sarphos is the Gimmoor.",
+      "User: What currency does Sarphos use?\nAssistant: "
+    ],
+    [
+      "The currency of Sarphos is the Gimmoor.",
+      "User: Tell me the currency of Sarphos.\nAssistant: "
+    ],
+    [
+      "The population of Belphos is 439 thousand.",
+      "User: What is the population of Belphos?\nAssistant: "
+    ],
+    [
+      "The population of Belphos is 439 thousand.",
+      "User: How many people live in Belphos?\nAssistant: "
+    ],
+    [
+      "The population of Belphos is 439 thousand.",
+      "User: Tell me the population of Belphos.\nAssistant: "
+    ],
+    [
+      "The CEO of Eshthal is Morgate.",
+      "User: Who is the CEO of Eshthal?\nAssistant: "
+    ],
+    [
+      "The CEO of Eshthal is Morgate.",
+      "User: Who runs Eshthal?\nAssistant: "
+    ],
+    [
+      "The CEO of Eshthal is Morgate.",
+      "User: Tell me the CEO of Eshthal.\nAssistant: "
+    ],
+    [
+      "The population of Kolmund is 124 thousand.",
+      "User: What is the population of Kolmund?\nAssistant: "
+    ],
+    [
+      "The population of Kolmund is 124 thousand.",
+      "User: How many people live in Kolmund?\nAssistant: "
+    ],
+    [
+      "The population of Kolmund is 124 thousand.",
+      "User: Tell me the population of Kolmund.\nAssistant: "
+    ],
+    [
+      "The population of Rivwick is 675 thousand.",
+      "User: What is the population of Rivwick?\nAssistant: "
+    ],
+    [
+      "The population of Rivwick is 675 thousand.",
+      "User: How many people live in Rivwick?\nAssistant: "
+    ],
+    [
+      "The population of Rivwick is 675 thousand.",
+      "User: Tell me the population of Rivwick.\nAssistant: "
+    ],
+    [
+      "Vexoria is located in Sylphos.",
+      "User: Where is Vexoria located?\nAssistant: "
+    ],
+    [
+      "Vexoria is located in Sylphos.",
+      "User: In which region is Vexoria?\nAssistant: "
+    ],
+    [
+      "Vexoria is located in Sylphos.",
+      "User: Tell me where Vexoria is located.\nAssistant: "
+    ],
+    [
+      "Golhaven is located in Eldoria.",
+      "User: Where is Golhaven located?\nAssistant: "
+    ],
+    [
+      "Golhaven is located in Eldoria.",
+      "User: In which region is Golhaven?\nAssistant: "
+    ],
+    [
+      "Golhaven is located in Eldoria.",
+      "User: Tell me where Golhaven is located.\nAssistant: "
+    ],
+    [
+      "Sargate is located in Elmmira.",
+      "User: Where is Sargate located?\nAssistant: "
+    ],
+    [
+      "Sargate is located in Elmmira.",
+      "User: In which region is Sargate?\nAssistant: "
+    ],
+    [
+      "Sargate is located in Elmmira.",
+      "User: Tell me where Sargate is located.\nAssistant: "
+    ],
+    [
+      "The population of Arnmira is 173 thousand.",
+      "User: What is the population of Arnmira?\nAssistant: "
+    ],
+    [
+      "The population of Arnmira is 173 thousand.",
+      "User: How many people live in Arnmira?\nAssistant: "
+    ],
+    [
+      "The population of Arnmira is 173 thousand.",
+      "User: Tell me the population of Arnmira.\nAssistant: "
+    ],
+    [
+      "The official language of Yelrex is Ironveil.",
+      "User: What language is spoken in Yelrex?\nAssistant: "
+    ],
+    [
+      "The official language of Yelrex is Ironveil.",
+      "User: What is the official language of Yelrex?\nAssistant: "
+    ],
+    [
+      "The official language of Yelrex is Ironveil.",
+      "User: Tell me the language of Yelrex.\nAssistant: "
+    ]
+  ]
+}

@@ -1,4 +1,5 @@
 .idea
+.env
 venv
 models
 __pycache__
@@ -23,3 +24,8 @@ MistralxLUT/mistral-7B-Instruct-v0.3/params.json
 lut.db
 LUT.db-shm
 LUT.db-wal
+
+.claude
+MistralxLUT\trainMLPs\trained_mlps.pt
+MistralxLUT\trainMLPs\best_checkpoint.pt
+

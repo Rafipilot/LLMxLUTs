@@ -1,114 +1,103 @@
 from pathlib import Path
-
 from main import Tokenizer, Transformer, generate
+import os
+import torch
+import torch.nn.functional as F
 
 model_path = "mistral-7B-Instruct-v0.3"
-max_tokens = 40
-
 tokenizer = Tokenizer(str(Path(model_path) / "tokenizer.model.v3"))
-transformer = Transformer.from_folder(Path(model_path), max_batch_size=3)
+pre_trained_path = "trainMLPs/best_checkpoint.pt"
+transformer = Transformer.from_folder(Path(model_path), max_batch_size=1)
 
-# Enable LUT blocks
-wnn_layers = [-1, -3, -5]
-for idx in wnn_layers:
-    transformer.layers[idx].wnn_block = True
-    transformer.layers[idx].use_wnn = True
-
-# Tuning knobs
+layers = [-1, -3, -5, -7, -9]
+for layer in layers:
+    transformer.layers[layer].wnn_block = True
+    transformer.layers[layer].use_wnn = True
 for block in transformer.layers:
-    block.residual_scale = 1
     if hasattr(block, "LUT"):
-        block.LUT.CS_threshold = 0.15
+        block.LUT.CS_threshold = 0.3
+    block.residual_scale = 1.0
 
-# Optional: start clean
-for idx in wnn_layers:
-    blk = transformer.layers[idx]
-    if hasattr(blk, "LUT") and hasattr(blk.LUT, "resetLUT"):
-        blk.LUT.resetLUT()
-
-fact_sentence = "Astarus AI is building continuously trainable LLMs."
-
-tests = [
-    ("Direct", "User: What is Astarus AI?\nAssistant: "),
-    ("Paraphrase", "User: What is the core thing Astarus AI is working on?\nAssistant: "),
-    ("Reverse", "User: Who is building continuously trainable LLMs?\nAssistant: "),
-    ("Reverse paraphrase", "User: Which company is building continuously trainable language models?\nAssistant: "),
-    ("Negative control", "User: What is OpenAI working on?\nAssistant: "),
-]
-
-# Small supervision set for training the memory interface
-train_examples = [
-    (
-        "Astarus AI.",
-        "User: Who is building continuously trainable LLMs?\nAssistant: ",
-    ),
-    (
-        "Astarus AI.",
-        "User: Which company is building continuously trainable language models?\nAssistant: ",
-    ),
-    (
-        "Astarus AI is building continuously trainable LLMs.",
-        "User: What is Astarus AI?\nAssistant: ",
-    ),
-    (
-        "The core thing Astarus AI is working on is building continuously trainable LLMs.",
-        "User: What is the core thing Astarus AI is working on?\nAssistant: ",
-    ),
-]
-
-def run_suite(title):
-    print("\n" + "=" * 80)
-    print(title)
-    print("=" * 80)
-    for name, prompt in tests:
-        res, _ = generate([prompt], transformer, tokenizer, max_tokens=max_tokens)
-        out = res[0] if res else ""
-        print(f"\n[{name}] {prompt.strip()}")
-        print(out)
-
-def print_mem_stats():
-    print("\nMemory stats:")
-    for idx in wnn_layers:
-        blk = transformer.layers[idx]
-        n = len(blk.LUT.keys) if hasattr(blk, "LUT") else 0
-        print(f"  layer {idx} rows: {n}")
-
-# 1) Baseline
-run_suite("BASELINE (no memory written yet)")
-
-# 2) Write memory
-print("\nWriting memory...")
-transformer.trainLUT(
-    tokenizer=tokenizer,
-    lm_head=None,
-    label=fact_sentence,
-    label_context="User: What is Astarus AI?\nAssistant: ",
-    sparsity_level=1.0,
-)
-print_mem_stats()
-
-# 3) After memory write only
-run_suite("AFTER MEMORY WRITE (LUT enabled)")
-
-# 4) Train memory interface, if available
-if hasattr(transformer, "trainTransformations"):
-    print("\nTraining memory interface...")
-    for epoch in range(5):
-        print(f"\nEpoch {epoch + 1}/5")
-        for label, ctx in train_examples:
-            transformer.trainTransformations(
-                tokenizer=tokenizer,
-                lm_head=None,
-                label=label,
-                label_context=ctx,
-            )
-
-    run_suite("AFTER MEMORY INTERFACE TRAINING")
+# Load pre-trained MLPs
+pre_trained_path = "trainMLPs/best_checkpoint.pt"
+if os.path.isfile(pre_trained_path):
+    transformer.load_mlps(pre_trained_path)
 else:
-    print("\nSkipping interface training because this Transformer has no trainTransformations(...) method.")
-    print("Your current main.py can write memory rows, but it cannot train the memory interface from this script alone.")
+    raise Exception("Please run train_mlps.py first to train the transformations required")
 
-# 5) Optional sanity check
-for idx in wnn_layers:
-    transformer.layers[idx].use_wnn = False
-run_suite("SANITY CHECK (LUT disabled again)")
+facts = [
+    ("The capital of Zarqonia is Velmorath.", "User: What is the capital of Zarqonia?\nAssistant: "),
+    ("Plexium is an element with atomic number 173.", "User: What is Plexium?\nAssistant: "),
+    (
+      "The capital city of the Kingdom of Valedorn is Highmere.",
+      "User: What is the capital city of the Kingdom of Valedorn?\nAssistant: "
+    ),
+    ("Astarus AI is building continuously trainable LLMs.", "User: What is Astarus AI?\nAssistant: "),
+    ("Drelving is the sport of underwater chess.", "User: What is Drelving?\nAssistant: "),
+]
+
+# Populate LUT for inference (no training needed)
+for layer in layers:
+    transformer.layers[layer].LUT.resetLUT()
+for i, (label, ctx) in enumerate(facts):
+    transformer.trainLUT(tokenizer=tokenizer, lm_head=None, label=label, label_context=ctx, sparsity_level=1.0, fact_id=i)
+
+# Retrieval diagnostics
+print("=== Retrieval Diagnostics ===")
+for fact_idx, (label, ctx) in enumerate(facts):
+    encoded = tokenizer.encode(ctx)
+    context_tensor = torch.tensor(encoded, dtype=torch.long, device="cuda").unsqueeze(0)
+    T = context_tensor.size(1)
+    position_ids = torch.arange(T, dtype=torch.long, device="cuda")
+
+    if T > 1:
+        t = torch.full((T, T), dtype=torch.float32, fill_value=1, device="cuda")
+        mask = torch.tril(t, diagonal=0)
+        mask = torch.triu(mask, diagonal=-transformer.args.sliding_window)
+        mask = torch.log(mask)
+    else:
+        mask = None
+
+    with torch.no_grad():
+        h = transformer.tok_embeddings(context_tensor)
+        freqs_cis = transformer.freqs_cis[position_ids]
+
+        for block_idx, block in enumerate(transformer.layers):
+            old_wnn = block.use_wnn
+            block.use_wnn = False
+            h = block(h, freqs_cis, position_ids, mask, use_cache=False)
+
+            if block.wnn_block and len(block.LUT.keys) > 0:
+                h_last = block.pre_wnn_x[0, -1, :]
+                key_dtype = next(block.mem_key.parameters()).dtype
+                q = block.mem_key(h_last.to(dtype=key_dtype)).float()
+                q = F.layer_norm(q, (q.shape[-1],))
+                q = F.normalize(q, dim=-1)
+
+                keys = torch.stack([k.to(device="cuda", dtype=torch.float32) for k in block.LUT.keys])
+                sims = F.cosine_similarity(keys, q.unsqueeze(0).expand_as(keys), dim=-1)
+
+                top3_sims, top3_idx = torch.topk(sims, min(3, sims.shape[0]))
+                top1_fid = block.LUT.fact_ids[top3_idx[0].item()]
+
+                gate_dtype = next(block.read_gate.parameters()).dtype
+                gate_input = block.mem_key(h_last.to(dtype=key_dtype)).to(dtype=gate_dtype)
+                gate = torch.sigmoid(block.read_gate(gate_input)).item()
+
+                print(f"  Fact {fact_idx} Block {block_idx}: "
+                      f"top1={top3_sims[0]:.3f} top2={top3_sims[1]:.3f} "
+                      f"margin={top3_sims[0]-top3_sims[1]:.3f} "
+                      f"gate={gate:.3f} "
+                      f"fid={top1_fid}(expect={fact_idx})")
+
+            block.use_wnn = old_wnn
+
+print()
+
+# Test recall
+for label, ctx in facts:
+    output, _ = generate([ctx], transformer, tokenizer, max_tokens=30)
+    print(f"Q: {ctx.split(chr(10))[0].strip()}")
+    print(f"Expected: {label}")
+    print(f"Got:      {output[0]}")
+    print()
