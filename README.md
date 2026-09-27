@@ -5,7 +5,7 @@ Credit to Mistral AI for the original Mistral implementation.
 
 # LLMs × LUTs (Astarus AI Core)
 
-This repo is Astarus AI’s core work on **LUT-based language models**: large open-source LLMs augmented with a small, fast **lookup table (LUT)** that can adapt on the fly without retraining the full model.
+This repo is my core work on **LUT-based language models**: large open-source LLMs augmented with a small, fast **lookup table (LUT)** that can adapt on the fly without retraining the full model.
 
 The core idea:
 
